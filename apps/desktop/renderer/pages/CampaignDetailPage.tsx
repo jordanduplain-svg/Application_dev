@@ -1,57 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { subDays, isBefore, parseISO } from 'date-fns';
-import DOMPurify from 'dompurify';
-import type { Application, Campaign, CampaignInput, Company, CompanyInput, Cv } from '@candio/shared';
-import { UNVERIFIED_EMAIL_SOURCES } from '@candio/shared';
+import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
 import { FR_REGIONS, FR_DEPTS_BY_REGION, FR_CITIES, CONTRACT_TYPES } from '../lib/geo';
 import PromptHelper from '../components/PromptHelper';
-
-// DELIV-01 : email « deviné » (pattern) non confirmé → à vérifier avant envoi.
-const isUnverifiedEmail = (a: Application): boolean =>
-  (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(a.emailSource);
-
-// UX-4v3 : libellés des statuts manuels post-réponse.
-const MANUAL_STATUS_OPTIONS = [
-  { value: '', label: '— Aucun —' },
-  { value: 'INTERVIEWED', label: 'Entretien' },
-  { value: 'OFFER', label: 'Offre reçue' },
-  { value: 'REJECTED', label: 'Refusé' },
-  { value: 'ACCEPTED', label: 'Accepté' },
-];
-
-// UX-4v3 : couleur par statut manuel.
-function manualStatusColor(s: string | null): string {
-  if (s === 'INTERVIEWED') return '#ff9f0a';
-  if (s === 'OFFER') return '#34c759';
-  if (s === 'REJECTED') return '#ff453a';
-  if (s === 'ACCEPTED') return '#007aff';
-  return '#888';
-}
-
-type CompanyForm = Omit<CompanyInput, 'campaignId'>;
-const EMPTY_COMPANY: CompanyForm = {
-  name: '', website: null, contactEmail: '', contactName: null, contactRole: null,
-};
-
-// M4 : messages d'erreur techniques → messages compréhensibles.
-function friendlyError(msg: string): string {
-  if (msg.includes('Clé OpenAI') || msg.includes('openai') || msg.includes('401'))
-    return 'Clé OpenAI incorrecte ou absente — vérifiez les Réglages';
-  if (msg.includes('SMTP') || msg.includes('smtp'))
-    return 'Erreur d\'envoi SMTP — vérifiez la configuration dans les Réglages';
-  if (msg.includes('ENOTFOUND') || msg.includes('getaddrinfo'))
-    return 'Serveur SMTP introuvable — vérifiez l\'hôte dans les Réglages';
-  if (msg.includes('ENOENT') || msg.includes('no such file'))
-    return 'Fichier introuvable (CV déplacé ?)';
-  return msg;
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// PERF-1 / UX-3v3 : pagination — tailles de page sélectionnables (entreprises + candidatures).
-const PAGE_SIZE_OPTIONS = [10, 25, 50];
+import ConversationThread from '../components/ConversationThread';
+import EmailPreviewModal from '../components/EmailPreviewModal';
+import {
+  isUnverifiedEmail, MANUAL_STATUS_OPTIONS, manualStatusColor, friendlyError,
+  EMAIL_RE, PAGE_SIZE_OPTIONS, EMPTY_COMPANY, type CompanyForm,
+} from '../lib/campaignDetail';
 
 export default function CampaignDetailPage({
   id, onBack, onGoToSettings,
@@ -279,16 +238,6 @@ export default function CampaignDetailPage({
     } finally {
       if (isMounted.current) setSavingCampaign(false);
     }
-  };
-
-  // FM-07 : convertit le texte en HTML (version renderer, sans import externe).
-  const toHtmlRenderer = (text: string): string => {
-    const escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-    return escaped.replace(/\n/g, '<br>');
   };
 
   // FM-04 : soumet le formulaire après confirmation des doublons.
@@ -1237,27 +1186,7 @@ export default function CampaignDetailPage({
       {previewAppId && (() => {
         const previewApp = apps.find((a) => a.id === previewAppId);
         if (!previewApp) return null;
-        return (
-          <>
-            <div className="modal-overlay" onClick={() => setPreviewAppId(null)} />
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
-              <h3>Aperçu email — {previewApp.companyName}</h3>
-              <p style={{ fontSize: '12px', color: '#888' }}>Objet : {previewApp.subject}</p>
-              <div
-                // eslint-disable-next-line react/no-danger
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(toHtmlRenderer(previewApp.body)) }}
-                style={{
-                  background: '#fff', padding: '16px', borderRadius: '4px', border: '1px solid #e0e0e0',
-                  maxHeight: '500px', overflow: 'auto', fontFamily: 'Georgia, serif',
-                  fontSize: '14px', lineHeight: '1.6', color: '#222',
-                }}
-              />
-              <div style={{ marginTop: '12px' }}>
-                <button onClick={() => setPreviewAppId(null)}>Fermer</button>
-              </div>
-            </div>
-          </>
-        );
+        return <EmailPreviewModal app={previewApp} onClose={() => setPreviewAppId(null)} />;
       })()}
 
       {editing && (
@@ -1308,79 +1237,3 @@ export default function CampaignDetailPage({
   );
 }
 
-// UX-S5 : composant fil de conversation (email initial + relance + réponse).
-function ConversationThread({ app }: { app: Application }) {
-  const [showFullBody, setShowFullBody] = useState(false);
-  const [showFullReply, setShowFullReply] = useState(false);
-  const TRUNC = 500;
-
-  const hasAnyThread = app.body || app.followUpSentAt || app.replyContent;
-  if (!hasAnyThread) return null;
-
-  return (
-    <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
-      <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#555' }}>Fil de conversation</h4>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-
-        {/* Email envoyé */}
-        {app.body && (
-          <div style={{ borderLeft: '3px solid #007aff', paddingLeft: '10px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#007aff', marginBottom: '4px' }}>
-              Email envoyé{app.sentAt ? ` — ${new Date(app.sentAt).toLocaleDateString('fr-FR')}` : ''}
-            </div>
-            <div style={{ fontSize: '12px', color: '#444', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {showFullBody ? app.body : app.body.slice(0, TRUNC) + (app.body.length > TRUNC ? '…' : '')}
-            </div>
-            {app.body.length > TRUNC && (
-              <button
-                onClick={() => setShowFullBody((v) => !v)}
-                style={{ fontSize: '11px', color: '#007aff', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}
-              >
-                {showFullBody ? 'Réduire' : 'Voir tout'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Relance envoyée */}
-        {app.followUpSentAt && (
-          <div style={{ borderLeft: '3px solid #ff9f0a', paddingLeft: '10px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#ff9f0a' }}>
-              Relance envoyée le {new Date(app.followUpSentAt).toLocaleDateString('fr-FR')}
-            </div>
-          </div>
-        )}
-
-        {/* Réponse reçue */}
-        {app.replyContent && (
-          <div style={{ borderLeft: '3px solid #34c759', paddingLeft: '10px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#34c759', marginBottom: '4px' }}>
-              Réponse reçue{app.repliedAt ? ` le ${new Date(app.repliedAt).toLocaleDateString('fr-FR')}` : ''}
-            </div>
-            {/* Sanitiser le HTML si présent. */}
-            {/<[a-z][\s\S]*>/i.test(app.replyContent) ? (
-              <div
-                // eslint-disable-next-line react/no-danger
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(showFullReply ? app.replyContent : app.replyContent.slice(0, TRUNC)) }}
-                style={{ fontSize: '12px', color: '#444', wordBreak: 'break-word' }}
-              />
-            ) : (
-              <div style={{ fontSize: '12px', color: '#444', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {showFullReply ? app.replyContent : app.replyContent.slice(0, TRUNC) + (app.replyContent.length > TRUNC ? '…' : '')}
-              </div>
-            )}
-            {app.replyContent.length > TRUNC && (
-              <button
-                onClick={() => setShowFullReply((v) => !v)}
-                style={{ fontSize: '11px', color: '#34c759', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}
-              >
-                {showFullReply ? 'Réduire' : 'Voir tout'}
-              </button>
-            )}
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
-}
