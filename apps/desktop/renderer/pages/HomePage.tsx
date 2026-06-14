@@ -64,10 +64,9 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
       <div className="bento">
         {/* Héro — Campagnes */}
         <div
-          className="bento-card"
+          className="bento-card b-hero"
           onClick={() => onNavigate('campaigns')}
-          style={{ gridColumn: '1 / 3', gridRow: '1 / 3', color: '#fff',
-            background: 'linear-gradient(135deg, #2b2466 0%, #17132e 100%)' }}
+          style={{ color: '#fff', background: 'linear-gradient(135deg, #2b2466 0%, #17132e 100%)' }}
         >
           <div className="bento-top">
             <div className="bento-chip" style={{ background: 'rgba(255,255,255,0.14)', color: '#fff' }}><Send size={ICON} /></div>
@@ -90,35 +89,31 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
         </div>
 
         {/* Réponses */}
-        <div className="bento-card" onClick={() => onNavigate('replies')}
-          style={{ gridColumn: 3, gridRow: 1, background: '#0F6E56', color: '#fff' }}>
+        <div className="bento-card b-rep" onClick={() => onNavigate('replies')} style={{ background: '#0F6E56', color: '#fff' }}>
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Mail size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Réponses</div><div className="bento-sub">à consulter</div></div>
         </div>
 
         {/* À traiter */}
-        <div className="bento-card" onClick={() => onNavigate('todo')}
-          style={{ gridColumn: 4, gridRow: 1, background: '#854F0B', color: '#fff' }}>
+        <div className="bento-card b-tdo" onClick={() => onNavigate('todo')} style={{ background: '#854F0B', color: '#fff' }}>
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><ListChecks size={ICON} /></div></div>
           <div><span className="bento-num" style={{ color: '#fff' }}>{s.todo}</span><div className="bento-sub">à traiter</div></div>
         </div>
 
         {/* Leads */}
-        <div className="bento-card" onClick={() => onNavigate('leads')}
-          style={{ gridColumn: 3, gridRow: 2, background: '#185FA5', color: '#fff' }}>
+        <div className="bento-card b-leads" onClick={() => onNavigate('leads')} style={{ background: '#185FA5', color: '#fff' }}>
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Building2 size={ICON} /></div></div>
           <div><span className="bento-num" style={{ color: '#fff', fontSize: '26px' }}>{s.leads}</span><div className="bento-sub">leads</div></div>
         </div>
 
         {/* Scraping */}
-        <div className="bento-card" onClick={() => onNavigate('scraping')}
-          style={{ gridColumn: 4, gridRow: 2, background: '#993C1D', color: '#fff' }}>
+        <div className="bento-card b-scr" onClick={() => onNavigate('scraping')} style={{ background: '#993C1D', color: '#fff' }}>
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Radar size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Scraping</div><div className="bento-sub">collecter</div></div>
         </div>
 
         {/* Tableau de bord (large) */}
-        <div className="bento-card util row" onClick={() => onNavigate('stats')} style={{ gridColumn: '1 / 3', gridRow: 3 }}>
+        <div className="bento-card util row b-dash" onClick={() => onNavigate('stats')}>
           <div className="bento-chip" style={{ background: '#EEEDFE', color: '#26215C' }}><ChartBar size={ICON} /></div>
           <div style={{ flex: 1 }}>
             <div className="bento-lbl">Tableau de bord</div>
@@ -128,7 +123,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
         </div>
 
         {/* CV */}
-        <div className="bento-card util" onClick={() => onNavigate('cv')} style={{ gridColumn: 3, gridRow: 3 }}>
+        <div className="bento-card util b-cv" onClick={() => onNavigate('cv')}>
           <div className="bento-top">
             <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><FileText size={ICON} /></div>
             {s.cvOk && <CircleCheck size={16} color="#1D9E75" />}
@@ -137,13 +132,13 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
         </div>
 
         {/* Profil */}
-        <div className="bento-card util" onClick={() => onNavigate('profile')} style={{ gridColumn: 4, gridRow: 3 }}>
+        <div className="bento-card util b-prof" onClick={() => onNavigate('profile')}>
           <div className="bento-top"><div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><User size={ICON} /></div></div>
           <div><div className="bento-lbl">Profil</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>identité · contact</div></div>
         </div>
 
         {/* Réglages (large) */}
-        <div className="bento-card util row" onClick={() => onNavigate('settings')} style={{ gridColumn: '1 / 3', gridRow: 4 }}>
+        <div className="bento-card util row b-set" onClick={() => onNavigate('settings')}>
           <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><Settings size={ICON} /></div>
           <div style={{ flex: 1 }}>
             <div className="bento-lbl">Réglages</div>
@@ -153,8 +148,8 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
         </div>
 
         {/* Action primaire — Nouvelle campagne */}
-        <div className="bento-card row" onClick={() => onNavigate('campaigns')}
-          style={{ gridColumn: '3 / 5', gridRow: 4, background: '#378ADD', color: '#fff', justifyContent: 'center' }}>
+        <div className="bento-card row b-cta" onClick={() => onNavigate('campaigns')}
+          style={{ background: '#378ADD', color: '#fff', justifyContent: 'center' }}>
           <Plus size={18} color="#fff" />
           <span style={{ fontSize: '15px', fontWeight: 600 }}>Nouvelle campagne</span>
         </div>

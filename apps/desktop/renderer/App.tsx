@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Toaster, toast } from 'sonner';
+import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings } from 'lucide-react';
 import type { TaskProgress, ReplyNotification, SettingsStatus, Profile, SearchResult } from '@candio/shared';
 import { api } from './lib/api';
 import ProfilePage from './pages/ProfilePage';
@@ -311,69 +312,39 @@ export default function App() {
           </div>
         )}
 
-        <button
-          onClick={() => setRoute({ name: 'home' })}
-          className={route.name === 'home' ? 'active' : ''}
-        >
-          Accueil
+        {/* DESIGN-2 : nav colorée — chaque item porte sa couleur de section (--nav). */}
+        <button onClick={() => setRoute({ name: 'home' })} className={route.name === 'home' ? 'active' : ''} style={{ '--nav': '#0a84ff' } as React.CSSProperties}>
+          <Home size={17} className="nav-ico" /> <span>Accueil</span>
         </button>
-        <button
-          onClick={() => setRoute({ name: 'stats' })}
-          className={route.name === 'stats' ? 'active' : ''}
-        >
-          Tableau de bord
+        <button onClick={() => setRoute({ name: 'stats' })} className={route.name === 'stats' ? 'active' : ''} style={{ '--nav': '#7F77DD' } as React.CSSProperties}>
+          <ChartBar size={17} className="nav-ico" /> <span>Tableau de bord</span>
         </button>
-        <button
-          onClick={() => setRoute({ name: 'profile' })}
-          className={route.name === 'profile' ? 'active' : ''}
-        >
-          Profil
+        <button onClick={() => setRoute({ name: 'campaigns' })} className={isCampaignsActive ? 'active' : ''} style={{ '--nav': '#5856d6' } as React.CSSProperties}>
+          <Send size={17} className="nav-ico" /> <span>Campagnes</span>
         </button>
-        <button
-          onClick={() => setRoute({ name: 'cv' })}
-          className={route.name === 'cv' ? 'active' : ''}
-        >
-          CV
-        </button>
-        <button
-          onClick={() => setRoute({ name: 'campaigns' })}
-          className={isCampaignsActive ? 'active' : ''}
-        >
-          Campagnes
-        </button>
-        <button
-          onClick={() => setRoute({ name: 'replies' })}
-          className={route.name === 'replies' ? 'active' : ''}
-        >
-          Réponses
+        <button onClick={() => setRoute({ name: 'replies' })} className={route.name === 'replies' ? 'active' : ''} style={{ '--nav': '#1D9E75' } as React.CSSProperties}>
+          <Mail size={17} className="nav-ico" /> <span>Réponses</span>
         </button>
         {/* UX-5v3 : page des actions requises avec badge. */}
-        <button
-          onClick={() => setRoute({ name: 'todo' })}
-          className={route.name === 'todo' ? 'active' : ''}
-          style={todoCount > 0 ? { fontWeight: 'bold', color: route.name === 'todo' ? undefined : '#dc3545' } : undefined}
-        >
-          À traiter{todoCount > 0 ? ` (${todoCount})` : ''}
+        <button onClick={() => setRoute({ name: 'todo' })} className={route.name === 'todo' ? 'active' : ''} style={{ '--nav': '#BA7517', ...(todoCount > 0 ? { fontWeight: 600 } : {}) } as React.CSSProperties}>
+          <ListChecks size={17} className="nav-ico" /> <span>À traiter{todoCount > 0 ? ` (${todoCount})` : ''}</span>
         </button>
         {/* SCRAPE-01 : scraping d'entreprises. */}
-        <button
-          onClick={() => setRoute({ name: 'scraping' })}
-          className={route.name === 'scraping' ? 'active' : ''}
-        >
-          Scraping
+        <button onClick={() => setRoute({ name: 'scraping' })} className={route.name === 'scraping' ? 'active' : ''} style={{ '--nav': '#D85A30' } as React.CSSProperties}>
+          <Radar size={17} className="nav-ico" /> <span>Scraping</span>
         </button>
         {/* LEADS-VIEW : consultation des leads scrapés. */}
-        <button
-          onClick={() => setRoute({ name: 'leads' })}
-          className={route.name === 'leads' ? 'active' : ''}
-        >
-          Leads
+        <button onClick={() => setRoute({ name: 'leads' })} className={route.name === 'leads' ? 'active' : ''} style={{ '--nav': '#378ADD' } as React.CSSProperties}>
+          <Building2 size={17} className="nav-ico" /> <span>Leads</span>
         </button>
-        <button
-          onClick={() => setRoute({ name: 'settings' })}
-          className={route.name === 'settings' ? 'active' : ''}
-        >
-          Réglages
+        <button onClick={() => setRoute({ name: 'cv' })} className={route.name === 'cv' ? 'active' : ''} style={{ '--nav': '#8E8E93' } as React.CSSProperties}>
+          <FileText size={17} className="nav-ico" /> <span>CV</span>
+        </button>
+        <button onClick={() => setRoute({ name: 'profile' })} className={route.name === 'profile' ? 'active' : ''} style={{ '--nav': '#8E8E93' } as React.CSSProperties}>
+          <User size={17} className="nav-ico" /> <span>Profil</span>
+        </button>
+        <button onClick={() => setRoute({ name: 'settings' })} className={route.name === 'settings' ? 'active' : ''} style={{ '--nav': '#8E8E93' } as React.CSSProperties}>
+          <Settings size={17} className="nav-ico" /> <span>Réglages</span>
         </button>
 
         {/* ADM-M1 : tâches en cours groupées en haut du log. */}
