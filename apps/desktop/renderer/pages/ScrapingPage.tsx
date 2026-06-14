@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Campaign, ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
+import type { ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { api } from '../lib/api';
 import { COUNTRIES, FR_DEPTS_BY_REGION, FR_REGIONS, FR_CITIES } from '../lib/geo';
@@ -78,32 +78,12 @@ function regionOfCity(city: string): string {
   return FR_REGIONS.find((r) => FR_DEPTS_BY_REGION[r].some((d) => d.name === city)) || '';
 }
 
-const EMAIL_SOURCE_BADGE: Record<string, { label: string; color: string }> = {
-  hunter_verified:  { label: '✅ Vérifié Hunter',     color: '#34c759' },
-  linkedin_smtp:    { label: '🔗 LinkedIn+SMTP',      color: '#0077b5' },
-  web_crawl:        { label: '🌐 Crawl site',         color: '#30d158' },
-  whois:            { label: '🔎 WHOIS',              color: '#64d2ff' },
-  snov_found:       { label: '🔵 Snov.io',            color: '#5ac8fa' },
-  apollo_found:     { label: '🟣 Apollo.io',          color: '#bf5af2' },
-  hunter_found:     { label: '🟡 Trouvé Hunter',      color: '#ff9f0a' },
-  linkedin_pattern: { label: '🔸 LinkedIn (non vérifié)', color: '#ff9500' },
-  pattern_verified: { label: '⚡ Pattern+SMTP',       color: '#ffd60a' },
-  catch_all:        { label: '🟠 Catch-all',          color: '#ff6b2b' },
-  pattern:          { label: '⚪ Généré auto',         color: '#888'    },
-  no_email:         { label: '❌ Sans email',          color: '#ff453a' },
-  manual:           { label: '✏️ Manuel',              color: '#5ac8fa' },
-};
-
 export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void }) {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [config, setConfig] = useState<ScrapingConfig | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [csvPath, setCsvPath] = useState<string | null>(null);
   const [linesCount, setLinesCount] = useState(0);
-  const [importCampaignId, setImportCampaignId] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [importMsg, setImportMsg] = useState<string | null>(null);
   // Chemins master persistants (disponibles même sans run dans la session courante).
   const [masterPaths, setMasterPaths] = useState<{ csvPath: string | null; htmlPath: string | null } | null>(null);
   const [resumeAvailable, setResumeAvailable] = useState(false);
@@ -127,16 +107,14 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
   useEffect(() => {
     isMounted.current = true;
     const load = async () => {
-      const [cfg, camps, status, master] = await Promise.all([
+      const [cfg, status, master] = await Promise.all([
         api.invoke('scraping:getConfig'),
-        api.invoke('campaign:list'),
         api.invoke('scraping:getStatus'),
         api.invoke('scraping:getMasterPaths'),
       ]);
       if (!isMounted.current) return;
       setMasterPaths(master);
       setConfig(cfg);
-      setCampaigns(camps.filter((c) => c.status !== 'COMPLETED' && !c.archivedAt));
       if (status.status === 'running') {
         setRunning(true);
       }
@@ -277,7 +255,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
     setLog([]);
     setCsvPath(null);
     setLinesCount(0);
-    setImportMsg(null);
     setRunning(true);
     try {
       await api.invoke('scraping:launch', config);
@@ -294,7 +271,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
     setLog([]);
     setCsvPath(null);
     setLinesCount(0);
-    setImportMsg(null);
     setRunning(true);
     setResumeAvailable(false);
     try {
@@ -321,7 +297,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
     setLog([]);
     setCsvPath(null);
     setLinesCount(0);
-    setImportMsg(null);
     setRunning(true);
     try {
       await api.invoke('scraping:linkedinImport', { csvPath, config });
@@ -344,7 +319,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
     setLog([]);
     setCsvPath(null);
     setLinesCount(0);
-    setImportMsg(null);
     setRunning(true);
     try {
       await api.invoke('scraping:enrichCsv', { csvPath: master, config });
@@ -354,22 +328,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
       setRunning(false);
     }
   }, [config, masterPaths]);
-
-  const importCsv = useCallback(async () => {
-    if (!csvPath || !importCampaignId) return;
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const { added, skipped } = await api.invoke('scraping:importCsv', {
-        csvPath,
-        campaignId: importCampaignId,
-      });
-      setImportMsg(`✅ ${added} entreprises importées, ${skipped} ignorées (doublons / email manquant).`);
-    } catch (e) {
-      setImportMsg(`❌ Erreur : ${e instanceof Error ? e.message : String(e)}`);
-    }
-    if (isMounted.current) setImporting(false);
-  }, [csvPath, importCampaignId]);
 
   // Réinitialise les curseurs de pagination des sources → recherches dès la page 1.
   const resetPagination = useCallback(async () => {
@@ -1573,64 +1531,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
             ))}
             <div ref={logEndRef} />
           </div>
-        </section>
-      )}
-
-      {/* ── Import dans une campagne ── */}
-      {csvPath && !running && (
-        <section style={{
-          marginBottom: '28px', padding: '16px',
-          background: '#f0fff4', borderRadius: '10px', border: '1px solid #34c759',
-        }}>
-          <h3 style={{ margin: '0 0 12px', color: '#1a7a3a' }}>
-            Importer les résultats dans une campagne
-          </h3>
-          <p style={{ fontSize: '13px', color: '#555', margin: '0 0 10px' }}>
-            <code style={{ wordBreak: 'break-all', fontSize: '11px' }}>{csvPath}</code>
-            {' '}— {linesCount} entreprise{linesCount > 1 ? 's' : ''}
-          </p>
-
-          {/* Légende emailSource */}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
-            {Object.entries(EMAIL_SOURCE_BADGE).map(([k, v]) => (
-              <span key={k} style={{
-                fontSize: '11px', padding: '2px 8px', borderRadius: '8px',
-                background: v.color + '22', color: v.color, border: `1px solid ${v.color}`,
-              }}>
-                {v.label}
-              </span>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <select
-              value={importCampaignId}
-              onChange={(e) => setImportCampaignId(e.target.value)}
-              style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
-            >
-              <option value="">— Choisir une campagne —</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <button
-              onClick={importCsv}
-              disabled={!importCampaignId || importing}
-              style={{
-                padding: '8px 18px', background: '#34c759', color: '#fff',
-                border: 'none', borderRadius: '8px', cursor: 'pointer',
-                fontWeight: 600,
-              }}
-            >
-              {importing ? 'Import…' : 'Importer'}
-            </button>
-          </div>
-          {importMsg && (
-            <p style={{ marginTop: '10px', fontSize: '13px',
-              color: importMsg.startsWith('✅') ? '#1a7a3a' : '#c0392b' }}>
-              {importMsg}
-            </p>
-          )}
         </section>
       )}
 
