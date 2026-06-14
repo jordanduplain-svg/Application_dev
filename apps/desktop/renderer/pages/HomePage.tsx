@@ -1,0 +1,164 @@
+import { useEffect, useState } from 'react';
+import {
+  Send, Mail, ListChecks, Building2, Radar, ChartBar,
+  FileText, User, Settings, Plus, ArrowRight, Flame, CircleCheck,
+} from 'lucide-react';
+import { api } from '../lib/api';
+
+/**
+ * DESIGN-2 : page d'accueil-lanceur (bento). Point d'entrée de l'app : un menu
+ * de cartes cliquables vers chaque section, avec quelques chiffres réels.
+ * Présentationnel — la navigation passe par onNavigate.
+ */
+type Nav = 'stats' | 'profile' | 'cv' | 'campaigns' | 'replies' | 'settings' | 'todo' | 'scraping' | 'leads';
+
+interface HomeStats {
+  firstName: string;
+  active: number;
+  drafts: number;
+  todo: number;
+  leads: number;
+  cvOk: boolean;
+}
+
+export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
+  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false });
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const [camps, todo, leads, prof] = await Promise.all([
+          api.invoke('campaign:list'),
+          api.invoke('application:listActionRequired'),
+          api.invoke('scraping:listLeads').catch(() => [] as unknown[]),
+          api.invoke('profile:get'),
+        ]);
+        if (!alive) return;
+        const live = camps.filter((c) => !c.archivedAt);
+        setS({
+          firstName: prof?.firstName ?? '',
+          active: live.filter((c) => c.status !== 'COMPLETED' && c.status !== 'DRAFT').length,
+          drafts: live.filter((c) => c.status === 'DRAFT').length,
+          todo: todo.length,
+          leads: Array.isArray(leads) ? leads.length : 0,
+          cvOk: !!prof?.cvParsed,
+        });
+      } catch { /* non bloquant — l'accueil s'affiche avec des valeurs à 0 */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const ICON = 19;
+
+  return (
+    <section className="home">
+      <div className="home-head">
+        <h1>
+          Bonjour{s.firstName ? ` ${s.firstName}` : ''} <span className="muted">— on postule ?</span>
+        </h1>
+        <span className="home-streak"><Flame size={14} /> {today}</span>
+      </div>
+
+      <div className="bento">
+        {/* Héro — Campagnes */}
+        <div
+          className="bento-card"
+          onClick={() => onNavigate('campaigns')}
+          style={{ gridColumn: '1 / 3', gridRow: '1 / 3', color: '#fff',
+            background: 'linear-gradient(135deg, #2b2466 0%, #17132e 100%)' }}
+        >
+          <div className="bento-top">
+            <div className="bento-chip" style={{ background: 'rgba(255,255,255,0.14)', color: '#fff' }}><Send size={ICON} /></div>
+            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              Ouvrir <ArrowRight size={13} />
+            </span>
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+              <span className="bento-num" style={{ fontSize: '46px', color: '#fff' }}>{s.active}</span>
+              {s.drafts > 0 && <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>+{s.drafts} brouillon{s.drafts > 1 ? 's' : ''}</span>}
+            </div>
+            <div className="bento-lbl" style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)' }}>Campagnes actives</div>
+            <div style={{ marginTop: '12px', display: 'flex', gap: '5px' }}>
+              <span style={{ height: '5px', flex: 2, borderRadius: '3px', background: '#7F77DD' }} />
+              <span style={{ height: '5px', flex: 1, borderRadius: '3px', background: '#5DCAA5' }} />
+              <span style={{ height: '5px', flex: 1, borderRadius: '3px', background: 'rgba(255,255,255,0.18)' }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Réponses */}
+        <div className="bento-card" onClick={() => onNavigate('replies')}
+          style={{ gridColumn: 3, gridRow: 1, background: '#0F6E56', color: '#fff' }}>
+          <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Mail size={ICON} /></div></div>
+          <div><div className="bento-lbl" style={{ color: '#fff' }}>Réponses</div><div className="bento-sub">à consulter</div></div>
+        </div>
+
+        {/* À traiter */}
+        <div className="bento-card" onClick={() => onNavigate('todo')}
+          style={{ gridColumn: 4, gridRow: 1, background: '#854F0B', color: '#fff' }}>
+          <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><ListChecks size={ICON} /></div></div>
+          <div><span className="bento-num" style={{ color: '#fff' }}>{s.todo}</span><div className="bento-sub">à traiter</div></div>
+        </div>
+
+        {/* Leads */}
+        <div className="bento-card" onClick={() => onNavigate('leads')}
+          style={{ gridColumn: 3, gridRow: 2, background: '#185FA5', color: '#fff' }}>
+          <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Building2 size={ICON} /></div></div>
+          <div><span className="bento-num" style={{ color: '#fff', fontSize: '26px' }}>{s.leads}</span><div className="bento-sub">leads</div></div>
+        </div>
+
+        {/* Scraping */}
+        <div className="bento-card" onClick={() => onNavigate('scraping')}
+          style={{ gridColumn: 4, gridRow: 2, background: '#993C1D', color: '#fff' }}>
+          <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Radar size={ICON} /></div></div>
+          <div><div className="bento-lbl" style={{ color: '#fff' }}>Scraping</div><div className="bento-sub">collecter</div></div>
+        </div>
+
+        {/* Tableau de bord (large) */}
+        <div className="bento-card util row" onClick={() => onNavigate('stats')} style={{ gridColumn: '1 / 3', gridRow: 3 }}>
+          <div className="bento-chip" style={{ background: '#EEEDFE', color: '#26215C' }}><ChartBar size={ICON} /></div>
+          <div style={{ flex: 1 }}>
+            <div className="bento-lbl">Tableau de bord</div>
+            <div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>taux de réponse · entonnoir · activité</div>
+          </div>
+          <ArrowRight size={16} color="var(--text-sub)" />
+        </div>
+
+        {/* CV */}
+        <div className="bento-card util" onClick={() => onNavigate('cv')} style={{ gridColumn: 3, gridRow: 3 }}>
+          <div className="bento-top">
+            <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><FileText size={ICON} /></div>
+            {s.cvOk && <CircleCheck size={16} color="#1D9E75" />}
+          </div>
+          <div><div className="bento-lbl">CV</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>{s.cvOk ? 'analysé' : 'à ajouter'}</div></div>
+        </div>
+
+        {/* Profil */}
+        <div className="bento-card util" onClick={() => onNavigate('profile')} style={{ gridColumn: 4, gridRow: 3 }}>
+          <div className="bento-top"><div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><User size={ICON} /></div></div>
+          <div><div className="bento-lbl">Profil</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>identité · contact</div></div>
+        </div>
+
+        {/* Réglages (large) */}
+        <div className="bento-card util row" onClick={() => onNavigate('settings')} style={{ gridColumn: '1 / 3', gridRow: 4 }}>
+          <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><Settings size={ICON} /></div>
+          <div style={{ flex: 1 }}>
+            <div className="bento-lbl">Réglages</div>
+            <div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>IA · SMTP · sécurité</div>
+          </div>
+          <ArrowRight size={16} color="var(--text-sub)" />
+        </div>
+
+        {/* Action primaire — Nouvelle campagne */}
+        <div className="bento-card row" onClick={() => onNavigate('campaigns')}
+          style={{ gridColumn: '3 / 5', gridRow: 4, background: '#378ADD', color: '#fff', justifyContent: 'center' }}>
+          <Plus size={18} color="#fff" />
+          <span style={{ fontSize: '15px', fontWeight: 600 }}>Nouvelle campagne</span>
+        </div>
+      </div>
+    </section>
+  );
+}

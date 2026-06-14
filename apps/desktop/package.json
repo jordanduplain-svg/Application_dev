@@ -25,6 +25,7 @@
     "electron-store": "^11.0.2",
     "fuse.js": "^7.3.0",
     "imapflow": "^1.0.171",
+    "lucide-react": "^1.18.0",
     "mailparser": "^3.7.1",
     "nodemailer": "^6.9.16",
     "openai": "^4.28.4",

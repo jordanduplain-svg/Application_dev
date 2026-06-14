@@ -10,12 +10,15 @@ import CampaignDetailPage from './pages/CampaignDetailPage';
 import RepliesPage from './pages/RepliesPage';
 import SettingsPage from './pages/SettingsPage';
 import DashboardPage from './pages/DashboardPage';
+import HomePage from './pages/HomePage';
 import TodoPage from './pages/TodoPage';
 import ScrapingPage from './pages/ScrapingPage';
 import LockScreen from './components/LockScreen';
 
 // Navigation maison. La sélection d'une campagne emporte l'id dans la route.
 type Route =
+  // DESIGN-2 : page d'accueil-lanceur (bento) — point d'entrée par défaut.
+  | { name: 'home' }
   | { name: 'profile' }
   | { name: 'cv' }
   | { name: 'campaigns' }
@@ -34,7 +37,7 @@ type Route =
 const MAX_LOG_ENTRIES = 100;
 
 export default function App() {
-  const [route, setRoute] = useState<Route>({ name: 'stats' });
+  const [route, setRoute] = useState<Route>({ name: 'home' });
   // L3 : uid stable pour éviter l'antipattern key={index} quand le tableau est tronqué.
   const uidRef = useRef(0);
   const [taskLog, setTaskLog] = useState<(TaskProgress & { uid: number })[]>([]);
@@ -309,6 +312,12 @@ export default function App() {
         )}
 
         <button
+          onClick={() => setRoute({ name: 'home' })}
+          className={route.name === 'home' ? 'active' : ''}
+        >
+          Accueil
+        </button>
+        <button
           onClick={() => setRoute({ name: 'stats' })}
           className={route.name === 'stats' ? 'active' : ''}
         >
@@ -422,6 +431,8 @@ export default function App() {
           </div>
         )}
 
+        {/* DESIGN-2 : toutes les cibles de HomePage sont des routes sans paramètre → cast sûr. */}
+        {route.name === 'home' && <HomePage onNavigate={(n) => setRoute({ name: n } as Route)} />}
         {route.name === 'stats' && <DashboardPage onOpenCampaign={openCampaign} />}
         {route.name === 'profile' && (
           <ProfilePage
