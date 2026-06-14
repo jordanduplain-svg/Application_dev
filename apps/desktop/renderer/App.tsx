@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Toaster, toast } from 'sonner';
 import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings } from 'lucide-react';
-import type { TaskProgress, ReplyNotification, SettingsStatus, Profile, SearchResult } from '@candio/shared';
+import type { TaskProgress, ReplyNotification, SettingsStatus, SearchResult } from '@candio/shared';
 import { api } from './lib/api';
 import ProfilePage from './pages/ProfilePage';
 import CvPage from './pages/CvPage';
@@ -48,7 +48,6 @@ export default function App() {
 
   // UX-8 : état de la checklist d'onboarding.
   const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
 
   // UX-M16 : badge "À traiter".
   const [todoCount, setTodoCount] = useState(0);
@@ -65,20 +64,18 @@ export default function App() {
   // AUDIT-H4 fix : ref sur le conteneur pour détecter le clic extérieur.
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // UX-8 : charger le statut au démarrage et à chaque changement de route.
+  // Charge le statut (verrouillage) + le badge « à traiter » au démarrage et à chaque route.
   useEffect(() => {
     const loadOnboarding = async () => {
       try {
-        const [st, prof, todoResult] = await Promise.all([
+        const [st, todoResult] = await Promise.all([
           api.invoke('settings:getStatus'),
-          api.invoke('profile:get'),
           // UX-M16 : badge des actions requises.
           api.invoke('application:listActionRequired'),
         ]);
         setSettingsStatus(st);
-        setProfile(prof);
         setTodoCount(todoResult.length);
-      } catch { /* non bloquant — la bannière ne s'affiche pas si erreur */ }
+      } catch { /* non bloquant */ }
     };
     void loadOnboarding();
   }, [route.name]);
@@ -234,17 +231,6 @@ export default function App() {
   // ANA-3v3 : navigation depuis le dashboard vers une campagne spécifique.
   const openCampaign = (id: string) => setRoute({ name: 'campaign', id });
 
-  // UX-8 : calcul de la checklist d'onboarding.
-  const profileOk = !!(profile?.firstName && profile?.lastName);
-  const cvOk = !!profile?.cvParsed;
-  // L'IA est OK si une clé OpenAI est présente OU si le provider est Ollama
-  // (local, gratuit, aucune clé requise). Corrige l'incohérence : avant, on
-  // exigeait toujours OpenAI même quand l'utilisateur avait choisi Ollama.
-  const aiOk = (settingsStatus?.openaiKeySet ?? false)
-    || settingsStatus?.aiProvider === 'ollama';
-  const smtpOk = settingsStatus?.smtpConfigured ?? false;
-  const onboardingComplete = profileOk && aiOk && smtpOk && cvOk;
-
   // Gérer le clic sur un résultat de recherche.
   const handleSearchResultClick = (result: SearchResult) => {
     setShowSearch(false);
@@ -363,45 +349,6 @@ export default function App() {
       </nav>
 
       <main className="content">
-        {/* UX-8 : bannière de configuration initiale (disparaît quand tout est configuré). */}
-        {settingsStatus !== null && !onboardingComplete && (
-          <div style={{
-            background: '#fff3cd', border: '1px solid #ffc107',
-            borderRadius: '6px', padding: '10px 16px', marginBottom: '16px',
-            fontSize: '13px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap',
-          }}>
-            <span>⚡ Configuration initiale :</span>
-            {/* Profil */}
-            <span
-              onClick={() => setRoute({ name: 'profile' })}
-              style={{ cursor: 'pointer', color: profileOk ? '#28a745' : '#dc3545', textDecoration: 'underline' }}
-            >
-              {profileOk ? '✓' : '✗'} Profil
-            </span>
-            {/* Moteur IA (OpenAI ou Ollama local) */}
-            <span
-              onClick={() => setRoute({ name: 'settings' })}
-              style={{ cursor: 'pointer', color: aiOk ? '#28a745' : '#dc3545', textDecoration: 'underline' }}
-            >
-              {aiOk ? '✓' : '✗'} Moteur IA
-            </span>
-            {/* SMTP */}
-            <span
-              onClick={() => setRoute({ name: 'settings' })}
-              style={{ cursor: 'pointer', color: smtpOk ? '#28a745' : '#dc3545', textDecoration: 'underline' }}
-            >
-              {smtpOk ? '✓' : '✗'} SMTP
-            </span>
-            {/* CV */}
-            <span
-              onClick={() => setRoute({ name: 'profile' })}
-              style={{ cursor: 'pointer', color: cvOk ? '#28a745' : '#dc3545', textDecoration: 'underline' }}
-            >
-              {cvOk ? '✓' : '✗'} CV
-            </span>
-          </div>
-        )}
-
         {/* DESIGN-2 : toutes les cibles de HomePage sont des routes sans paramètre → cast sûr. */}
         {route.name === 'home' && <HomePage onNavigate={(n) => setRoute({ name: n } as Route)} />}
         {route.name === 'stats' && <DashboardPage onOpenCampaign={openCampaign} />}
