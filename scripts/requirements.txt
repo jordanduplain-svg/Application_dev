@@ -1,0 +1,35 @@
+# Dépendances du scraper candio_scraper — versions épinglées (reproductibilité).
+# Installation :  pip install -r requirements.txt
+# NB : aucun navigateur Chromium à installer — le scraper utilise uniquement le
+#      Fetcher HTTP/curl de scrapling (StealthyFetcher/Chromium jamais instancié).
+
+# ── Cœur (obligatoire) ────────────────────────────────────────────────────────
+requests==2.32.5            # appels HTTP REST + crawl rapide (fallback si httpx absent)
+httpx[http2]==0.28.1        # HTTP async Phase 2 MX + Phase 4 fast-crawl (A1 async migration)
+                            # [http2] active le multiplexage HTTP/2 (h2 dependency)
+scrapling[fetchers]==0.4.8  # Fetcher HTTP/curl (l'extra [fetchers] apporte curl_cffi).
+                            # patchright/playwright viennent aussi via cet extra mais ne
+                            # sont PAS utilisés (pas de StealthyFetcher) — aucun navigateur requis.
+beautifulsoup4==4.14.3      # parsing HTML (extraction emails / liens)
+lxml==6.1.1                 # parseur rapide pour bs4 / scrapling
+dnspython==2.8.0            # lookups MX + résolution catch-all SMTP (dns.asyncresolver)
+
+# ── Qualité / dev (garde anti-régression — voir check.py) ─────────────────────
+pyflakes==3.2.0             # analyse statique : détecte les undefined name (NameError)
+                            # avant un run réel. Lancé par check.py (pnpm check:py).
+
+# ── Enrichissement optionnel (le pipeline dégrade proprement si absent) ────────
+python-whois==0.9.6         # email via WHOIS (enrich_whois)
+
+# ── NER spaCy (extraction de contacts par reconnaissance d'entités nommées) ────
+# Améliore find_recruiter_name sur les pages atypiques (LinkedIn-style, cartes
+# d'équipe tabulaires). Utilisé en fallback entre regex et LLM.
+# Installation en 2 étapes :
+#   pip install spacy
+#   python -m spacy download fr_core_news_sm
+# Le pipeline dégrade proprement si spaCy / fr_core_news_sm sont absents.
+spacy>=3.8,<4.0             # NER framework (fr_core_news_sm ~12 MB, aucun GPU requis)
+# NB : l'extraction LLM OpenAI utilise l'API REST en direct (requests) — le
+# package `openai` n'est PAS requis. La clé se passe via OPENAI_API_KEY (env).
+# python-Wappalyzer         # détection tech-stack (optionnel ; non installé ici —
+#                             enrich_tech_stack se rabat sur l'heuristique maison)

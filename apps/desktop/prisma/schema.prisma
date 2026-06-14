@@ -1,0 +1,170 @@
+// Schéma de données — application desktop mono-utilisateur, 100 % local.
+// Une seule base SQLite (un fichier). Pas d'auth, pas de Stripe, pas de cloud.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // En prod, le fichier est placé dans le dossier userData d'Electron ;
+  // l'URL réelle est injectée au lancement via datasources.db.url.
+  url      = env("DATABASE_URL")
+}
+
+// IMPORTANT : SQLite ne supporte pas les enums Prisma. Les statuts sont donc
+// typés `String` côté base ; la validation se fait via les unions du contrat
+// IPC partagé (CampaignStatus, ApplicationStatus dans @kandijobs/shared).
+
+// Profil unique de l'utilisateur (remplace l'ancien modèle User multi-comptes).
+// Une seule ligne ; les secrets (clé OpenAI, mot de passe SMTP) ne sont PAS
+// ici — ils sont chiffrés via le trousseau Windows (safeStorage).
+model Profile {
+  id          Int      @id @default(autoincrement())
+  firstName   String
+  lastName    String
+  emailSender String?  // Adresse d'envoi des candidatures
+  cvPath      String?  // Chemin du PDF de CV stocké localement
+  cvParsed    String?  // CV extrait par l'IA, sérialisé en JSON
+  // FM-05 : champs de contact complémentaires.
+  phone       String?
+  linkedin    String?
+  portfolio   String?
+  // PROFILE-GH : GitHub perso (preuve de travail), injecté dans les emails.
+  github      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Une campagne = une recherche d'emploi (un poste ciblé + ses paramètres).
+model Campaign {
+  id            String   @id @default(cuid())
+  name          String
+  prompt        String   // Description libre de la recherche
+  jobTitle      String
+  location      String
+  contractTypes String   // Liste CSV ("CDI,CDD,Remote") — SQLite n'a pas de tableaux
+  salaryMin     Int?
+  salaryMax     Int?
+  // Valeurs possibles : DRAFT | RUNNING | COMPLETED (cf. CampaignStatus côté UI)
+  status        String   @default("DRAFT")
+  // UX-6 : date d'archivage — null = campagne active, non null = archivée.
+  archivedAt    DateTime?
+  // UX-7v2 : notes libres sur la campagne.
+  notes         String?
+  // AVAIL : disponibilité saisie (ex. « début octobre 2026 ») — recopiée telle
+  // quelle dans le §4 de la lettre. Évite que l'IA invente une date.
+  availability  String?
+  // INT-2v3 : date d'envoi planifié.
+  scheduledAt   DateTime?
+  // ANA-5v3 : variante B du prompt pour test A/B.
+  promptVariantB String?
+  // CV-MULTI : CV choisi pour cette campagne (joint aux emails + utilisé par l'IA).
+  // null = aucun CV sélectionné (la génération échouera avec un message clair).
+  cvId          String?
+  cv            Cv?      @relation(fields: [cvId], references: [id], onDelete: SetNull)
+  // SECTOR-PREF : secteurs préférés où l'on veut travailler (CSV de clés, max 5).
+  // Vide = tous secteurs. Filtre les leads importés (élargit si trop peu).
+  preferredSectors String @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  companies    Company[]
+  applications Application[]
+}
+
+// CV-MULTI : un CV nommé (plusieurs CV possibles, choisis par campagne).
+// Remplace l'ancien champ unique Profile.cvPath/cvParsed (désormais inutilisé).
+model Cv {
+  id        String   @id @default(cuid())
+  name      String   // nom manuel donné par l'utilisateur (ex: "CV Data Analyst")
+  filePath  String?  // chemin du PDF stocké localement (joint aux emails)
+  parsed    String?  // CV extrait par l'IA, sérialisé JSON (CvParsed)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaigns Campaign[]
+}
+
+// Entreprise cible d'une campagne, saisie manuellement ou importée par CSV.
+// Devient une Application une fois l'email généré.
+model Company {
+  id           String   @id @default(cuid())
+  campaignId   String
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name         String
+  website      String?
+  contactEmail String
+  contactName  String?
+  contactRole  String?
+  // FM-06 : blacklist d'entreprise (exclue de la génération).
+  blacklisted  Boolean  @default(false)
+  // BOUNCE-01 : source de l'email de contact et alternatives à essayer si bounce.
+  emailSource      String  @default("manual")  // manual | hunter_verified | hunter_found | pattern
+  emailAlternatives String @default("[]")      // JSON array — emails alternatifs ordonnés par priorité
+  // SCRAPE-01 : données d'enrichissement issues du scraper.
+  region         String?  // libre (legacy) — ex: "Paris", "PARIS (75)"
+  activityDomain String?  // libellé brut secteur — ex: "Programmation informatique"
+  companySize    String?  // taille brute — ex: "11-50", code INSEE
+  // SCRAPE-LOC : localisation structurée + secteur normalisé (depuis classification.py)
+  country           String?  // ex: "France"
+  regionAdmin       String?  // région administrative — ex: "Île-de-France"
+  dept              String?  // code département — ex: "75"
+  deptName          String?  // nom département — ex: "Paris", "Rhône"
+  city              String?  // ex: "Paris"
+  sector            String?  // secteur normalisé — ex: "Tech / IT", "Pharmacie"
+  // SCRAPE-DESC : description courte de l'activité (texte du site résumé par IA).
+  // Sert à personnaliser le §2 de l'email de candidature spontanée.
+  description       String?  // ex: "Conçoit des capteurs IoT pour l'industrie agroalimentaire."
+  companySizeBucket String?  // bucket taille — ex: "10-19", "200-249"
+  // SCRAPE-02 : stack technique et scores de pertinence.
+  techStack      String  @default("[]")  // JSON array de technologies détectées
+  freshnessScore Int     @default(0)     // Fraîcheur de l'offre scrappée (0-100)
+  relevanceScore Int     @default(0)     // Pertinence du stack vs stack souhaité (0-100)
+  createdAt    DateTime @default(now())
+
+  application Application?
+
+  @@unique([campaignId, contactEmail])
+  @@index([campaignId])
+}
+
+// Candidature : l'email généré pour une entreprise cible, et son suivi.
+model Application {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  companyId  String   @unique // Une candidature par entreprise cible
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  subject    String   // Objet de l'email généré
+  body       String   // Corps de l'email généré
+  // Valeurs : DRAFT | SENDING | SENT | REPLIED | FAILED (cf. ApplicationStatus)
+  status     String   @default("DRAFT")
+  messageId  String?  // Message-ID de l'envoi — sert au matching IMAP des réponses
+  sentAt     DateTime?
+  repliedAt  DateTime?
+  replyContent String?
+  errorMessage String?
+  // UX-10 : note de suivi saisie manuellement dans la page Réponses.
+  followUpNote String?
+  // UX-12 : date d'envoi de la relance automatique.
+  followUpSentAt DateTime?
+  // B2 : Message-ID de la relance — conserve l'original pour le matching IMAP des réponses à la candidature initiale.
+  followUpMessageId String?
+  // UX-4v3 : statut manuel post-réponse (INTERVIEWED/OFFER/REJECTED/ACCEPTED).
+  manualStatus String?
+  // FM-02 : variante de prompt A/B utilisée lors de la génération ('A' ou 'B').
+  promptVariant String?
+  // FM-08 : suivi d'entretien.
+  interviewDate     DateTime?
+  interviewLocation String?
+  interviewNotes    String?
+  // BOUNCE-01 : l'email a rebondi (NDR reçu dans la boîte IMAP).
+  emailBounced   Boolean   @default(false)
+  emailBouncedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([status])
+}

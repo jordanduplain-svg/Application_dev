@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: kandi_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: kandi_db
+      # DEV LOCAL UNIQUEMENT : autorise les connexions sans mot de passe.
+      # Contourne un échec d'authentification Prisma↔Postgres sur certaines
+      # machines Windows. NE PAS utiliser en production.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      # Port hôte 5544 : 5432 et 5433 sont déjà pris par des PostgreSQL natifs
+      # Windows. On expose donc le conteneur sur un port libre.
+      - "5544:5432"
+    healthcheck:
+      # L'utilisateur doit correspondre à POSTGRES_USER ci-dessus ('postgres'),
+      # sinon le healthcheck échoue en permanence.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kandi_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - kandi_db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: kandi_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - kandi_redis_data:/data
+
+volumes:
+  kandi_db_data:
+  kandi_redis_data:

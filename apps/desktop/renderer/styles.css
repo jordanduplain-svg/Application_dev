@@ -1,0 +1,287 @@
+/* ============================================================
+   Candidatures — Design system
+   ============================================================ */
+:root {
+  --sidebar-w: 240px;
+  --sidebar-bg: #1c1c1e;
+  --sidebar-text: rgba(255,255,255,0.85);
+  --accent: #0a84ff;
+  --accent-hover: #006edc;
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --border: #d1d1d6;
+  --text: #1c1c1e;
+  --text-sub: #6e6e73;
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
+  --radius: 8px;
+  font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color-scheme: light;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); }
+#root { height: 100%; display: contents; }
+
+/* ── Layout principal : sidebar fixe + zone défilable ── */
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.sidebar h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.2px;
+  padding: 8px 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  margin-bottom: 4px;
+}
+
+.sidebar button {
+  background: transparent;
+  color: var(--sidebar-text);
+  border: none;
+  padding: 9px 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13.5px;
+  font-weight: 400;
+  width: 100%;
+  transition: background 0.1s;
+  letter-spacing: -0.1px;
+}
+.sidebar button:hover  { background: rgba(255,255,255,0.08); }
+.sidebar button.active { background: rgba(255,255,255,0.14); color: #fff; font-weight: 600; }
+
+/* Indicateur de tâches en cours dans la sidebar */
+.sidebar-task-badge {
+  font-size: 11.5px;
+  color: var(--warning);
+  background: rgba(255,159,10,0.12);
+  border-radius: 5px;
+  padding: 5px 10px;
+  margin: 4px 0;
+}
+
+/* Journal des tâches de fond — ancré en bas */
+.task-log {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  font-size: 11px;
+  max-height: 160px;
+  overflow: auto;
+}
+.task-line   { padding: 2px 0; color: rgba(255,255,255,0.4); word-break: break-word; }
+.task-running { color: #5ac8fa; }
+.task-done   { color: var(--success); }
+.task-failed { color: var(--danger); }
+
+/* ── Zone de contenu ── */
+.content {
+  overflow-y: auto;
+  padding: 28px 32px;
+  background: var(--bg);
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* ── Typographie ── */
+h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 18px; }
+h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+h4 { font-size: 13px; font-weight: 600; }
+
+/* ── Cartes ── */
+.form, .card {
+  background: var(--surface);
+  padding: 20px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 700px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+/* ── Formulaires ── */
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+}
+input, textarea, select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10,132,255,0.15);
+}
+input::placeholder, textarea::placeholder { color: #b0b0b8; }
+
+/* Cases à cocher / radios : NE PAS leur appliquer le style des champs texte
+   (padding 8px/bordure/largeur) — sinon elles se déforment et le libellé passe
+   à la ligne en dessous. On restaure une case compacte alignée avec son texte. */
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+/* ── Boutons ── */
+button {
+  padding: 8px 16px;
+  border-radius: 7px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background 0.1s, opacity 0.1s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+button:hover:not(:disabled)  { background: var(--accent-hover); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button + button { margin-left: 6px; }
+
+/* Variantes de bouton */
+button.btn-danger  { background: var(--danger); }
+button.btn-success { background: var(--success); }
+button.btn-ghost   { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+button.btn-ghost:hover:not(:disabled) { background: #f0f0f5; }
+
+/* ── Listes ── */
+ul { list-style: none; padding: 0; margin: 12px 0; }
+li {
+  background: var(--surface);
+  padding: 13px 16px;
+  margin: 6px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.campaigns-list li { cursor: pointer; transition: background 0.1s, border-color 0.1s; }
+.campaigns-list li:hover { background: #f5f5fa; border-color: #c7c7ce; }
+
+/* ── Badges de statut ── */
+.status {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.status-draft    { background: #e5e5ea; color: #555; }
+.status-running,
+.status-sending  { background: #d4ecff; color: #0060c0; }
+.status-completed,
+.status-sent     { background: #d1f0da; color: #1a7c35; }
+.status-failed   { background: #ffd6d3; color: #a02020; }
+.status-replied  { background: #e5d9ff; color: #5000d6; }
+.status-followed_up { background: #fff3cd; color: #8a6200; }
+
+/* ── Messages utilitaires ── */
+.error { color: var(--danger); font-size: 13px; padding: 8px 12px; background: #fff2f1; border-radius: 6px; border: 1px solid #ffd6d3; }
+.empty { color: var(--text-sub); font-style: italic; }
+
+/* ── Modale ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 99;
+  backdrop-filter: blur(3px);
+}
+.modal {
+  position: fixed; inset: 5% 8%;
+  background: var(--surface);
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.25);
+  display: flex; flex-direction: column; gap: 10px;
+  overflow: auto; z-index: 100;
+}
+.modal textarea { flex: 1; min-height: 280px; font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 13px; }
+
+/* ── Code / pre ── */
+pre {
+  white-space: pre-wrap; word-break: break-word;
+  background: #f3f3f6; padding: 12px 14px;
+  border-radius: 6px; border: 1px solid #e5e5ea;
+  max-height: 300px; overflow: auto; font-size: 12.5px;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+
+/* ── Scrollbars (Webkit) ── */
+::-webkit-scrollbar             { width: 5px; height: 5px; }
+::-webkit-scrollbar-track       { background: transparent; }
+::-webkit-scrollbar-thumb       { background: rgba(0,0,0,0.18); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.28); }
+
+/* ── Recherche globale (dropdown) ── */
+.search-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: #2c2c2e; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 200;
+  max-height: 280px; overflow-y: auto;
+}
+.search-item {
+  padding: 9px 12px; cursor: pointer;
+  font-size: 12.5px; color: rgba(255,255,255,0.8);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.08s;
+}
+.search-item:last-child { border-bottom: none; }
+.search-item:hover { background: rgba(255,255,255,0.08); }
+.search-item-label { font-weight: 500; color: #fff; }
+.search-item-sub   { color: rgba(255,255,255,0.45); font-size: 11.5px; margin-top: 1px; }
+.search-item-type  { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; margin-top: 1px; }

@@ -1,0 +1,6 @@
+# Workspace pnpm — limité à l'app desktop.
+# apps/api et apps/mobile (prototype) sont volontairement exclus : ils restent
+# sur disque pour comparaison mais ne sont plus installés ni résolus.
+packages:
+  - 'apps/desktop'
+  - 'packages/*'

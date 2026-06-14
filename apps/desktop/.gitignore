@@ -1,0 +1,11 @@
+# Sorties de compilation
+out/
+dist/
+
+# Dépendances
+node_modules/
+
+# Base SQLite locale (générée à l'exécution) et secrets
+*.db
+*.db-journal
+prisma/dev.db*

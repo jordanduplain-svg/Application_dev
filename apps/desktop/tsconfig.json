@@ -1,0 +1,20 @@
+{
+  // Un seul tsconfig pour tout le projet (principal + renderer) : suffisant
+  // pour un usage personnel, et plus simple à maintenir. esbuild (via
+  // electron-vite) gère la vraie transpilation ; ce fichier sert au typage.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["electron", "src", "renderer", "electron.vite.config.ts"]
+}

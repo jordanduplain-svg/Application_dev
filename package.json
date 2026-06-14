@@ -1,0 +1,29 @@
+{
+  "name": "candio",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  },
+  "scripts": {
+    "// note": "Toutes les commandes sont filtrées sur l'app desktop (mono-app).",
+    "dev": "pnpm --filter desktop dev",
+    "build": "pnpm --filter desktop build",
+    "build:win": "pnpm check:py && pnpm --filter desktop build:win",
+    "// check:py": "Garde qualité du scraper Python (pyflakes + tests) — voir scripts/check.py.",
+    "check:py": "python scripts/check.py",
+    "db:generate": "pnpm --filter desktop db:generate",
+    "db:migrate": "pnpm --filter desktop db:migrate"
+  },
+  "pnpm": {
+    "// note": "Liste blanche des deps autorisées à exécuter des scripts d'install — sécurité pnpm.",
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "electron"
+    ]
+  }
+}
