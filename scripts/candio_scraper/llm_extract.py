@@ -42,7 +42,7 @@ class LLMConfig:
         openai_key:   str = "",
         openai_model: str = "gpt-4o-mini",
         claude_key:   str = "",
-        claude_model: str = "claude-3-5-haiku-latest",
+        claude_model: str = "claude-haiku-4-5",
         budget:       int = 100,                # max appels LLM par run
         timeout:      int = 45,                 # secondes par appel (Ollama sur CPU peut prendre 20-40 s)
         warmup_timeout: int = 90,               # cold-start (chargement modèle) — plus long pour les gros modèles
@@ -55,7 +55,7 @@ class LLMConfig:
         self.openai_key   = openai_key   or os.environ.get("OPENAI_API_KEY", "")
         self.openai_model = openai_model
         self.claude_key   = claude_key   or os.environ.get("ANTHROPIC_API_KEY", "")
-        self.claude_model = claude_model or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+        self.claude_model = claude_model or os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5")
         self.budget       = budget
         self.timeout      = timeout
         self.warmup_timeout = warmup_timeout

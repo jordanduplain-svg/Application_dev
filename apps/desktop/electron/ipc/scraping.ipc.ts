@@ -362,11 +362,11 @@ async function launchScript(
   // (--ollama-url déjà passé si le crawl LLM est actif → on évite le doublon.)
   if (!config.llmProvider && config.ollamaUrl) args.push('--ollama-url', config.ollamaUrl);
   // Provider des fiches : ollama (local) | openai | claude. Les modèles cloud sont
-  // imposés ici (gpt-4o-mini / claude-3-5-haiku) ; describeModel ne sert qu'à Ollama.
+  // imposés ici (gpt-4o-mini / claude-haiku-4-5) ; describeModel ne sert qu'à Ollama.
   const fichesProvider = config.describeProvider || 'ollama';
   args.push('--describe-provider', fichesProvider);
   if (fichesProvider === 'openai') args.push('--describe-model', 'gpt-4o-mini');
-  else if (fichesProvider === 'claude') args.push('--describe-model', 'claude-3-5-haiku-latest');
+  else if (fichesProvider === 'claude') args.push('--describe-model', 'claude-haiku-4-5');
   else if (config.describeModel) args.push('--describe-model', config.describeModel);
   if (config.githubToken?.trim()) {
     args.push('--github-token', config.githubToken.trim());
@@ -818,7 +818,7 @@ export function registerScrapingHandlers(): void {
     args.push('--describe-provider', fichesProvider);
     args.push('--describe-model',
       fichesProvider === 'openai' ? 'gpt-4o-mini'
-      : fichesProvider === 'claude' ? 'claude-3-5-haiku-latest'
+      : fichesProvider === 'claude' ? 'claude-haiku-4-5'
       : (cfg.describeModel || 'qwen2.5:7b'));
     if (newsOnly) args.push('--news-only'); // régénère seulement la note actualités
     if (force) args.push('--desc-force'); // régénère toutes les fiches existantes
