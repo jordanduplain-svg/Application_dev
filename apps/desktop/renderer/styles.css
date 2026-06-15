@@ -407,3 +407,23 @@ pre {
    les modales en position:fixed. */
 @keyframes page-in { from { opacity: 0; } to { opacity: 1; } }
 .content > * { animation: page-in 0.2s var(--ease-spring); }
+
+/* ============================================================
+   DESIGN-2 — Cadre adaptatif (s'adapte à n'importe quel écran)
+   ============================================================ */
+/* Écran étroit : la sidebar se replie en RAIL d'icônes (labels masqués,
+   bulles d'aide via title=), et le contenu réduit ses marges. */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 58px; }
+  .sidebar { padding: 10px 7px; }
+  .sidebar h1,
+  .sidebar-search,
+  .sidebar-task-badge,
+  .task-log { display: none; }
+  .sidebar button { justify-content: center; gap: 0; padding: 11px 0; }
+  .sidebar button > span { display: none; }
+  .content { padding: 20px 16px; }
+}
+@media (max-width: 560px) {
+  .content { padding: 14px 11px; }
+}
