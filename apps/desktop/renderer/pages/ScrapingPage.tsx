@@ -8,7 +8,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ClipboardList, BarChart3, Play, Square, Loader2, Rocket } from 'lucide-react';
+import {
+  ClipboardList, BarChart3, Play, Square, Loader2, Rocket,
+  Briefcase, Layers, MapPin, Users, Radio, Hash, Clock,
+} from 'lucide-react';
 import type { ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { api } from '../lib/api';
@@ -834,27 +837,27 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
         {/* Cockpit — résume la config ET lance le scraping (rail de pilotage). */}
         <div className="cockpit">
-          <h4><Rocket size={16} />Prêt à lancer</h4>
+          <h4><span className="rocket-chip"><Rocket size={16} /></span>Prêt à lancer</h4>
           <ul className="cockpit-recap">
-            <li><span className="k">Poste</span><span className="v">{config.sector || '—'}</span></li>
-            <li><span className="k">Secteurs</span><span className={`v${(config.industry ?? '').trim() ? '' : ' muted'}`}>{
+            <li><span className="ico"><Briefcase size={15} color="#a78bfa" /></span><span className="k">Poste</span><span className="v">{config.sector || '—'}</span></li>
+            <li><span className="ico"><Layers size={15} color="#60a5fa" /></span><span className="k">Secteurs</span><span className={`v${(config.industry ?? '').trim() ? '' : ' muted'}`}>{
               (config.industry ?? '').trim()
                 ? (config.industry ?? '').split(',').map((s) => s.trim()).filter(Boolean)
                     .map((v) => INDUSTRY_CHOICES.find((c) => c.value === v)?.label ?? v)
                     .join(', ')
                 : 'Auto (même que le poste)'
             }</span></li>
-            <li><span className="k">Zone</span><span className="v">{config.city || 'France entière'}</span></li>
-            <li><span className="k">Taille</span><span className="v">{
+            <li><span className="ico"><MapPin size={15} color="#f472b6" /></span><span className="k">Zone</span><span className="v">{config.city || 'France entière'}</span></li>
+            <li><span className="ico"><Users size={15} color="#2dd4bf" /></span><span className="k">Taille</span><span className="v">{
               config.sizeTarget === 'pme' ? 'TPE/PME (0–250)' :
               config.sizeTarget === 'eti' ? 'ETI (250–5000)' :
               config.sizeTarget === 'grand' ? 'Grand groupe (5000+)' : 'Toutes tailles'
             }</span></li>
-            <li><span className="k">Sources</span><span className={`v${config.sources.length ? '' : ' warn'}`}>{config.sources.length
+            <li><span className="ico"><Radio size={15} color="#fbbf24" /></span><span className="k">Sources</span><span className={`v${config.sources.length ? '' : ' warn'}`}>{config.sources.length
               ? `${config.sources.length} sélectionnée${config.sources.length > 1 ? 's' : ''}`
               : '⚠ aucune'}</span></li>
-            <li><span className="k">Volume max</span><span className="v">{config.max} entreprises</span></li>
-            <li><span className="k">Durée max</span><span className="v">{(config.maxRuntimeMin ?? 0) === 0 ? 'Illimitée' : `${config.maxRuntimeMin} min`}</span></li>
+            <li><span className="ico"><Hash size={15} color="#fb923c" /></span><span className="k">Volume max</span><span className="v">{config.max} entreprises</span></li>
+            <li><span className="ico"><Clock size={15} color="#34d399" /></span><span className="k">Durée max</span><span className="v">{(config.maxRuntimeMin ?? 0) === 0 ? 'Illimitée' : `${config.maxRuntimeMin} min`}</span></li>
           </ul>
           <button onClick={launch} disabled={running || config.sources.length === 0} className="cockpit-launch">
             {running ? <><Loader2 size={17} className="spin" />Scraping en cours…</> : <><Play size={17} fill="currentColor" />Lancer le scraping</>}

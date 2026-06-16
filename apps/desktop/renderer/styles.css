@@ -662,19 +662,25 @@ pre {
   color: #fff; box-shadow: var(--shadow-md);
 }
 .cockpit h4 {
-  margin: 0 0 12px; font-size: 14px; font-weight: 700; letter-spacing: -0.2px;
-  display: flex; align-items: center; gap: 8px; color: #fff;
+  margin: 0 0 14px; font-size: 14px; font-weight: 700; letter-spacing: -0.2px;
+  display: flex; align-items: center; gap: 9px; color: #fff;
+}
+.cockpit h4 .rocket-chip {
+  width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(52,199,89,0.18); color: #5ee7a8;
 }
 .cockpit-recap { list-style: none; margin: 0 0 16px; padding: 0; font-size: 12.5px; line-height: 1.5; }
 .cockpit-recap li {
-  display: flex; justify-content: space-between; gap: 12px;
-  margin: 0; padding: 7px 0; border-radius: 0;
+  display: flex; align-items: center; gap: 10px;
+  margin: 0; padding: 8px 0; border-radius: 0;
   background: transparent; border: none;
   border-bottom: 1px solid rgba(255,255,255,0.1);
   box-shadow: none;
 }
 .cockpit-recap li:last-child { border-bottom: none; }
-.cockpit-recap .k { color: rgba(255,255,255,0.55); flex: 0 0 auto; }
+.cockpit-recap .ico { display: flex; flex: 0 0 auto; }
+.cockpit-recap .k { color: rgba(255,255,255,0.55); flex: 1; }
 .cockpit-recap .v { color: #fff; font-weight: 600; text-align: right; }
 .cockpit-recap .v.warn { color: #ff9f6b; }
 .cockpit-recap .v.muted { color: rgba(255,255,255,0.45); font-weight: 400; }
