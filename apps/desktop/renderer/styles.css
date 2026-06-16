@@ -647,9 +647,42 @@ pre {
 .form-grid label { margin: 0; }
 @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
 
-/* Scraping : grille config responsive (Recherche large + Sources/Récap étroit). */
-.scrape-cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .scrape-cols { grid-template-columns: 1fr; } }
+/* Scraping : grille config responsive (Recherche large + rail de pilotage). */
+.scrape-cols { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 920px) { .scrape-cols { grid-template-columns: 1fr; } }
+
+/* Rail droit collant : Sources + cockpit suivent le scroll de la config. */
+.scrape-rail { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 12px; }
+@media (max-width: 920px) { .scrape-rail { position: static; } }
+
+/* Cockpit de lancement : panneau accent qui résume + lance le scraping. */
+.cockpit {
+  border-radius: 16px; padding: 18px 20px;
+  background: linear-gradient(150deg, #1f2a52 0%, #14132e 100%);
+  color: #fff; box-shadow: var(--shadow-md);
+}
+.cockpit h4 {
+  margin: 0 0 12px; font-size: 14px; font-weight: 700; letter-spacing: -0.2px;
+  display: flex; align-items: center; gap: 8px; color: #fff;
+}
+.cockpit-recap { list-style: none; margin: 0 0 16px; padding: 0; font-size: 12.5px; line-height: 1.5; }
+.cockpit-recap li {
+  display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+}
+.cockpit-recap li:last-child { border-bottom: none; }
+.cockpit-recap .k { color: rgba(255,255,255,0.55); flex: 0 0 auto; }
+.cockpit-recap .v { color: #fff; font-weight: 600; text-align: right; }
+.cockpit-recap .v.warn { color: #ff9f6b; }
+.cockpit-recap .v.muted { color: rgba(255,255,255,0.45); font-weight: 400; }
+.cockpit-launch {
+  width: 100%; justify-content: center; padding: 13px 0 !important; font-size: 15px !important;
+  background: var(--success) !important; box-shadow: 0 4px 14px rgba(52,199,89,0.4) !important;
+  border-radius: 11px !important;
+}
+.cockpit-launch:disabled { background: rgba(255,255,255,0.18) !important; box-shadow: none !important; color: rgba(255,255,255,0.5) !important; }
+.cockpit-hint { font-size: 11px; color: rgba(255,255,255,0.5); text-align: center; margin: 9px 0 0; }
+
 /* Icône en rotation (spinner pendant le scraping). */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }

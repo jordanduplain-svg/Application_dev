@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ClipboardList, BarChart3, Play, Square, Loader2 } from 'lucide-react';
+import { ClipboardList, BarChart3, Play, Square, Loader2, Rocket } from 'lucide-react';
 import type { ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { api } from '../lib/api';
@@ -783,8 +783,8 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         </div>
         </div>{/* fin ① Recherche */}
 
-        {/* Colonne droite : ② Sources + récapitulatif (comble le vide — solution B) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Colonne droite : ② Sources + cockpit de lancement (rail collant) */}
+        <div className="scrape-rail">
         {/* ② Sources de collecte */}
         <div style={cardStyle}>
           <SectionHeader n={2} title="Sources de collecte" subtitle="Où aller chercher les entreprises" />
@@ -833,35 +833,39 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
           </div>
         </div>{/* fin ② Sources */}
 
-        {/* Récapitulatif live — résume ce qui va tourner (comble le vide sous Sources) */}
-        <div style={{ ...cardStyle, background: '#f8fafc', marginBottom: 0, flex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: '#1d1d1f', marginBottom: '10px' }}>
-            📋 Récapitulatif
-          </div>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '12.5px', color: '#444', lineHeight: 1.9 }}>
-            <li><strong>Poste :</strong> {config.sector || '—'}</li>
-            <li><strong>Secteurs :</strong> {
+        {/* Cockpit — résume la config ET lance le scraping (rail de pilotage). */}
+        <div className="cockpit">
+          <h4><Rocket size={16} />Prêt à lancer</h4>
+          <ul className="cockpit-recap">
+            <li><span className="k">Poste</span><span className="v">{config.sector || '—'}</span></li>
+            <li><span className="k">Secteurs</span><span className={`v${(config.industry ?? '').trim() ? '' : ' muted'}`}>{
               (config.industry ?? '').trim()
                 ? (config.industry ?? '').split(',').map((s) => s.trim()).filter(Boolean)
                     .map((v) => INDUSTRY_CHOICES.find((c) => c.value === v)?.label ?? v)
                     .join(', ')
-                : <span style={{ color: '#888' }}>Auto (même que le poste)</span>
-            }</li>
-            <li><strong>Zone :</strong> {config.city || 'France entière'}</li>
-            <li><strong>Taille :</strong> {
+                : 'Auto (même que le poste)'
+            }</span></li>
+            <li><span className="k">Zone</span><span className="v">{config.city || 'France entière'}</span></li>
+            <li><span className="k">Taille</span><span className="v">{
               config.sizeTarget === 'pme' ? 'TPE/PME (0–250)' :
               config.sizeTarget === 'eti' ? 'ETI (250–5000)' :
               config.sizeTarget === 'grand' ? 'Grand groupe (5000+)' : 'Toutes tailles'
-            }</li>
-            <li><strong>Sources :</strong> {config.sources.length
-              ? config.sources.join(', ')
-              : <span style={{ color: '#ff453a' }}>⚠ aucune sélectionnée</span>}</li>
-            <li><strong>Emails :</strong> {(config.emailSources ?? []).join(', ') || '—'}</li>
-            <li><strong>Volume max :</strong> {config.max} entreprises</li>
-            <li><strong>Budget crawl :</strong> {config.crawlBudgetSec ?? 25} s / entreprise</li>
-            <li><strong>Pages / run :</strong> {config.pagesPerRun ?? 2} <span style={{ color: '#34c759', fontSize: '11px' }}>✅ pagination auto</span></li>
-            <li><strong>Durée max :</strong> {(config.maxRuntimeMin ?? 0) === 0 ? 'Illimitée' : `${config.maxRuntimeMin} min`}</li>
+            }</span></li>
+            <li><span className="k">Sources</span><span className={`v${config.sources.length ? '' : ' warn'}`}>{config.sources.length
+              ? `${config.sources.length} sélectionnée${config.sources.length > 1 ? 's' : ''}`
+              : '⚠ aucune'}</span></li>
+            <li><span className="k">Volume max</span><span className="v">{config.max} entreprises</span></li>
+            <li><span className="k">Durée max</span><span className="v">{(config.maxRuntimeMin ?? 0) === 0 ? 'Illimitée' : `${config.maxRuntimeMin} min`}</span></li>
           </ul>
+          <button onClick={launch} disabled={running || config.sources.length === 0} className="cockpit-launch">
+            {running ? <><Loader2 size={17} className="spin" />Scraping en cours…</> : <><Play size={17} fill="currentColor" />Lancer le scraping</>}
+          </button>
+          {running && (
+            <button onClick={cancel} className="btn-danger" style={{ width: '100%', justifyContent: 'center', marginTop: '8px', marginLeft: 0, padding: '11px 0', borderRadius: '11px' }}>
+              <Square size={14} fill="currentColor" />Annuler
+            </button>
+          )}
+          <p className="cockpit-hint">Tous les réglages détaillés ci-dessous sont facultatifs.</p>
         </div>
         </div>{/* fin colonne droite */}
         </div>{/* fin ligne 1 : Recherche + Sources */}
@@ -932,29 +936,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
           </div>
         )}
 
-        {/* ▶ Action principale — placée AVANT les réglages détaillés. */}
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', margin: '4px 0 18px', flexWrap: 'wrap' }}>
-          <button
-            onClick={launch}
-            disabled={running || config.sources.length === 0}
-            style={{
-              padding: '14px 32px', fontSize: '15px', fontWeight: 700,
-              background: running ? undefined : 'var(--success)',
-              boxShadow: running ? undefined : '0 4px 14px rgba(52,199,89,0.35)',
-              borderRadius: '12px',
-            }}
-          >
-            {running ? <><Loader2 size={17} className="spin" />Scraping en cours…</> : <><Play size={17} fill="currentColor" />Lancer le scraping</>}
-          </button>
-          {running && (
-            <button onClick={cancel} className="btn-danger" style={{ padding: '14px 20px', fontSize: '14px', borderRadius: '12px' }}>
-              <Square size={15} fill="currentColor" />Annuler
-            </button>
-          )}
-          <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>
-            Tous les réglages ci-dessous sont facultatifs (laissez par défaut).
-          </span>
-        </div>
+        {/* (Le lancement est dans le cockpit du rail droit — toujours visible.) */}
 
         {/* ③ ⚙️ Réglages détaillés — une seule grosse zone d'accordéons (listes déroulantes). */}
         <div style={cardStyle}>
