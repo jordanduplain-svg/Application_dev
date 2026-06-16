@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ClipboardList, BarChart3, Play, Square, Loader2 } from 'lucide-react';
 import type { ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { api } from '../lib/api';
@@ -359,39 +360,38 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
   return (
     <div style={{ padding: '24px', maxWidth: '1180px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Scraping d'entreprises</h2>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
+        <div style={{ flex: 1, minWidth: '240px' }}>
+          <h2>Scraping d'entreprises</h2>
+          <div className="page-sub">
+            Lance le script Python <code>scrape_leads.py</code> directement depuis l'app.
+            Le CSV généré peut être importé dans n'importe quelle campagne.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {/* Accès à la page de consultation des leads scrapés. */}
-          <button onClick={() => onGoToLeads?.()}
-            style={{ background: '#0a84ff', color: '#fff', border: 'none', borderRadius: '8px',
-              padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
-            📋 Mes leads scrapés
+          <button onClick={() => onGoToLeads?.()}>
+            <ClipboardList size={15} />Mes leads scrapés
           </button>
           {/* Rapport HTML de performance (généré par le scraper). */}
           <button
+            className="btn-secondary"
             onClick={async () => {
               const m = masterPaths ?? await api.invoke('scraping:getMasterPaths');
               if (m?.htmlPath) await api.invoke('shell:open', m.htmlPath).catch(() => {});
             }}
             disabled={!masterPaths?.htmlPath}
-            title={masterPaths?.htmlPath ? 'Ouvre le rapport HTML de performance' : 'Lance un scraping pour générer le rapport'}
-            style={{ background: 'transparent', color: '#555', border: '1px solid #ccc', borderRadius: '8px',
-              padding: '8px 14px', cursor: masterPaths?.htmlPath ? 'pointer' : 'not-allowed', fontSize: '13px' }}>
-            📊 Rapport performance
+            title={masterPaths?.htmlPath ? 'Ouvre le rapport HTML de performance' : 'Lance un scraping pour générer le rapport'}>
+            <BarChart3 size={15} />Rapport performance
           </button>
         </div>
       </div>
-      <p style={{ color: '#666', marginBottom: '24px', marginTop: '8px' }}>
-        Lance le script Python <code>scrape_leads.py</code> directement depuis l'app.
-        Le CSV généré peut être importé dans n'importe quelle campagne.
-      </p>
 
       {/* ── Configuration (cartes titrées numérotées pour une hiérarchie claire) ── */}
       <section style={{ marginBottom: '28px' }}>
 
         {/* Ligne 1 : ① Recherche (gauche) + ② Sources (droite), côte à côte */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '16px', alignItems: 'start' }}>
+        <div className="scrape-cols">
 
         {/* ① Recherche */}
         <div style={cardStyle}>
@@ -938,25 +938,20 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
             onClick={launch}
             disabled={running || config.sources.length === 0}
             style={{
-              padding: '13px 30px', fontSize: '15px', fontWeight: 700,
-              background: running ? '#888' : '#34c759', color: '#fff', border: 'none',
-              borderRadius: '10px', cursor: running ? 'not-allowed' : 'pointer',
+              padding: '14px 32px', fontSize: '15px', fontWeight: 700,
+              background: running ? undefined : 'var(--success)',
+              boxShadow: running ? undefined : '0 4px 14px rgba(52,199,89,0.35)',
+              borderRadius: '12px',
             }}
           >
-            {running ? '⟳  Scraping en cours…' : '▶  Lancer le scraping'}
+            {running ? <><Loader2 size={17} className="spin" />Scraping en cours…</> : <><Play size={17} fill="currentColor" />Lancer le scraping</>}
           </button>
           {running && (
-            <button
-              onClick={cancel}
-              style={{
-                padding: '13px 18px', fontSize: '14px',
-                background: '#ff453a', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer',
-              }}
-            >
-              ■  Annuler
+            <button onClick={cancel} className="btn-danger" style={{ padding: '14px 20px', fontSize: '14px', borderRadius: '12px' }}>
+              <Square size={15} fill="currentColor" />Annuler
             </button>
           )}
-          <span style={{ fontSize: '12px', color: '#999' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-sub)' }}>
             Tous les réglages ci-dessous sont facultatifs (laissez par défaut).
           </span>
         </div>
@@ -1845,17 +1840,17 @@ function ScoringSection({
 }
 
 const labelStyle: React.CSSProperties = {
-  display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px', fontWeight: 500,
+  display: 'block', fontSize: '12.5px', color: '#444', marginBottom: '5px', fontWeight: 600,
 };
 const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 11px', borderRadius: '8px',
-  border: '1px solid #d2d2d7', fontSize: '13px', boxSizing: 'border-box',
+  width: '100%', padding: '9px 12px', borderRadius: '9px',
+  border: '1px solid #d1d1d6', fontSize: '13.5px', boxSizing: 'border-box',
 };
 // Sous-titre de groupe (pleine largeur dans une grille) pour segmenter une carte.
 const subGroupStyle: React.CSSProperties = {
   gridColumn: '1 / -1', fontSize: '11px', fontWeight: 700, color: '#86868b',
-  textTransform: 'uppercase', letterSpacing: '0.5px',
-  marginTop: '6px', paddingBottom: '4px', borderBottom: '1px solid #f0f0f0',
+  textTransform: 'uppercase', letterSpacing: '0.6px',
+  marginTop: '10px', paddingBottom: '6px', borderBottom: '1px solid #ececf0',
 };
 // Résumé d'accordéon (liste déroulante) dans la zone Réglages détaillés.
 const accordionSummaryStyle: React.CSSProperties = {
@@ -1871,24 +1866,27 @@ const emailMethodStyle = (on: boolean): React.CSSProperties => ({
 });
 
 // ── Tokens de mise en page (hiérarchie claire : cartes titrées numérotées) ────
-// Carte de groupe : fond blanc, bordure douce, coin arrondi, respiration.
+// Carte de groupe : fond blanc, bordure douce, coin arrondi, profondeur, respiration.
 const cardStyle: React.CSSProperties = {
-  background: '#fff', border: '1px solid #e6e6eb', borderRadius: '12px',
-  padding: '18px 20px', marginBottom: '16px',
+  background: '#fff', border: '1px solid #d1d1d6', borderRadius: '16px',
+  padding: '22px 24px', marginBottom: '16px',
+  boxShadow: '0 1px 3px rgba(17,17,26,0.05), 0 1px 2px rgba(17,17,26,0.04)',
 };
 
 // En-tête de carte avec pastille numérotée + sous-titre discret.
 function SectionHeader({ n, title, subtitle }: { n: number; title: string; subtitle?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '14px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        minWidth: '22px', height: '22px', borderRadius: '50%', background: '#007aff',
-        color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0,
+        width: '30px', height: '30px', borderRadius: '10px',
+        background: 'linear-gradient(135deg, #2b8aff 0%, #0a6ae0 100%)',
+        color: '#fff', fontSize: '14px', fontWeight: 700, flexShrink: 0,
+        boxShadow: '0 2px 6px rgba(10,106,224,0.32)',
       }}>{n}</span>
       <div>
-        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: '#1d1d1f', letterSpacing: '-0.01em' }}>{title}</h3>
-        {subtitle && <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#86868b' }}>{subtitle}</p>}
+        <h3 style={{ margin: 0, fontSize: '16.5px', fontWeight: 700, color: '#1d1d1f', letterSpacing: '-0.3px' }}>{title}</h3>
+        {subtitle && <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#86868b' }}>{subtitle}</p>}
       </div>
     </div>
   );

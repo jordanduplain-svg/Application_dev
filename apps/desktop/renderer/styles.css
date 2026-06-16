@@ -647,6 +647,13 @@ pre {
 .form-grid label { margin: 0; }
 @media (max-width: 720px) { .form-grid { grid-template-columns: 1fr; } }
 
+/* Scraping : grille config responsive (Recherche large + Sources/Récap étroit). */
+.scrape-cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .scrape-cols { grid-template-columns: 1fr; } }
+/* Icône en rotation (spinner pendant le scraping). */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
 /* Puces de sélection (types de contrat) — état actif/inactif clair. */
 .chip-toggle {
   padding: 5px 13px !important; border-radius: 999px !important; font-size: 12.5px !important;
