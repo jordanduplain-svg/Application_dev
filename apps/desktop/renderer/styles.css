@@ -170,18 +170,20 @@ label {
   color: #444;
 }
 input, textarea, select {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 9px;
   font: inherit;
+  font-size: 13.5px;
   background: var(--surface);
   color: var(--text);
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
 }
+input:hover:not(:focus), textarea:hover:not(:focus), select:hover:not(:focus) { border-color: #b8b8bf; }
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10,132,255,0.15);
+  box-shadow: 0 0 0 3.5px rgba(10,132,255,0.16);
 }
 input::placeholder, textarea::placeholder { color: #b0b0b8; }
 
@@ -540,6 +542,17 @@ pre {
 .table-wrap table { min-width: 620px; margin: 0; }
 .table-wrap.wide table { min-width: 760px; }
 .table-wrap th, .table-wrap td { white-space: normal; }
+/* En-têtes raffinés : capitales discrètes sur fond légèrement teinté. */
+.table-wrap thead tr { background: #fafafb; border-bottom: 1px solid var(--border) !important; }
+.table-wrap thead th {
+  color: var(--text-sub) !important; font-size: 11px !important; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 10px !important;
+}
+/* Lignes : survol doux, séparateurs fins, première colonne respirée. */
+.table-wrap tbody tr { transition: background 0.12s; border-bottom: 1px solid #f0f0f3 !important; }
+.table-wrap tbody tr:hover { background: #f7f8fb; }
+.table-wrap tbody tr:last-child { border-bottom: none !important; }
+.table-wrap tbody td { padding: 9px 10px !important; }
 
 /* En-tête de section repliable : barre-panneau clairement cliquable. */
 .section-toggle {

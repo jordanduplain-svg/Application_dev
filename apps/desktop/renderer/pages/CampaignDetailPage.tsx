@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Pencil, Archive, Trash2, ChevronRight,
-  Building2, Send, Mail, Percent, Sparkles, Download,
+  Building2, Send, Mail, Percent, Sparkles, Download, Plus, X, Search,
 } from 'lucide-react';
 import { subDays, isBefore, parseISO } from 'date-fns';
 import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
@@ -987,11 +987,12 @@ export default function CampaignDetailPage({
       <button
         type="button"
         onClick={() => setShowAddCompany((v) => !v)}
-        style={{ fontSize: '14px', fontWeight: 600, padding: '8px 16px', marginTop: '4px', marginBottom: '8px',
-          border: 'none', borderRadius: '6px', background: showAddCompany ? '#e5e5ea' : '#007aff',
-          color: showAddCompany ? '#333' : '#fff', cursor: 'pointer' }}
+        className={showAddCompany ? 'btn-secondary' : ''}
+        style={{ marginTop: '4px', marginBottom: '8px' }}
       >
-        {showAddCompany ? '▾ Fermer le formulaire' : '＋ Ajouter une entreprise'}
+        {showAddCompany
+          ? <><X size={15} />Fermer le formulaire</>
+          : <><Plus size={15} />Ajouter une entreprise</>}
       </button>
       {showAddCompany && (
       <div className="form">
@@ -1100,13 +1101,16 @@ export default function CampaignDetailPage({
       )}
 
       {/* PERF-2 : barre de recherche + filtre statut. */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-        <input
-          placeholder="Rechercher…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setAppsPage(0); }}
-          style={{ flex: 1 }}
-        />
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <div style={{ position: 'relative', flex: 1, display: 'flex' }}>
+          <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-sub)', pointerEvents: 'none' }} />
+          <input
+            placeholder="Rechercher une entreprise, un objet…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setAppsPage(0); }}
+            style={{ flex: 1, paddingLeft: '32px' }}
+          />
+        </div>
         <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setAppsPage(0); }}>
           <option value="">Tous</option>
           <option value="DRAFT">Brouillon</option>
