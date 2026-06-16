@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  Mail, Building2, Send, MessageSquare, Copy, ArchiveRestore, Plus, Sparkles,
+} from 'lucide-react';
 import type { Campaign, CampaignInput, Cv } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
@@ -238,21 +241,21 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
 
   return (
     <section>
-      <h2>Campagnes</h2>
+      <div className="page-head">
+        <h2>Campagnes</h2>
+        <div className="page-sub">Vos campagnes de candidatures spontanées — cliquez pour ouvrir, ou créez-en une ci-dessous.</div>
+      </div>
       {/* Le choix du moteur IA est centralisé sur la page Accueil. */}
 
       {/* FM-02 : quota d'envoi du jour, visible avant de générer/envoyer. */}
       {sendQuota && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
-          padding: '6px 12px', marginBottom: '12px', fontSize: '13px',
-          background: '#f5f5f7', borderRadius: '8px', border: '1px solid #e0e0e0',
-        }}>
-          <span>📨 Envois aujourd'hui :</span>
-          <strong style={{ color: sendQuota.count >= sendQuota.limit ? '#ff453a' : '#34c759' }}>
+        <div className="quota-bar">
+          <span className="quota-ico"><Mail size={16} /></span>
+          <span>Envois aujourd'hui :</span>
+          <strong style={{ color: sendQuota.count >= sendQuota.limit ? 'var(--danger)' : 'var(--success)' }}>
             {sendQuota.count} / {sendQuota.limit}
           </strong>
-          <span style={{ color: '#888' }}>
+          <span style={{ color: 'var(--text-sub)' }}>
             {sendQuota.count >= sendQuota.limit
               ? '— plafond du jour atteint (anti-suspension Gmail), réessaie demain'
               : `— ${sendQuota.limit - sendQuota.count} restant(s) avant le plafond du jour`}
@@ -261,7 +264,8 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
             <button
               type="button"
               onClick={() => onGoToSettings()}
-              style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px', background: 'transparent', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}
+              className="btn-secondary"
+              style={{ marginLeft: 'auto', fontSize: '11.5px', padding: '4px 10px' }}
             >
               Détails
             </button>
@@ -275,26 +279,25 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
         {paginatedList.map((c) => (
           <li key={c.id}>
             {/* Clic sur le nom ouvre la campagne. */}
-            <span
-              style={{ flex: 1, cursor: 'pointer' }}
-              onClick={() => onOpen(c.id)}
-            >
-              <strong>{c.name}</strong> — {c.jobTitle} · {c.location}
-              {/* UX-9v2 : compteurs. */}
-              {' '}
-              <span style={{ fontSize: '11px', color: '#888' }}>
-                ({c.companiesCount} ent. / {c.sentCount} env. / {c.repliedCount} rép.)
-              </span>
-            </span>
+            <div className="camp-main" onClick={() => onOpen(c.id)}>
+              <div className="camp-name">{c.name}</div>
+              <div className="camp-meta">{c.jobTitle} · {c.location || 'Toute la France'}</div>
+              {/* UX-9v2 : compteurs en badges. */}
+              <div className="camp-stats">
+                <span className="camp-stat"><Building2 size={12} />{c.companiesCount} entreprises</span>
+                <span className="camp-stat"><Send size={12} />{c.sentCount} envoyés</span>
+                <span className="camp-stat"><MessageSquare size={12} />{c.repliedCount} réponses</span>
+              </div>
+            </div>
             {/* UX-7 : statut en français. */}
             <span className={`status status-${c.status.toLowerCase()}`}>{statusLabel(c.status)}</span>
             {/* UX-4v2 : bouton dupliquer. */}
             <button
               onClick={(e) => { e.stopPropagation(); void duplicate(c.id); }}
               disabled={duplicatingId === c.id}
-              style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 8px' }}
+              title="Dupliquer cette campagne"
             >
-              {duplicatingId === c.id ? '…' : 'Dupliquer'}
+              <Copy size={13} />{duplicatingId === c.id ? '…' : 'Dupliquer'}
             </button>
           </li>
         ))}
@@ -320,8 +323,10 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
       <div style={{ marginTop: '24px' }}>
         <button
           onClick={() => setShowArchived((v) => !v)}
-          style={{ fontSize: '12px', background: 'transparent', border: '1px solid #ccc' }}
+          className="btn-secondary"
+          style={{ fontSize: '12.5px' }}
         >
+          <ArchiveRestore size={14} />
           {showArchived ? 'Masquer' : 'Afficher'} les campagnes archivées
           {archivedList.length > 0 && ` (${archivedList.length})`}
         </button>
@@ -334,7 +339,8 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
                 <button
                   onClick={bulkDeleteArchived}
                   disabled={bulkDeleting}
-                  style={{ background: '#ff453a', color: '#fff', marginBottom: '8px', fontSize: '11px' }}
+                  className="btn-danger"
+                  style={{ marginBottom: '8px', fontSize: '12px' }}
                 >
                   {bulkDeleting ? 'Suppression…' : `Supprimer toutes les archivées (${archivedList.length})`}
                 </button>
@@ -366,7 +372,9 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
       </div>
 
       <div className="form">
-        <h3>Nouvelle campagne</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Plus size={18} color="var(--accent)" />Nouvelle campagne
+        </h3>
         <label>Nom
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </label>
@@ -431,18 +439,13 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
                 <button
                   key={ct}
                   type="button"
+                  className={`chip-toggle ${active ? 'on' : 'off'}`}
                   onClick={() => setForm({
                     ...form,
                     contractTypes: active
                       ? form.contractTypes.filter((c) => c !== ct)
                       : [...form.contractTypes, ct],
                   })}
-                  style={{
-                    padding: '4px 12px', borderRadius: '14px', cursor: 'pointer',
-                    border: active ? '1px solid #007aff' : '1px solid #ccc',
-                    background: active ? '#007aff' : '#f0f0f0',
-                    color: active ? '#fff' : '#333', fontSize: '13px',
-                  }}
                 >
                   {ct}
                 </button>
@@ -520,7 +523,9 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
           Si renseigné, la moitié des emails sera générée avec le Prompt B pour comparer les taux de réponse.
         </small>
         {formError && <p className="error">{formError}</p>}
-        <button onClick={create} disabled={isSaving}>{isSaving ? 'Création…' : 'Créer'}</button>
+        <button onClick={create} disabled={isSaving} style={{ alignSelf: 'flex-start', padding: '10px 22px', fontSize: '14px' }}>
+          <Sparkles size={16} />{isSaving ? 'Création…' : 'Créer la campagne'}
+        </button>
       </div>
     </section>
   );
