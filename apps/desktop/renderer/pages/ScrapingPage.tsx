@@ -397,8 +397,8 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         <div className="scrape-cols">
 
         {/* ① Recherche */}
-        <div style={cardStyle}>
-        <SectionHeader n={1} title="Recherche" subtitle="Le poste ciblé, la zone géographique et le volume" />
+        <div style={cardStyle('#2b8aff')}>
+        <SectionHeader n={1} title="Recherche" subtitle="Le poste ciblé, la zone géographique et le volume" accent="#2b8aff" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', alignItems: 'start' }}>
           <div style={subGroupStyle}>🎯 Cible</div>
           <label>
@@ -788,8 +788,8 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         {/* Colonne droite : ② Sources + cockpit de lancement (rail collant) */}
         <div className="scrape-rail">
         {/* ② Sources de collecte */}
-        <div style={cardStyle}>
-          <SectionHeader n={2} title="Sources de collecte" subtitle="Où aller chercher les entreprises" />
+        <div style={cardStyle('#1aa179')}>
+          <SectionHeader n={2} title="Sources de collecte" subtitle="Où aller chercher les entreprises" accent="#1aa179" />
 
           {/* Job boards */}
           <p style={{ fontSize: '11px', color: '#888', margin: '6px 0 4px' }}>
@@ -941,9 +941,9 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         {/* (Le lancement est dans le cockpit du rail droit — toujours visible.) */}
 
         {/* ③ ⚙️ Réglages détaillés — une seule grosse zone d'accordéons (listes déroulantes). */}
-        <div style={cardStyle}>
+        <div style={cardStyle('#6c5ce0')}>
           <SectionHeader n={3} title="Réglages détaillés"
-            subtitle="Tout est optionnel — dépliez seulement ce que vous voulez ajuster" />
+            subtitle="Tout est optionnel — dépliez seulement ce que vous voulez ajuster" accent="#6c5ce0" />
 
         {/* 📧 Emails à récupérer */}
         <details style={{ marginBottom: '6px' }}>
@@ -1642,7 +1642,7 @@ function ScoringSection({
         📊 Scoring &amp; tri des résultats{' '}
         <span style={{ fontWeight: 400, fontSize: '12px', color: '#86868b' }}>— avancé, laissez par défaut</span>
       </summary>
-      <div style={{ ...cardStyle, marginTop: '10px' }}>
+      <div style={{ ...cardStyle('#c98a2b'), marginTop: '10px' }}>
         {isCustom && (
           <button
             onClick={resetDefaults}
@@ -1832,9 +1832,9 @@ const inputStyle: React.CSSProperties = {
 };
 // Sous-titre de groupe (pleine largeur dans une grille) pour segmenter une carte.
 const subGroupStyle: React.CSSProperties = {
-  gridColumn: '1 / -1', fontSize: '11px', fontWeight: 700, color: '#86868b',
+  gridColumn: '1 / -1', fontSize: '11px', fontWeight: 700, color: '#3b6fd4',
   textTransform: 'uppercase', letterSpacing: '0.6px',
-  marginTop: '10px', paddingBottom: '6px', borderBottom: '1px solid #ececf0',
+  marginTop: '10px', paddingBottom: '6px', borderBottom: '1px solid #e3e9f6',
 };
 // Résumé d'accordéon (liste déroulante) dans la zone Réglages détaillés.
 const accordionSummaryStyle: React.CSSProperties = {
@@ -1850,23 +1850,28 @@ const emailMethodStyle = (on: boolean): React.CSSProperties => ({
 });
 
 // ── Tokens de mise en page (hiérarchie claire : cartes titrées numérotées) ────
-// Carte de groupe : fond blanc, bordure douce, coin arrondi, profondeur, respiration.
-const cardStyle: React.CSSProperties = {
-  background: '#fff', border: '1px solid #d1d1d6', borderRadius: '16px',
-  padding: '22px 24px', marginBottom: '16px',
-  boxShadow: '0 1px 3px rgba(17,17,26,0.05), 0 1px 2px rgba(17,17,26,0.04)',
-};
+// Carte de groupe colorée : fond blanc, coin arrondi, accent latéral teinté.
+function cardStyle(accent = '#0a6ae0'): React.CSSProperties {
+  return {
+    background: '#fff', border: '1px solid #d1d1d6', borderLeft: `4px solid ${accent}`,
+    borderRadius: '16px', padding: '20px 22px', marginBottom: '16px',
+    boxShadow: '0 1px 3px rgba(17,17,26,0.05), 0 1px 2px rgba(17,17,26,0.04)',
+  };
+}
 
-// En-tête de carte avec pastille numérotée + sous-titre discret.
-function SectionHeader({ n, title, subtitle }: { n: number; title: string; subtitle?: string }) {
+// En-tête de carte : pastille numérotée colorée sur un bandeau teinté assorti.
+function SectionHeader({ n, title, subtitle, accent = '#0a6ae0' }: { n: number; title: string; subtitle?: string; accent?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px',
+      background: `${accent}12`, border: `1px solid ${accent}26`,
+      borderRadius: '12px', padding: '11px 13px',
+    }}>
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: '30px', height: '30px', borderRadius: '10px',
-        background: 'linear-gradient(135deg, #2b8aff 0%, #0a6ae0 100%)',
-        color: '#fff', fontSize: '14px', fontWeight: 700, flexShrink: 0,
-        boxShadow: '0 2px 6px rgba(10,106,224,0.32)',
+        background: accent, color: '#fff', fontSize: '14px', fontWeight: 700, flexShrink: 0,
+        boxShadow: `0 2px 7px ${accent}66`,
       }}>{n}</span>
       <div>
         <h3 style={{ margin: 0, fontSize: '16.5px', fontWeight: 700, color: '#1d1d1f', letterSpacing: '-0.3px' }}>{title}</h3>
