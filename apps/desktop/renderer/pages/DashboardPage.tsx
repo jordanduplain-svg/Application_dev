@@ -116,12 +116,13 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
         )}
       </div>
 
+      <div className="dash-grid">
       {/* ANA-3v3 : meilleure campagne cliquable pour navigation directe. */}
       {stats.topCampaign && (
         <div
           className="card spotlight"
           onClick={() => onOpenCampaign?.(stats.topCampaign!.id)}
-          style={{ cursor: onOpenCampaign ? 'pointer' : 'default', marginBottom: 'var(--space-4)' }}
+          style={{ cursor: onOpenCampaign ? 'pointer' : 'default' }}
           title={onOpenCampaign ? 'Ouvrir cette campagne' : undefined}
         >
           <div className="bento-chip"><Trophy size={20} /></div>
@@ -141,8 +142,8 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
       {/* ANA-1v3 : entonnoir de conversion. */}
       <FunnelChart data={stats.funnelStats} />
 
-      {/* ANA-2v3 : graphique d'activité avec sélecteur de plage. */}
-      <div className="card">
+      {/* ANA-2v3 : graphique d'activité avec sélecteur de plage (bande large). */}
+      <div className="card span-2">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={17} color="var(--accent)" /> Activité
@@ -261,6 +262,7 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
           </table>
         </div>
       )}
+      </div>
     </section>
   );
 }
