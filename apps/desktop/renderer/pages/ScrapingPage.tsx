@@ -396,7 +396,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         {/* ① Recherche */}
         <div style={cardStyle}>
         <SectionHeader n={1} title="Recherche" subtitle="Le poste ciblé, la zone géographique et le volume" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', alignItems: 'start' }}>
           <div style={subGroupStyle}>🎯 Cible</div>
           <label>
             <span style={labelStyle}>
@@ -410,8 +410,24 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               style={inputStyle}
             />
           </label>
+          <label>
+            <span style={labelStyle}>Taille d'entreprise visée <span style={{ fontWeight: 400, color: '#888' }}>(annuaire SIRENE)</span></span>
+            <select
+              value={config.sizeTarget ?? 'all'}
+              onChange={(e) => setConfig({ ...config, sizeTarget: e.target.value as NonNullable<typeof config.sizeTarget> })}
+              style={inputStyle}
+            >
+              <option value="all">Toutes tailles</option>
+              <option value="pme">TPE/PME (0–250 salariés) — + d'emails publics</option>
+              <option value="eti">ETI (250–5000)</option>
+              <option value="grand">Grand groupe (5000+)</option>
+            </select>
+            <span style={{ fontSize: '11px', color: '#888' }}>
+              Les PME publient bien plus souvent un email réel ; les grands groupes n'ont que des formulaires.
+            </span>
+          </label>
           {/* Secteur d'activité — menu déroulant multi-sélection (filtre NAF SIRENE). */}
-          <div ref={sectorRef} style={{ position: 'relative', zIndex: 20 }}>
+          <div ref={sectorRef} style={{ position: 'relative', zIndex: 20, gridColumn: '1 / -1' }}>
             <span style={labelStyle}>
               Secteur d'activité des entreprises cibles{' '}
               <span style={{ fontWeight: 400, color: '#888' }}>(filtre SIRENE par code NAF)</span>
@@ -535,23 +551,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               );
             })()}
           </div>
-          <label>
-            <span style={labelStyle}>Taille d'entreprise visée <span style={{ fontWeight: 400, color: '#888' }}>(annuaire SIRENE)</span></span>
-            <select
-              value={config.sizeTarget ?? 'all'}
-              onChange={(e) => setConfig({ ...config, sizeTarget: e.target.value as NonNullable<typeof config.sizeTarget> })}
-              style={inputStyle}
-            >
-              <option value="all">Toutes tailles</option>
-              <option value="pme">TPE/PME (0–250 salariés) — + d'emails publics</option>
-              <option value="eti">ETI (250–5000)</option>
-              <option value="grand">Grand groupe (5000+)</option>
-            </select>
-            <span style={{ fontSize: '11px', color: '#888' }}>
-              Les PME publient bien plus souvent un email réel ; les grands groupes n'ont que des formulaires.
-            </span>
-          </label>
-
           <div style={subGroupStyle}>📍 Localisation</div>
           {/* Localisation : Pays → Région → Département (listes déroulantes).
               La valeur envoyée reste config.city (nom de dépt, sinon de région). */}
@@ -622,7 +621,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               onChange={(e) => {
                 if (e.target.value !== 'custom') setConfig({ ...config, max: Number(e.target.value) });
               }}
-              style={{ ...inputStyle, width: '160px' }}
+              style={inputStyle}
             >
               {MAX_CHOICES.map((n) => <option key={n} value={n}>{maxLabel(n)}</option>)}
               {!MAX_CHOICES.includes(config.max) && (
@@ -635,7 +634,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
             <select
               value={String(config.crawlBudgetSec ?? 25)}
               onChange={(e) => setConfig({ ...config, crawlBudgetSec: Number(e.target.value) })}
-              style={{ ...inputStyle, width: '220px' }}
+              style={inputStyle}
             >
               {CRAWL_BUDGET_CHOICES.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -655,7 +654,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
             <select
               value={config.pagesPerRun ?? 2}
               onChange={(e) => setConfig({ ...config, pagesPerRun: Number(e.target.value) })}
-              style={{ ...inputStyle, width: '280px' }}
+              style={inputStyle}
             >
               {PAGES_PER_RUN_CHOICES.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -673,7 +672,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
             <select
               value={config.maxRuntimeMin ?? 0}
               onChange={(e) => setConfig({ ...config, maxRuntimeMin: Number(e.target.value) })}
-              style={{ ...inputStyle, width: '220px' }}
+              style={inputStyle}
             >
               {MAX_RUNTIME_CHOICES.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
