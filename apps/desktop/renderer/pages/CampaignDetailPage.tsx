@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Pencil, Archive, Trash2, ChevronRight,
   Building2, Send, Mail, Percent, Sparkles, Download, Plus, X, Search,
+  Briefcase, MapPin, FileText, Euro,
 } from 'lucide-react';
 import { subDays, isBefore, parseISO } from 'date-fns';
 import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
@@ -672,13 +673,16 @@ export default function CampaignDetailPage({
         {/* UX-7 : statut en français. */}
         <span className={`status status-${campaign.status.toLowerCase()}`}>{statusLabel(campaign.status)}</span>
       </h2>
-      <p className="detail-meta">
-        {campaign.jobTitle} · {campaign.location}
-        {campaign.contractTypes.length > 0 && ` · ${campaign.contractTypes.join(', ')}`}
-        {(campaign.salaryMin !== null || campaign.salaryMax !== null) && (
-          ` · ${campaign.salaryMin ?? '?'}€ – ${campaign.salaryMax ?? '?'}€`
+      <div className="meta-chips">
+        <span className="meta-chip"><Briefcase size={14} />{campaign.jobTitle}</span>
+        <span className="meta-chip"><MapPin size={14} />{campaign.location || 'Toute la France'}</span>
+        {campaign.contractTypes.length > 0 && (
+          <span className="meta-chip"><FileText size={14} />{campaign.contractTypes.join(', ')}</span>
         )}
-      </p>
+        {(campaign.salaryMin !== null || campaign.salaryMax !== null) && (
+          <span className="meta-chip"><Euro size={14} />{campaign.salaryMin ?? '?'} – {campaign.salaryMax ?? '?'} €</span>
+        )}
+      </div>
       {/* UX-9v3 : notes de la campagne (2 lignes max) dans l'en-tête. */}
       {campaign.notes && (
         <p style={{

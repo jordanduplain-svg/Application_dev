@@ -524,8 +524,23 @@ pre {
 }
 .btn-back:hover { background: #f2f2f7; }
 
-.detail-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 4px; }
-.detail-meta { color: var(--text-sub); font-size: 13px; margin: 0 0 var(--space-4); }
+.detail-title {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 10px; font-size: 28px; font-weight: 750; letter-spacing: -0.7px;
+}
+/* Dans l'en-tête, le badge se colle au titre (pas rejeté à droite). */
+.detail-title .status { margin-left: 0; font-size: 12px; padding: 4px 12px; }
+
+/* Ligne d'infos en puces : poste · lieu · contrat · salaire. */
+.meta-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 var(--space-5); }
+.meta-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 12px;
+  font-size: 12.5px; font-weight: 500; color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.meta-chip svg { color: var(--text-sub); flex: 0 0 auto; }
 
 /* Variante compacte des cartes métriques (bandeau de stats du détail). */
 .metric.sm { padding: 13px 14px; }
