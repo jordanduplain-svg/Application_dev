@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Megaphone, Building2, Send, Mail, Percent, Clock,
+  CalendarCheck, Trophy, Filter, Activity, BarChart3, FlaskConical,
+} from 'lucide-react';
 import type { GlobalStats } from '@candio/shared';
 import { api } from '../lib/api';
 
@@ -61,87 +65,76 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
     });
   }, [queryClientHook]);
 
-  // ANA-2v3 : rechargement lors du changement de plage.
-  const handleDaysChange = (days: number) => {
-    setActivityDays(days);
-  };
-
   const error = statsError instanceof Error ? statsError.message : statsError ? 'Erreur de chargement' : null;
 
-  if (error) return <section><h2>Tableau de bord</h2><p className="error">{error}</p></section>;
-  if (!stats) return <section><h2>Tableau de bord</h2><p>Chargement…</p></section>;
+  if (error) return <section><div className="page-head"><h2>Tableau de bord</h2></div><p className="error">{error}</p></section>;
+  if (!stats) return <section><div className="page-head"><h2>Tableau de bord</h2></div><p>Chargement…</p></section>;
+
+  // KPIs principaux — chaque carte porte sa teinte d'accent via --m.
+  const metrics = [
+    { icon: Megaphone, color: '#5856d6', value: stats.totalCampaigns, label: 'Campagnes actives' },
+    { icon: Building2, color: '#378ADD', value: stats.totalCompanies, label: 'Entreprises ciblées' },
+    { icon: Send, color: '#ff9f0a', value: stats.totalSent, label: 'Candidatures envoyées' },
+    { icon: Mail, color: '#1D9E75', value: stats.totalReplied, label: 'Réponses reçues' },
+    { icon: Percent, color: '#0F6E56', value: `${stats.replyRate}%`, label: 'Taux de réponse' },
+    { icon: Clock, color: '#8E8E93', value: stats.avgDaysToReply !== null ? `${stats.avgDaysToReply}j` : '—', label: 'Délai moyen de réponse' },
+  ];
 
   return (
     <section>
-      <h2>Tableau de bord</h2>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        {/* KPI : campagnes */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{stats.totalCampaigns}</div>
-          <div>Campagnes actives</div>
-        </div>
-
-        {/* KPI : entreprises */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{stats.totalCompanies}</div>
-          <div>Entreprises ciblées</div>
-        </div>
-
-        {/* KPI : envoyés */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{stats.totalSent}</div>
-          <div>Candidatures envoyées</div>
-        </div>
-
-        {/* KPI : réponses */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{stats.totalReplied}</div>
-          <div>Réponses reçues</div>
-        </div>
-
-        {/* KPI : taux de réponse */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>{stats.replyRate}%</div>
-          <div>Taux de réponse</div>
-        </div>
-
-        {/* KPI : délai moyen */}
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2em', fontWeight: 'bold' }}>
-            {stats.avgDaysToReply !== null ? `${stats.avgDaysToReply}j` : '—'}
-          </div>
-          <div>Délai moyen de réponse</div>
-        </div>
+      <div className="page-head">
+        <h2>Tableau de bord</h2>
+        <div className="page-sub">Vue d'ensemble de vos campagnes et de leurs performances.</div>
       </div>
 
-      {/* KPI : statuts manuels post-réponse (UX-4v3). */}
-      {(stats.totalInterviewed > 0 || stats.totalOffers > 0) && (
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-          <div className="card" style={{ textAlign: 'center', flex: 1 }}>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#ff9f0a' }}>{stats.totalInterviewed}</div>
-            <div>Entretiens</div>
+      <div className="metric-grid">
+        {metrics.map((m) => {
+          const Icon = m.icon;
+          return (
+            <div key={m.label} className="metric" style={{ '--m': m.color } as React.CSSProperties}>
+              <div className="metric-ico"><Icon size={18} /></div>
+              <div className="metric-num">{m.value}</div>
+              <div className="metric-lbl">{m.label}</div>
+            </div>
+          );
+        })}
+
+        {/* KPI : statuts manuels post-réponse (UX-4v3) — affichés seulement s'ils existent. */}
+        {stats.totalInterviewed > 0 && (
+          <div className="metric" style={{ '--m': '#ff6b35' } as React.CSSProperties}>
+            <div className="metric-ico"><CalendarCheck size={18} /></div>
+            <div className="metric-num">{stats.totalInterviewed}</div>
+            <div className="metric-lbl">Entretiens</div>
           </div>
-          <div className="card" style={{ textAlign: 'center', flex: 1 }}>
-            <div style={{ fontSize: '1.5em', fontWeight: 'bold', color: '#34c759' }}>{stats.totalOffers}</div>
-            <div>Offres reçues</div>
+        )}
+        {stats.totalOffers > 0 && (
+          <div className="metric" style={{ '--m': '#30d158' } as React.CSSProperties}>
+            <div className="metric-ico"><Trophy size={18} /></div>
+            <div className="metric-num">{stats.totalOffers}</div>
+            <div className="metric-lbl">Offres reçues</div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ANA-3v3 : meilleure campagne cliquable pour navigation directe. */}
       {stats.topCampaign && (
         <div
-          className="card"
+          className="card spotlight"
           onClick={() => onOpenCampaign?.(stats.topCampaign!.id)}
-          style={{ cursor: onOpenCampaign ? 'pointer' : 'default' }}
+          style={{ cursor: onOpenCampaign ? 'pointer' : 'default', marginBottom: 'var(--space-4)' }}
           title={onOpenCampaign ? 'Ouvrir cette campagne' : undefined}
         >
-          <h3>Meilleure campagne ↗</h3>
-          <p>
-            <strong>{stats.topCampaign.name}</strong>
-            {' '}— taux de réponse : <strong>{stats.topCampaign.replyRate}%</strong>
-          </p>
+          <div className="bento-chip"><Trophy size={20} /></div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 600 }}>Meilleure campagne</div>
+            <div style={{ fontSize: '16px', fontWeight: 700 }}>{stats.topCampaign.name}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)', lineHeight: 1 }}>
+              {stats.topCampaign.replyRate}%
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>taux de réponse</div>
+          </div>
         </div>
       )}
 
@@ -150,22 +143,14 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
 
       {/* ANA-2v3 : graphique d'activité avec sélecteur de plage. */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h3 style={{ margin: 0 }}>
-            Activité ({activityDays === 0 ? 'tout le temps' : `${activityDays} derniers jours`})
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Activity size={17} color="var(--accent)" /> Activité
           </h3>
-          {/* ANA-2v3 : sélecteur de plage temporelle. */}
-          <div style={{ display: 'flex', gap: '4px' }}>
+          {/* ANA-2v3 : sélecteur de plage temporelle (segmenté). */}
+          <div className="seg">
             {([7, 30, 90, 0] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => handleDaysChange(d)}
-                style={{
-                  padding: '3px 8px', fontSize: '12px',
-                  background: activityDays === d ? '#007aff' : undefined,
-                  color: activityDays === d ? '#fff' : undefined,
-                }}
-              >
+              <button key={d} className={activityDays === d ? 'on' : ''} onClick={() => setActivityDays(d)}>
                 {d === 0 ? 'Tout' : `${d}j`}
               </button>
             ))}
@@ -177,38 +162,39 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
       {/* ANA-4v3 : tableau comparatif des campagnes. */}
       {comparison.length > 0 && (
         <div className="card">
-          <h3>Comparaison des campagnes</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 size={17} color="var(--accent)" /> Comparaison des campagnes
+          </h3>
+          <table className="data-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Campagne</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Envoyés</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Réponses</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Taux</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Délai moy.</th>
+              <tr>
+                <th>Campagne</th>
+                <th>Envoyés</th>
+                <th>Réponses</th>
+                <th>Taux</th>
+                <th>Délai moy.</th>
               </tr>
             </thead>
             <tbody>
               {comparison.map((row) => (
                 <tr
                   key={row.id}
-                  style={{ borderBottom: '1px solid #f0f0f0', cursor: onOpenCampaign ? 'pointer' : 'default' }}
+                  className={onOpenCampaign ? 'clickable' : ''}
                   onClick={() => onOpenCampaign?.(row.id)}
                   title={onOpenCampaign ? 'Ouvrir cette campagne' : undefined}
                 >
-                  <td style={{ padding: '6px 8px' }}>{row.name}</td>
-                  <td style={{ textAlign: 'right', padding: '6px 8px' }}>{row.sent}</td>
-                  <td style={{ textAlign: 'right', padding: '6px 8px' }}>{row.replied}</td>
-                  <td style={{ textAlign: 'right', padding: '6px 8px' }}>
-                    <span style={{
+                  <td>{row.name}</td>
+                  <td>{row.sent}</td>
+                  <td>{row.replied}</td>
+                  <td>
+                    <span className="pill" style={{
                       background: row.replyRate >= 20 ? '#34c75920' : '#ff453a20',
                       color: row.replyRate >= 20 ? '#1a7a38' : '#cc2318',
-                      padding: '2px 6px', borderRadius: '4px',
                     }}>
                       {row.replyRate}%
                     </span>
                   </td>
-                  <td style={{ textAlign: 'right', padding: '6px 8px', color: '#888' }}>
+                  <td style={{ color: 'var(--text-sub)' }}>
                     {row.avgDays !== null ? `${row.avgDays}j` : '—'}
                   </td>
                 </tr>
@@ -220,19 +206,21 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
       {/* FM-02 : tableau comparatif A/B par variante de prompt. */}
       {abTest.length > 0 && (
         <div className="card">
-          <h3>Test A/B — variantes de prompt</h3>
-          <p style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FlaskConical size={17} color="var(--accent)" /> Test A/B — variantes de prompt
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-sub)', marginBottom: '10px' }}>
             Comparaison du taux de réponse selon la variante de prompt envoyée.
           </p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table className="data-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
-                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Campagne</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>A — Envoyés</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>A — Taux</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>B — Envoyés</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>B — Taux</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Gagnant</th>
+              <tr>
+                <th>Campagne</th>
+                <th>A — Envoyés</th>
+                <th>A — Taux</th>
+                <th>B — Envoyés</th>
+                <th>B — Taux</th>
+                <th>Gagnant</th>
               </tr>
             </thead>
             <tbody>
@@ -243,29 +231,27 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
                     ? row.variantA.replyRate >= row.variantB.replyRate ? 'A' : 'B'
                     : null;
                 return (
-                  <tr key={row.campaignId} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '6px 8px' }}>{row.campaignName}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px' }}>{row.variantA.sent}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px' }}>
-                      <span style={{
-                        background: '#007aff20', color: '#005cbf',
-                        padding: '2px 6px', borderRadius: '4px',
-                      }}>{row.variantA.replyRate}%</span>
+                  <tr key={row.campaignId}>
+                    <td>{row.campaignName}</td>
+                    <td>{row.variantA.sent}</td>
+                    <td>
+                      <span className="pill" style={{ background: '#007aff20', color: '#005cbf' }}>
+                        {row.variantA.replyRate}%
+                      </span>
                     </td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px' }}>{row.variantB.sent}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px' }}>
-                      <span style={{
-                        background: '#5856d620', color: '#3d3b9e',
-                        padding: '2px 6px', borderRadius: '4px',
-                      }}>{row.variantB.replyRate}%</span>
+                    <td>{row.variantB.sent}</td>
+                    <td>
+                      <span className="pill" style={{ background: '#5856d620', color: '#3d3b9e' }}>
+                        {row.variantB.replyRate}%
+                      </span>
                     </td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 'bold' }}>
+                    <td style={{ fontWeight: 'bold' }}>
                       {winner ? (
                         <span style={{ color: winner === 'A' ? '#005cbf' : '#3d3b9e' }}>
                           Variante {winner}
                         </span>
                       ) : (
-                        <span style={{ color: '#999', fontWeight: 'normal' }}>—</span>
+                        <span style={{ color: 'var(--text-sub)', fontWeight: 'normal' }}>—</span>
                       )}
                     </td>
                   </tr>
@@ -284,10 +270,10 @@ function FunnelChart({ data }: { data: GlobalStats['funnelStats'] }) {
   if (!data || data.targeted === 0) return null;
 
   const steps = [
-    { label: 'Ciblées', value: data.targeted, color: '#007aff' },
+    { label: 'Ciblées', value: data.targeted, color: '#378ADD' },
     { label: 'Rédigées', value: data.drafted, color: '#5856d6' },
     { label: 'Envoyées', value: data.sent, color: '#ff9f0a' },
-    { label: 'Réponses', value: data.replied, color: '#34c759' },
+    { label: 'Réponses', value: data.replied, color: '#1D9E75' },
     { label: 'Entretiens', value: data.interviewed, color: '#ff6b35' },
     { label: 'Offres', value: data.offers, color: '#30d158' },
   ].filter((s) => s.value > 0 || s.label === 'Ciblées');
@@ -296,26 +282,28 @@ function FunnelChart({ data }: { data: GlobalStats['funnelStats'] }) {
 
   return (
     <div className="card" style={{ marginBottom: '16px' }}>
-      <h3>Entonnoir de conversion</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Filter size={17} color="var(--accent)" /> Entonnoir de conversion
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
         {steps.map((step, i) => {
           const pct = Math.round((step.value / max) * 100);
           return (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '80px', fontSize: '12px', color: '#555', textAlign: 'right' }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '78px', fontSize: '12px', color: 'var(--text-sub)', textAlign: 'right', fontWeight: 600 }}>
                 {step.label}
               </div>
               <div style={{
-                flex: 1, background: '#f0f0f0', borderRadius: '4px', height: '22px', overflow: 'hidden',
+                flex: 1, background: '#f0f0f3', borderRadius: '7px', height: '24px', overflow: 'hidden',
               }}>
                 <div style={{
                   width: `${pct}%`, height: '100%', background: step.color,
-                  borderRadius: '4px', minWidth: step.value > 0 ? '2px' : '0',
-                  transition: 'width 0.3s ease',
+                  borderRadius: '7px', minWidth: step.value > 0 ? '3px' : '0',
+                  transition: 'width 0.5s var(--ease-spring)',
                 }} />
               </div>
-              <div style={{ width: '60px', fontSize: '12px', color: '#333' }}>
-                {step.value} ({pct}%)
+              <div style={{ width: '66px', fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>
+                {step.value} <span style={{ color: 'var(--text-sub)', fontWeight: 400 }}>({pct}%)</span>
               </div>
             </div>
           );
@@ -327,7 +315,7 @@ function FunnelChart({ data }: { data: GlobalStats['funnelStats'] }) {
 
 // Graphique en barres SVG — pas de dépendance externe.
 function ActivityChart({ data }: { data: DayActivity[] }) {
-  if (data.length === 0) return <p style={{ color: '#888', fontSize: '13px' }}>Aucune activité sur cette période.</p>;
+  if (data.length === 0) return <p style={{ color: 'var(--text-sub)', fontSize: '13px' }}>Aucune activité sur cette période.</p>;
 
   const maxVal = Math.max(1, ...data.map((d) => Math.max(d.sent, d.replied)));
   const BAR_W = 14;     // largeur d'une barre
@@ -367,6 +355,7 @@ function ActivityChart({ data }: { data: DayActivity[] }) {
                   height={hSent}
                   fill="#007aff"
                   opacity={0.85}
+                  rx={2}
                 >
                   <title>{d.date} — {d.sent} envoi(s)</title>
                 </rect>
@@ -378,6 +367,7 @@ function ActivityChart({ data }: { data: DayActivity[] }) {
                   height={hReplied}
                   fill="#34c759"
                   opacity={0.85}
+                  rx={2}
                 >
                   <title>{d.date} — {d.replied} réponse(s)</title>
                 </rect>
