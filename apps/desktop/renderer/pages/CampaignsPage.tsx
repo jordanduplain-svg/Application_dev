@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Mail, Building2, Send, MessageSquare, Copy, ArchiveRestore, Plus, Sparkles,
+  Briefcase, Target, PenLine,
 } from 'lucide-react';
 import type { Campaign, CampaignInput, Cv } from '@candio/shared';
 import { api } from '../lib/api';
@@ -371,159 +372,168 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
         )}
       </div>
 
-      <div className="form">
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="form-create">
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 0' }}>
           <Plus size={18} color="var(--accent)" />Nouvelle campagne
         </h3>
-        <label>Nom
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </label>
-        <label>Intitulé du poste
-          <input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} />
-        </label>
-        {/* CV-MULTI : choix du CV utilisé pour cette campagne. */}
-        <label>CV utilisé pour cette campagne
-          {cvs.length === 0 ? (
-            <div style={{ fontSize: '13px', color: '#856404', background: '#fff8e1',
-              border: '1px solid #ffc107', borderRadius: '6px', padding: '8px 10px', marginTop: '4px' }}>
-              Aucun CV créé.
-              <button type="button" onClick={() => onGoToCv?.()}
-                style={{ marginLeft: '8px', fontSize: '12px', padding: '3px 10px',
-                  background: '#0a84ff', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                Créer un CV
-              </button>
-            </div>
-          ) : (
-            <select value={form.cvId ?? ''} onChange={(e) => setForm({ ...form, cvId: e.target.value || null })}>
-              <option value="">— Choisir un CV —</option>
-              {cvs.map((cv) => (
-                <option key={cv.id} value={cv.id}>
-                  {cv.name}{cv.parsed ? '' : ' (PDF non analysé)'}
-                </option>
-              ))}
-            </select>
-          )}
-        </label>
-        <label>Lieu
-          <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>
-            <option value="">— Toute la France —</option>
-            <optgroup label="Régions">
-              {FR_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </optgroup>
-            <optgroup label="Départements">
-              {FR_REGIONS.flatMap((r) => FR_DEPTS_BY_REGION[r]).map((d) => (
-                <option key={d.code} value={d.name}>{d.name} ({d.code})</option>
-              ))}
-            </optgroup>
-            <optgroup label="Grandes villes">
-              {FR_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </optgroup>
-          </select>
-        </label>
-        <label>Secteurs préférés <span style={{ fontWeight: 400, color: '#888', fontSize: '12px' }}>(où tu veux travailler — max 5)</span>
-          <SectorMultiSelect
-            value={form.preferredSectors ?? []}
-            onChange={(next) => setForm({ ...form, preferredSectors: next })}
-            max={5}
-          />
-          <span style={{ fontSize: '11px', color: '#888', display: 'block', marginTop: '4px' }}>
-            Filtre les leads importés vers ces secteurs. Vide = tous. Si trop peu d'entreprises
-            (&lt; 25) dans ces secteurs, on élargit automatiquement aux autres.
-          </span>
-        </label>
-        <label>Types de contrat
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-            {CONTRACT_TYPES.map((ct) => {
-              const active = form.contractTypes.includes(ct);
-              return (
-                <button
-                  key={ct}
-                  type="button"
-                  className={`chip-toggle ${active ? 'on' : 'off'}`}
-                  onClick={() => setForm({
-                    ...form,
-                    contractTypes: active
-                      ? form.contractTypes.filter((c) => c !== ct)
-                      : [...form.contractTypes, ct],
-                  })}
-                >
-                  {ct}
-                </button>
-              );
-            })}
+
+        {/* ── Section : le poste ── */}
+        <div className="form-section" style={{ '--m': '#5856d6' } as React.CSSProperties}>
+          <div className="form-section-title"><span className="fst-ico"><Briefcase size={16} /></span>Le poste</div>
+          <div className="form-grid">
+            <label>Nom de la campagne
+              <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex : Data Analyst — Rhône-Alpes" />
+            </label>
+            <label>Intitulé du poste
+              <input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} placeholder="Ex : Data Analyst" />
+            </label>
+            {/* CV-MULTI : choix du CV utilisé pour cette campagne. */}
+            <label className="full">CV utilisé pour cette campagne
+              {cvs.length === 0 ? (
+                <div style={{ fontSize: '13px', color: '#856404', background: '#fff8e1',
+                  border: '1px solid #ffc107', borderRadius: '9px', padding: '8px 10px', marginTop: '4px',
+                  display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Aucun CV créé.
+                  <button type="button" onClick={() => onGoToCv?.()} style={{ fontSize: '12px', padding: '4px 12px' }}>
+                    Créer un CV
+                  </button>
+                </div>
+              ) : (
+                <select value={form.cvId ?? ''} onChange={(e) => setForm({ ...form, cvId: e.target.value || null })}>
+                  <option value="">— Choisir un CV —</option>
+                  {cvs.map((cv) => (
+                    <option key={cv.id} value={cv.id}>
+                      {cv.name}{cv.parsed ? '' : ' (PDF non analysé)'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+            {/* AVAIL : disponibilité recopiée telle quelle dans la lettre (évite les dates inventées). */}
+            <label className="full">Disponibilité
+              <input
+                value={form.availability ?? ''}
+                onChange={(e) => setForm({ ...form, availability: e.target.value })}
+                placeholder="Ex : début octobre 2026, dès maintenant, sous 1 mois…"
+              />
+              <span style={{ fontSize: '11px', color: 'var(--text-sub)', display: 'block', marginTop: '4px' }}>
+                Recopiée telle quelle dans la lettre — l'IA n'inventera plus de date.
+              </span>
+            </label>
           </div>
-        </label>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <label style={{ flex: 1 }}>Salaire min (€)
-            <input
-              type="number"
-              min={0}
-              step={1000}
-              value={form.salaryMin ?? ''}
-              onChange={(e) => {
-                const n = e.target.value ? Math.max(0, Number(e.target.value)) : null;
-                setForm({ ...form, salaryMin: n });
-              }}
-            />
-          </label>
-          <label style={{ flex: 1 }}>Salaire max (€)
-            <input
-              type="number"
-              min={0}
-              step={1000}
-              value={form.salaryMax ?? ''}
-              onChange={(e) => {
-                const n = e.target.value ? Math.max(0, Number(e.target.value)) : null;
-                setForm({ ...form, salaryMax: n });
-              }}
-            />
-          </label>
         </div>
-        {/* AVAIL : disponibilité recopiée telle quelle dans la lettre (évite les dates inventées). */}
-        <label>Disponibilité
-          <input
-            value={form.availability ?? ''}
-            onChange={(e) => setForm({ ...form, availability: e.target.value })}
-            placeholder="Ex : début octobre 2026, dès maintenant, sous 1 mois…"
-          />
-          <span style={{ fontSize: '11px', color: '#888', display: 'block', marginTop: '4px' }}>
-            Recopiée telle quelle dans la lettre — l'IA n'inventera plus de date.
-          </span>
-        </label>
-        {/* PROMPT-HELPER : assistant de rédaction repliable (génère Prompt A + B). */}
-        <PromptHelper
-          cvId={form.cvId}
-          jobTitle={form.jobTitle}
-          contractInfo={[
-            form.contractTypes.length ? `Type(s) de contrat : ${form.contractTypes.join(', ')}` : '',
-            (form.availability ?? '').trim() ? `disponibilité : ${(form.availability ?? '').trim()}` : '',
-          ].filter(Boolean).join(' · ')}
-          onGenerate={(promptA, promptB) =>
-            setForm({ ...form, prompt: promptA, promptVariantB: promptB })
-          }
-        />
-        <label>Prompt A — consignes pour l'IA
-          <textarea
-            rows={4}
-            value={form.prompt}
-            onChange={(e) => setForm({ ...form, prompt: e.target.value })}
-            placeholder="Ex: ton chaleureux, mettre en avant mon expérience de chef de projet…"
-          />
-        </label>
-        {/* ANA-5v3 : prompt variante B pour test A/B. */}
-        <label>Prompt B (optionnel — test A/B)
-          <textarea
-            rows={3}
-            value={form.promptVariantB ?? ''}
-            onChange={(e) => setForm({ ...form, promptVariantB: e.target.value || null })}
-            placeholder="Variante B : ton différent ou axe de communication alternatif…"
-          />
-        </label>
-        <small style={{ color: '#888', display: 'block', marginBottom: '8px' }}>
-          Si renseigné, la moitié des emails sera générée avec le Prompt B pour comparer les taux de réponse.
-        </small>
+
+        {/* ── Section : le ciblage ── */}
+        <div className="form-section" style={{ '--m': '#378ADD' } as React.CSSProperties}>
+          <div className="form-section-title"><span className="fst-ico"><Target size={16} /></span>Le ciblage</div>
+          <div className="form-grid">
+            <label className="full">Lieu
+              <select value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}>
+                <option value="">— Toute la France —</option>
+                <optgroup label="Régions">
+                  {FR_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </optgroup>
+                <optgroup label="Départements">
+                  {FR_REGIONS.flatMap((r) => FR_DEPTS_BY_REGION[r]).map((d) => (
+                    <option key={d.code} value={d.name}>{d.name} ({d.code})</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Grandes villes">
+                  {FR_CITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </optgroup>
+              </select>
+            </label>
+            <label className="full">Secteurs préférés <span style={{ fontWeight: 400, color: 'var(--text-sub)', fontSize: '12px' }}>(où tu veux travailler — max 5)</span>
+              <SectorMultiSelect
+                value={form.preferredSectors ?? []}
+                onChange={(next) => setForm({ ...form, preferredSectors: next })}
+                max={5}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--text-sub)', display: 'block', marginTop: '4px' }}>
+                Filtre les leads importés vers ces secteurs. Vide = tous. Si trop peu d'entreprises
+                (&lt; 25) dans ces secteurs, on élargit automatiquement aux autres.
+              </span>
+            </label>
+            <label className="full">Types de contrat
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                {CONTRACT_TYPES.map((ct) => {
+                  const active = form.contractTypes.includes(ct);
+                  return (
+                    <button
+                      key={ct}
+                      type="button"
+                      className={`chip-toggle ${active ? 'on' : 'off'}`}
+                      onClick={() => setForm({
+                        ...form,
+                        contractTypes: active
+                          ? form.contractTypes.filter((c) => c !== ct)
+                          : [...form.contractTypes, ct],
+                      })}
+                    >
+                      {ct}
+                    </button>
+                  );
+                })}
+              </div>
+            </label>
+            <label>Salaire min (€)
+              <input
+                type="number" min={0} step={1000} value={form.salaryMin ?? ''}
+                onChange={(e) => setForm({ ...form, salaryMin: e.target.value ? Math.max(0, Number(e.target.value)) : null })}
+                placeholder="35000"
+              />
+            </label>
+            <label>Salaire max (€)
+              <input
+                type="number" min={0} step={1000} value={form.salaryMax ?? ''}
+                onChange={(e) => setForm({ ...form, salaryMax: e.target.value ? Math.max(0, Number(e.target.value)) : null })}
+                placeholder="45000"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* ── Section : la rédaction IA ── */}
+        <div className="form-section" style={{ '--m': '#1D9E75' } as React.CSSProperties}>
+          <div className="form-section-title"><span className="fst-ico"><PenLine size={16} /></span>La rédaction IA</div>
+          <div className="form-grid">
+            {/* PROMPT-HELPER : assistant de rédaction repliable (génère Prompt A + B). */}
+            <div className="full">
+              <PromptHelper
+                cvId={form.cvId}
+                jobTitle={form.jobTitle}
+                contractInfo={[
+                  form.contractTypes.length ? `Type(s) de contrat : ${form.contractTypes.join(', ')}` : '',
+                  (form.availability ?? '').trim() ? `disponibilité : ${(form.availability ?? '').trim()}` : '',
+                ].filter(Boolean).join(' · ')}
+                onGenerate={(promptA, promptB) =>
+                  setForm({ ...form, prompt: promptA, promptVariantB: promptB })
+                }
+              />
+            </div>
+            <label className="full">Prompt A — consignes pour l'IA
+              <textarea
+                rows={4} value={form.prompt}
+                onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+                placeholder="Ex: ton chaleureux, mettre en avant mon expérience de chef de projet…"
+              />
+            </label>
+            {/* ANA-5v3 : prompt variante B pour test A/B. */}
+            <label className="full">Prompt B (optionnel — test A/B)
+              <textarea
+                rows={3} value={form.promptVariantB ?? ''}
+                onChange={(e) => setForm({ ...form, promptVariantB: e.target.value || null })}
+                placeholder="Variante B : ton différent ou axe de communication alternatif…"
+              />
+            </label>
+            <small className="full" style={{ color: 'var(--text-sub)', display: 'block' }}>
+              Si renseigné, la moitié des emails sera générée avec le Prompt B pour comparer les taux de réponse.
+            </small>
+          </div>
+        </div>
+
         {formError && <p className="error">{formError}</p>}
-        <button onClick={create} disabled={isSaving} style={{ alignSelf: 'flex-start', padding: '10px 22px', fontSize: '14px' }}>
+        <button onClick={create} disabled={isSaving} style={{ alignSelf: 'flex-start', padding: '11px 24px', fontSize: '14px' }}>
           <Sparkles size={16} />{isSaving ? 'Création…' : 'Créer la campagne'}
         </button>
       </div>
