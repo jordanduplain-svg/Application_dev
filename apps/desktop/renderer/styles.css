@@ -486,6 +486,47 @@ pre {
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 
 /* ============================================================
+   DESIGN-2 — Détail de campagne (en-tête, stats, tableaux responsives)
+   ============================================================ */
+/* En-tête : retour + titre + actions, qui se replient proprement. */
+.detail-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: var(--space-4);
+}
+.detail-head .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-back {
+  background: transparent; border: 1px solid var(--border); color: var(--text);
+  font-weight: 600;
+}
+.btn-back:hover { background: #f2f2f7; }
+
+.detail-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 4px; }
+.detail-meta { color: var(--text-sub); font-size: 13px; margin: 0 0 var(--space-4); }
+
+/* Variante compacte des cartes métriques (bandeau de stats du détail). */
+.metric.sm { padding: 13px 14px; }
+.metric.sm .metric-ico { width: 30px; height: 30px; margin-bottom: 9px; border-radius: 9px; }
+.metric.sm .metric-num { font-size: 24px; }
+
+/* Enveloppe de tableau dense : scroll horizontal sur écran étroit
+   (les colonnes restent lisibles au lieu d'être écrasées). */
+.table-wrap {
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); margin-bottom: 10px;
+}
+.table-wrap table { min-width: 620px; margin: 0; }
+.table-wrap.wide table { min-width: 760px; }
+.table-wrap th, .table-wrap td { white-space: normal; }
+
+/* En-tête de section repliable. */
+.section-toggle {
+  cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;
+}
+.section-toggle .chev { transition: transform 0.18s var(--ease-spring); color: var(--text-sub); }
+.section-toggle.open .chev { transform: rotate(90deg); }
+
+/* ============================================================
    DESIGN-2 — Cadre adaptatif (s'adapte à n'importe quel écran)
    ============================================================ */
 /* Écran étroit : la sidebar se replie en RAIL d'icônes (labels masqués,

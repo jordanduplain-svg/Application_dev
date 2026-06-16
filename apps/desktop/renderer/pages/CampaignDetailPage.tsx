@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft, Pencil, Archive, Trash2, ChevronRight,
+  Building2, Send, Mail, Percent,
+} from 'lucide-react';
 import { subDays, isBefore, parseISO } from 'date-fns';
 import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
 import { api } from '../lib/api';
@@ -650,23 +654,25 @@ export default function CampaignDetailPage({
 
   return (
     <section>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <button onClick={onBack}>← Retour</button>
-        <div style={{ display: 'flex', gap: '8px' }}>
+      <div className="detail-head">
+        <button className="btn-back" onClick={onBack}>
+          <ArrowLeft size={15} style={{ verticalAlign: '-2px', marginRight: '4px' }} />Retour
+        </button>
+        <div className="detail-actions">
           {/* UX-1 : bouton Modifier la campagne. */}
-          <button onClick={startEditCampaign}>Modifier</button>
+          <button onClick={startEditCampaign}><Pencil size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Modifier</button>
           {/* UX-6 : bouton Archiver. */}
-          <button onClick={archiveCampaign} style={{ background: '#6c757d', color: '#fff' }}>Archiver</button>
-          <button onClick={deleteCampaign} style={{ background: '#ff453a', color: '#fff' }}>Supprimer cette campagne</button>
+          <button onClick={archiveCampaign} style={{ background: '#6c757d', color: '#fff' }}><Archive size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Archiver</button>
+          <button onClick={deleteCampaign} style={{ background: '#ff453a', color: '#fff' }}><Trash2 size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Supprimer</button>
         </div>
       </div>
 
-      <h2>
+      <h2 className="detail-title">
         {campaign.name}
         {/* UX-7 : statut en français. */}
         <span className={`status status-${campaign.status.toLowerCase()}`}>{statusLabel(campaign.status)}</span>
       </h2>
-      <p>
+      <p className="detail-meta">
         {campaign.jobTitle} · {campaign.location}
         {campaign.contractTypes.length > 0 && ` · ${campaign.contractTypes.join(', ')}`}
         {(campaign.salaryMin !== null || campaign.salaryMax !== null) && (
@@ -828,20 +834,34 @@ export default function CampaignDetailPage({
         </div>
       )}
 
-      {/* UX-5 : bandeau de statistiques. */}
-      <div style={{
-        display: 'flex', gap: '16px', background: '#f8f9fa', borderRadius: '6px',
-        padding: '10px 16px', marginBottom: '16px', fontSize: '13px', flexWrap: 'wrap',
-      }}>
-        <span><strong>{totalCompanies}</strong> entreprises ciblées</span>
-        <span><strong>{totalSent}</strong> / <strong>{apps.length}</strong> envoyés</span>
-        <span><strong>{totalReplied}</strong> réponse(s)</span>
-        <span><strong>{replyRate}%</strong> taux de réponse</span>
+      {/* UX-5 : bandeau de statistiques en cartes métriques compactes. */}
+      <div className="metric-grid">
+        <div className="metric sm" style={{ '--m': '#378ADD' } as React.CSSProperties}>
+          <div className="metric-ico"><Building2 size={16} /></div>
+          <div className="metric-num">{totalCompanies}</div>
+          <div className="metric-lbl">Entreprises ciblées</div>
+        </div>
+        <div className="metric sm" style={{ '--m': '#ff9f0a' } as React.CSSProperties}>
+          <div className="metric-ico"><Send size={16} /></div>
+          <div className="metric-num">{totalSent} <span style={{ fontSize: '15px', color: 'var(--text-sub)', fontWeight: 600 }}>/ {apps.length}</span></div>
+          <div className="metric-lbl">Candidatures envoyées</div>
+        </div>
+        <div className="metric sm" style={{ '--m': '#1D9E75' } as React.CSSProperties}>
+          <div className="metric-ico"><Mail size={16} /></div>
+          <div className="metric-num">{totalReplied}</div>
+          <div className="metric-lbl">Réponses reçues</div>
+        </div>
+        <div className="metric sm" style={{ '--m': '#0F6E56' } as React.CSSProperties}>
+          <div className="metric-ico"><Percent size={16} /></div>
+          <div className="metric-num">{replyRate}%</div>
+          <div className="metric-lbl">Taux de réponse</div>
+        </div>
       </div>
 
-      <h3 onClick={() => setShowCompanies((v) => !v)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-        {showCompanies ? '▾' : '▸'} Entreprises cibles ({companies.length})
-        <span style={{ fontSize: '12px', fontWeight: 400, color: '#888', marginLeft: '8px' }}>
+      <h3 className={`section-toggle${showCompanies ? ' open' : ''}`} onClick={() => setShowCompanies((v) => !v)}>
+        <ChevronRight className="chev" size={18} />
+        Entreprises cibles ({companies.length})
+        <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-sub)' }}>
           {showCompanies ? '— masquer' : '— afficher / gérer'}
         </span>
       </h3>
@@ -868,7 +888,8 @@ export default function CampaignDetailPage({
         </div>
       )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '8px' }}>
+      <div className="table-wrap wide">
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: 0 }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid #e0e0e0', color: '#555' }}>
             <th style={{ padding: '6px 8px', width: '28px' }}></th>
@@ -942,6 +963,7 @@ export default function CampaignDetailPage({
           )}
         </tbody>
       </table>
+      </div>
 
       {/* UX-3v3 : pagination + sélecteur de taille de page (entreprises). */}
       <div style={{ display: 'flex', gap: '8px', margin: '8px 0', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1092,7 +1114,8 @@ export default function CampaignDetailPage({
         </select>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: '8px' }}>
+      <div className="table-wrap">
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', marginBottom: 0 }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid #e0e0e0', color: '#555' }}>
             <th style={{ padding: '6px 8px' }}>Entreprise</th>
@@ -1163,6 +1186,7 @@ export default function CampaignDetailPage({
           )}
         </tbody>
       </table>
+      </div>
 
       {/* PERF-1 : pagination + sélecteur de taille de page (candidatures). */}
       <div style={{ display: 'flex', gap: '8px', margin: '8px 0', alignItems: 'center', flexWrap: 'wrap' }}>
