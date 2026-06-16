@@ -201,30 +201,52 @@ input[type="checkbox"], input[type="radio"] {
 
 /* ── Boutons ── */
 button {
-  padding: 8px 16px;
-  border-radius: 7px;
+  padding: 8px 15px;
+  border-radius: 9px;
   border: none;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
   font: inherit;
   font-size: 13.5px;
-  font-weight: 500;
-  transition: background 0.14s, opacity 0.1s, transform 0.14s var(--ease-spring);
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  box-shadow: 0 1px 2px rgba(10,132,255,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
+  transition: background 0.14s, box-shadow 0.18s var(--ease-spring),
+              transform 0.14s var(--ease-spring), opacity 0.1s;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 6px;
 }
-button:hover:not(:disabled)  { background: var(--accent-hover); }
-button:active:not(:disabled) { transform: scale(0.97); }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
+button:hover:not(:disabled)  { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(10,132,255,0.32); transform: translateY(-1px); }
+button:active:not(:disabled) { transform: translateY(0) scale(0.975); box-shadow: 0 1px 2px rgba(10,132,255,0.28); }
+button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 button + button { margin-left: 6px; }
 
 /* Variantes de bouton */
-button.btn-danger  { background: var(--danger); }
-button.btn-success { background: var(--success); }
-button.btn-ghost   { background: transparent; color: var(--accent); border: 1px solid var(--border); }
-button.btn-ghost:hover:not(:disabled) { background: #f0f0f5; }
+button.btn-danger  { background: var(--danger); box-shadow: 0 1px 2px rgba(255,59,48,0.3); }
+button.btn-danger:hover:not(:disabled)  { background: #e0352b; box-shadow: 0 4px 12px rgba(255,59,48,0.35); }
+button.btn-success { background: var(--success); box-shadow: 0 1px 2px rgba(52,199,89,0.3); }
+/* Secondaire : surface claire, lisible, sans peser visuellement. */
+button.btn-secondary {
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+}
+button.btn-secondary:hover:not(:disabled) { background: #f7f7fb; border-color: #c7c7ce; box-shadow: var(--shadow-md); }
+button.btn-ghost   { background: transparent; color: var(--accent); border: 1px solid var(--border); box-shadow: none; }
+button.btn-ghost:hover:not(:disabled) { background: #f0f0f5; box-shadow: none; }
+
+/* Mini-boutons d'action dans les tableaux denses : puces discrètes plutôt
+   que des blocs pleins. Les boutons à couleur explicite (style inline) gardent
+   leur teinte — c'est le défaut bleu lourd qu'on neutralise ici. */
+.table-wrap td button {
+  padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 7px;
+  background: #eef0f4; color: #3a3a3c; box-shadow: none;
+}
+.table-wrap td button:hover:not(:disabled) {
+  background: #e2e5eb; color: var(--text); transform: none; box-shadow: none;
+}
 
 /* ── Listes ── */
 ul { list-style: none; padding: 0; margin: 12px 0; }
@@ -519,12 +541,23 @@ pre {
 .table-wrap.wide table { min-width: 760px; }
 .table-wrap th, .table-wrap td { white-space: normal; }
 
-/* En-tête de section repliable. */
+/* En-tête de section repliable : barre-panneau clairement cliquable. */
 .section-toggle {
-  cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 13px 16px; margin: 0 0 12px;
+  font-size: 15px; font-weight: 600;
+  transition: border-color 0.16s, box-shadow 0.16s, background 0.16s;
 }
-.section-toggle .chev { transition: transform 0.18s var(--ease-spring); color: var(--text-sub); }
+.section-toggle:hover { border-color: #c7c7ce; box-shadow: var(--shadow-sm); }
+.section-toggle.open { background: #faf9ff; border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.section-toggle .chev {
+  transition: transform 0.2s var(--ease-spring); color: var(--accent); flex: 0 0 auto;
+}
 .section-toggle.open .chev { transform: rotate(90deg); }
+.section-toggle .toggle-count { color: var(--text-sub); font-weight: 400; margin-left: auto; font-size: 13px; }
 
 /* ============================================================
    DESIGN-2 — Cadre adaptatif (s'adapte à n'importe quel écran)

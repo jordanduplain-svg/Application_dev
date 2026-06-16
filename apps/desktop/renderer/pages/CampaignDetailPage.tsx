@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, Pencil, Archive, Trash2, ChevronRight,
-  Building2, Send, Mail, Percent,
+  Building2, Send, Mail, Percent, Sparkles, Download,
 } from 'lucide-react';
 import { subDays, isBefore, parseISO } from 'date-fns';
 import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
@@ -660,10 +660,10 @@ export default function CampaignDetailPage({
         </button>
         <div className="detail-actions">
           {/* UX-1 : bouton Modifier la campagne. */}
-          <button onClick={startEditCampaign}><Pencil size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Modifier</button>
+          <button onClick={startEditCampaign} className="btn-secondary"><Pencil size={14} />Modifier</button>
           {/* UX-6 : bouton Archiver. */}
-          <button onClick={archiveCampaign} style={{ background: '#6c757d', color: '#fff' }}><Archive size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Archiver</button>
-          <button onClick={deleteCampaign} style={{ background: '#ff453a', color: '#fff' }}><Trash2 size={14} style={{ verticalAlign: '-2px', marginRight: '5px' }} />Supprimer</button>
+          <button onClick={archiveCampaign} className="btn-secondary"><Archive size={14} />Archiver</button>
+          <button onClick={deleteCampaign} className="btn-danger"><Trash2 size={14} />Supprimer</button>
         </div>
       </div>
 
@@ -860,9 +860,10 @@ export default function CampaignDetailPage({
 
       <h3 className={`section-toggle${showCompanies ? ' open' : ''}`} onClick={() => setShowCompanies((v) => !v)}>
         <ChevronRight className="chev" size={18} />
-        Entreprises cibles ({companies.length})
-        <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-sub)' }}>
-          {showCompanies ? '— masquer' : '— afficher / gérer'}
+        <Building2 size={16} style={{ color: 'var(--text-sub)' }} />
+        Entreprises cibles
+        <span className="toggle-count">
+          {companies.length} entreprise{companies.length > 1 ? 's' : ''} · {showCompanies ? 'masquer' : 'afficher / gérer'}
         </span>
       </h3>
 
@@ -1042,15 +1043,17 @@ export default function CampaignDetailPage({
       {/* Le choix du moteur IA est centralisé sur la page Accueil. */}
 
       {/* Barre d'actions ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={generate} disabled={isGenerating}>
+          <Sparkles size={15} />
           {isGenerating ? 'Génération…' : 'Générer les emails manquants'}
         </button>
-        <button onClick={sendAll} disabled={isSendingAll}>
+        <button onClick={sendAll} disabled={isSendingAll} className="btn-success">
+          <Send size={15} />
           {isSendingAll ? 'Envoi en cours…' : 'Tout envoyer (brouillons + échecs)'}
         </button>
         {/* UX-9 : export CSV. */}
-        <button onClick={exportCsv}>Exporter en CSV</button>
+        <button onClick={exportCsv} className="btn-secondary"><Download size={15} />Exporter en CSV</button>
       </div>
 
       {/* FM11 : panneau d'aperçu avant envoi en masse. */}
