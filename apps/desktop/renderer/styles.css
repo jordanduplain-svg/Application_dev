@@ -667,8 +667,11 @@ pre {
 }
 .cockpit-recap { list-style: none; margin: 0 0 16px; padding: 0; font-size: 12.5px; line-height: 1.5; }
 .cockpit-recap li {
-  display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.09);
+  display: flex; justify-content: space-between; gap: 12px;
+  margin: 0; padding: 7px 0; border-radius: 0;
+  background: transparent; border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  box-shadow: none;
 }
 .cockpit-recap li:last-child { border-bottom: none; }
 .cockpit-recap .k { color: rgba(255,255,255,0.55); flex: 0 0 auto; }
