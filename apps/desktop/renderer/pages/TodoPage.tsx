@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { CircleCheck } from 'lucide-react';
 import type { Application } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
@@ -69,26 +70,28 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
     await load();
   };
 
-  if (loading) return <section><h2>À traiter</h2><p>Chargement…</p></section>;
+  if (loading) return <section><div className="page-head"><h2>À traiter</h2></div><p>Chargement…</p></section>;
 
   return (
     <section>
-      <h2>À traiter ({apps.length})</h2>
-      <p style={{ color: '#555', fontSize: '13px', marginBottom: '16px' }}>
-        Candidatures nécessitant une action : relances en attente, réponses à qualifier, échecs à renvoyer.
-      </p>
+      <div className="page-head">
+        <h2>À traiter ({apps.length})</h2>
+        <div className="page-sub">
+          Candidatures nécessitant une action : relances en attente, réponses à qualifier, échecs à renvoyer.
+        </div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
       {apps.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', color: '#555', padding: '32px' }}>
-          <p style={{ fontSize: '1.5em' }}>✓</p>
-          <p>Tout est à jour — aucune action requise.</p>
+        <div className="card" style={{ textAlign: 'center', color: 'var(--text-sub)', padding: '36px', alignItems: 'center' }}>
+          <CircleCheck size={40} color="#1D9E75" />
+          <p style={{ fontWeight: 600 }}>Tout est à jour — aucune action requise.</p>
         </div>
       ) : (
         <ul>
           {apps.map((a) => (
-            <li key={a.id} style={{ marginBottom: '12px' }}>
+            <li key={a.id} style={{ marginBottom: '12px', borderLeft: `4px solid ${actionColor(a)}`, alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 {/* Badge d'action requise. */}
                 <span style={{
@@ -106,6 +109,7 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
                 {onOpenCampaign && (
                   <button
                     onClick={() => onOpenCampaign(a.campaignId)}
+                    className="btn-secondary"
                     style={{ fontSize: '12px' }}
                   >
                     Voir la campagne
@@ -117,7 +121,8 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
                   <button
                     onClick={() => sendOne(a.id)}
                     disabled={sendingId === a.id}
-                    style={{ background: '#ff453a', color: '#fff', fontSize: '12px' }}
+                    className="btn-danger"
+                    style={{ fontSize: '12px' }}
                   >
                     {sendingId === a.id ? 'Envoi…' : 'Renvoyer'}
                   </button>

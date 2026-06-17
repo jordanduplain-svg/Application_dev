@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { RefreshCw, Search, Reply, MessageSquare } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import type { Application } from '@candio/shared';
 import { api } from '../lib/api';
@@ -166,20 +167,29 @@ export default function RepliesPage() {
 
   return (
     <section>
-      <h2>Réponses reçues</h2>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h2>Réponses reçues</h2>
+          <div className="page-sub">Les réponses détectées par IMAP — qualifie, prends des notes, réponds directement.</div>
+        </div>
+        <button onClick={pollNow} disabled={polling}>
+          <RefreshCw size={15} className={polling ? 'spin' : undefined} />
+          {polling ? 'Relevé en cours…' : 'Relever maintenant'}
+        </button>
+      </div>
       {error && <p className="error">{error}</p>}
-      <button onClick={pollNow} disabled={polling}>
-        {polling ? 'Relevé en cours…' : 'Relever maintenant'}
-      </button>
 
       {/* FM6 : barre de recherche et sélecteur de tri. */}
       <div style={{ display: 'flex', gap: '8px', margin: '12px 0', flexWrap: 'wrap' }}>
-        <input
-          placeholder="Rechercher par entreprise…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          style={{ flex: 1, minWidth: '160px' }}
-        />
+        <div style={{ position: 'relative', flex: 1, minWidth: '160px', display: 'flex' }}>
+          <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-sub)', pointerEvents: 'none' }} />
+          <input
+            placeholder="Rechercher par entreprise…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            style={{ flex: 1, paddingLeft: '32px' }}
+          />
+        </div>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
@@ -197,10 +207,12 @@ export default function RepliesPage() {
       )}
       <ul>
         {paginatedReplies.map((a) => (
-          <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div>
-              <strong>{a.companyName}</strong> — {a.subject}
-              <span className="status status-replied">Réponse reçue</span>
+          <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: '4px solid #5856d6' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <MessageSquare size={15} color="#5856d6" />
+              <strong>{a.companyName}</strong>
+              <span style={{ color: 'var(--text-sub)', fontSize: '13px' }}>— {a.subject}</span>
+              <span className="status status-replied" style={{ marginLeft: 'auto' }}>Réponse reçue</span>
             </div>
             <small>
               Reçu le {a.repliedAt ? new Date(a.repliedAt).toLocaleString('fr-FR') : ''}
@@ -300,9 +312,9 @@ export default function RepliesPage() {
             ) : (
               <button
                 onClick={() => { setReplyingId(a.id); setReplyBody(''); }}
-                style={{ marginTop: '8px', fontSize: '12px', background: '#5856d6', color: '#fff' }}
+                style={{ marginTop: '8px', fontSize: '12px', background: '#5856d6', boxShadow: '0 1px 2px rgba(88,86,214,0.3)', alignSelf: 'flex-start' }}
               >
-                Répondre au recruteur
+                <Reply size={14} />Répondre au recruteur
               </button>
             )}
           </li>

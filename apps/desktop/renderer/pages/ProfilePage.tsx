@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { User, FileText, Sparkles, ArrowRight } from 'lucide-react';
 import type { Profile } from '@candio/shared';
 import { api } from '../lib/api';
 import AiConfigBlocks from '../components/AiConfigBlocks';
@@ -62,21 +63,26 @@ export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }
 
   return (
     <section>
-      <h2>Profil</h2>
+      <div className="page-head">
+        <h2>Profil</h2>
+        <div className="page-sub">Ton identité et tes coordonnées (elles signent les lettres) + la configuration IA.</div>
+      </div>
       {loadError && <p className="error">{loadError}</p>}
 
       {/* Mise en page 2 colonnes : identité + CV à gauche, configuration IA à droite. */}
       <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         {/* ── Colonne gauche : identité + CV ── */}
-        <div style={{ flex: '0 1 440px', minWidth: '320px' }}>
-      <div className="form">
-        <label>Prénom
+        <div className="form-create" style={{ flex: '0 1 440px', minWidth: '320px' }}>
+      <div className="form-section" style={{ '--m': '#5856d6' } as React.CSSProperties}>
+        <div className="form-section-title"><span className="fst-ico"><User size={16} /></span>Identité &amp; contact</div>
+        <div className="form-grid">
+        <label className="full">Prénom
           <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
         </label>
-        <label>Nom
+        <label className="full">Nom
           <input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
         </label>
-        <label>Adresse d'envoi des candidatures
+        <label className="full">Adresse d'envoi des candidatures
           <input
             type="email"
             value={form.emailSender}
@@ -116,32 +122,33 @@ export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }
             onChange={(e) => setForm({ ...form, portfolio: e.target.value })}
           />
         </label>
-        <button onClick={save} disabled={isSaving}>
-          {isSaving ? 'Enregistrement…' : 'Enregistrer'}
-        </button>
-        {saveError && <p className="error">{saveError}</p>}
+        <div className="full">
+          <button onClick={save} disabled={isSaving}>
+            {isSaving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+          {saveError && <p className="error" style={{ marginTop: '8px' }}>{saveError}</p>}
+        </div>
+        </div>
       </div>
 
       {/* CV-MULTI : le CV se gère désormais dans l'onglet dédié. */}
-      <div className="card">
-        <h3>CV</h3>
-        <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.5, marginBottom: '10px' }}>
+      <div className="form-section" style={{ '--m': '#1D9E75' } as React.CSSProperties}>
+        <div className="form-section-title"><span className="fst-ico"><FileText size={16} /></span>CV</div>
+        <p style={{ fontSize: '13px', color: 'var(--text-sub)', lineHeight: 1.5, marginBottom: '12px' }}>
           Tu peux créer plusieurs CV (un par type de poste) et choisir lequel utiliser
           pour chaque campagne.
         </p>
-        <button
-          onClick={() => onGoToCv?.()}
-          style={{ background: '#0a84ff', color: '#fff', border: 'none', borderRadius: '6px',
-            padding: '8px 16px', cursor: 'pointer', fontWeight: 600 }}
-        >
-          📄 Gérer mes CV →
+        <button onClick={() => onGoToCv?.()}>
+          <FileText size={15} />Gérer mes CV<ArrowRight size={15} />
         </button>
       </div>
         </div>{/* ── fin colonne gauche ── */}
 
         {/* ── Colonne droite : configuration IA + emails ── */}
         <div style={{ flex: '1 1 560px', minWidth: '340px' }}>
-          <h3 style={{ marginTop: 0 }}>Configuration IA &amp; emails</h3>
+          <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles size={17} color="var(--accent)" />Configuration IA &amp; emails
+          </h3>
           <AiConfigBlocks
             onGoToSettings={() => onGoToSettings?.()}
             onGoToScraping={() => onGoToScraping?.()}
