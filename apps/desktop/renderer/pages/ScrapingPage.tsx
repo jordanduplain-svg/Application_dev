@@ -10,10 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ClipboardList, BarChart3, Play, Square, Loader2, Rocket,
-  Briefcase, Layers, MapPin, Users, Radio, Hash, Clock,
+  Briefcase, Layers, MapPin, Users, Radio, Hash, Clock, ArrowDownWideNarrow,
 } from 'lucide-react';
-import type { ScrapingConfig, ScoringWeights, HardwareInfo } from '@candio/shared';
-import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
+import type { ScrapingConfig, HardwareInfo } from '@candio/shared';
 import { api } from '../lib/api';
 import { COUNTRIES, FR_DEPTS_BY_REGION, FR_REGIONS, FR_CITIES } from '../lib/geo';
 import { SCRAPING_MODEL_CATALOG, qualityStars, compatLabel } from '../lib/ollamaModels';
@@ -1586,34 +1585,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
 // ── Composant scoring ──────────────────────────────────────────────────────────
 
-// Labels affichés dans l'UI pour chaque source email
-const EMAIL_BONUS_LABELS: { key: keyof ScoringWeights['emailBonus']; label: string; color: string }[] = [
-  { key: 'hunter_verified',   label: '✅ Vérifié Hunter',          color: '#34c759' },
-  { key: 'linkedin_smtp',     label: '🔗 LinkedIn + SMTP',          color: '#0077b5' },
-  { key: 'web_crawl',         label: '🌐 Crawlé sur le site',       color: '#30d158' },
-  { key: 'catch_all',         label: '🟠 Domaine catch-all',        color: '#ff6b2b' },
-  { key: 'apollo_found',      label: '🟣 Apollo.io',                color: '#bf5af2' },
-  { key: 'snov_found',        label: '🔵 Snov.io',                  color: '#5ac8fa' },
-  { key: 'hunter_found',      label: '🟡 Trouvé Hunter (non vérifié)',color: '#ff9f0a' },
-  { key: 'whois',             label: '🔎 WHOIS',                    color: '#64d2ff' },
-  { key: 'linkedin_pattern',  label: '🔸 LinkedIn (pattern)',       color: '#ff9500' },
-  { key: 'pattern_verified',  label: '⚡ Pattern + SMTP',           color: '#ffd60a' },
-  { key: 'pattern',           label: '⚪ Pattern auto (non vérifié)', color: '#888'  },
-  { key: 'manual',            label: '✏️ Saisi manuellement',        color: '#5ac8fa' },
-];
-
-const SIZE_BONUS_LABELS: { key: keyof ScoringWeights['sizeBonus']; label: string }[] = [
-  { key: '10-19',     label: '10 – 19 salariés'   },
-  { key: '20-49',     label: '20 – 49 salariés'   },
-  { key: '50-99',     label: '50 – 99 salariés'   },
-  { key: '100-199',   label: '100 – 199 salariés' },
-  { key: '200-249',   label: '200 – 249 salariés' },
-  { key: '250-499',   label: '250 – 499 salariés' },
-  { key: '500-999',   label: '500 – 999 salariés' },
-  { key: '1000-1999', label: '1 000 – 1 999 salariés' },
-  { key: '2000-4999', label: '2 000 – 4 999 salariés' },
-];
-
 function ScoringSection({
   config,
   setConfig,
@@ -1621,205 +1592,29 @@ function ScoringSection({
   config: ScrapingConfig;
   setConfig: (c: ScrapingConfig) => void;
 }) {
-  // Poids actifs : soit ceux de la config, soit les défauts (pour affichage initial)
-  const weights: ScoringWeights = config.scoringWeights ?? DEFAULT_SCORING_WEIGHTS;
-
-  const setWeights = (w: ScoringWeights) => setConfig({ ...config, scoringWeights: w });
-
-  const resetDefaults = () => setConfig({ ...config, scoringWeights: null });
-
-  const setEmailBonus = (key: keyof ScoringWeights['emailBonus'], val: number) =>
-    setWeights({ ...weights, emailBonus: { ...weights.emailBonus, [key]: val } });
-
-  const setSizeBonus = (key: keyof ScoringWeights['sizeBonus'], val: number) =>
-    setWeights({ ...weights, sizeBonus: { ...weights.sizeBonus, [key]: val } });
-
-  const isCustom = config.scoringWeights !== null;
-
+  // Option 2 (simplifiée) : un seul interrupteur. Le tri utilise des poids par
+  // défaut éprouvés (fiabilité email + fraîcheur + taille + ATS) — non exposés,
+  // car les régler à la main n'apporte rien pour un usage mono-utilisateur.
   return (
-    <details style={{ marginBottom: '28px' }}>
-      <summary style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#5856d6', padding: '4px 0' }}>
-        📊 Scoring &amp; tri des résultats{' '}
-        <span style={{ fontWeight: 400, fontSize: '12px', color: '#86868b' }}>— avancé, laissez par défaut</span>
-      </summary>
-      <div style={{ ...cardStyle('#c98a2b'), marginTop: '10px' }}>
-        {isCustom && (
-          <button
-            onClick={resetDefaults}
-            style={{
-              fontSize: '12px', padding: '4px 10px', background: '#ff9f0a22',
-              color: '#8a5700', border: '1px solid #ff9f0a88', borderRadius: '6px',
-              cursor: 'pointer', marginBottom: '12px',
-            }}
-          >
-            ↺ Réinitialiser les défauts
-          </button>
-        )}
-
-      {/* Toggle skip scoring */}
-      <label style={{
-        display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
-        padding: '10px 12px', background: '#fff', borderRadius: '8px',
-        border: `2px solid ${config.skipScoring ? '#ff453a' : '#007aff'}`,
-        marginBottom: '14px',
-      }}>
+    <div style={{ ...cardStyle('#c98a2b'), marginBottom: '28px' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
         <input
           type="checkbox"
           checked={!config.skipScoring}
           onChange={(e) => setConfig({ ...config, skipScoring: !e.target.checked })}
         />
         <span>
-          <strong style={{ fontSize: '13px' }}>
-            {config.skipScoring ? '⏩ Scoring désactivé' : '📊 Activer le scoring & tri automatique'}
+          <strong style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <ArrowDownWideNarrow size={16} color="#c98a2b" />Trier par fiabilité d'email + fraîcheur
           </strong>
-          <span style={{ fontSize: '11px', color: '#888', display: 'block', marginTop: '1px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-sub)', display: 'block', marginTop: '3px', lineHeight: 1.5 }}>
             {config.skipScoring
-              ? 'Les entreprises seront exportées dans l\'ordre de collecte, sans aucun tri.'
-              : 'Chaque entreprise reçoit un score basé sur la fiabilité de l\'email, la taille, l\'ATS détecté.'}
+              ? 'Désactivé — les entreprises sont exportées dans l\'ordre de collecte.'
+              : 'Les entreprises les plus prometteuses (email vérifié, offre récente, bonne taille, ATS détecté) remontent en tête pour être contactées en premier — utile sous le plafond d\'envois quotidien.'}
           </span>
         </span>
       </label>
-
-      {!config.skipScoring && (
-        <>
-          <p style={{ fontSize: '12px', color: '#666', margin: '0 0 12px' }}>
-            <strong>Score total</strong> = fraîcheur de l'offre (0–100) + pertinence stack (0–100) + bonus ci-dessous.
-            {isCustom
-              ? <span style={{ color: '#ff9f0a', marginLeft: '6px' }}>⚠ Poids personnalisés actifs</span>
-              : <span style={{ color: '#888', marginLeft: '6px' }}>Valeurs par défaut</span>}
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
-            {/* ── Colonne gauche : email source bonuses ── */}
-            <div>
-              <p style={{ fontWeight: 600, fontSize: '12px', color: '#444', margin: '0 0 8px' }}>
-                Bonus source d'email
-              </p>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <tbody>
-                  {EMAIL_BONUS_LABELS.map(({ key, label, color }) => (
-                    <tr key={key}>
-                      <td style={{ padding: '3px 0', color }}>
-                        {label}
-                      </td>
-                      <td style={{ padding: '3px 0 3px 8px', textAlign: 'right', width: '64px' }}>
-                        <input
-                          type="number"
-                          min={-100} max={100}
-                          value={weights.emailBonus[key]}
-                          onChange={(e) => setEmailBonus(key, Number(e.target.value))}
-                          style={{
-                            width: '56px', padding: '2px 6px', borderRadius: '4px',
-                            border: weights.emailBonus[key] !== DEFAULT_SCORING_WEIGHTS.emailBonus[key]
-                              ? '1px solid #ff9f0a' : '1px solid #ccc',
-                            fontSize: '12px', textAlign: 'right',
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Pénalité email invalide */}
-                  <tr style={{ borderTop: '1px solid #e5e5ea', marginTop: '4px' }}>
-                    <td style={{ padding: '5px 0 3px', color: '#ff453a', fontWeight: 600 }}>
-                      ❌ Email invalide (pénalité)
-                    </td>
-                    <td style={{ padding: '5px 0 3px 8px', textAlign: 'right', width: '64px' }}>
-                      <input
-                        type="number"
-                        min={-200} max={0}
-                        value={weights.emailInvalidPenalty}
-                        onChange={(e) => setWeights({ ...weights, emailInvalidPenalty: Number(e.target.value) })}
-                        style={{
-                          width: '56px', padding: '2px 6px', borderRadius: '4px',
-                          border: weights.emailInvalidPenalty !== DEFAULT_SCORING_WEIGHTS.emailInvalidPenalty
-                            ? '1px solid #ff9f0a' : '1px solid #ccc',
-                          fontSize: '12px', textAlign: 'right', color: '#ff453a',
-                        }}
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* ── Colonne droite : taille + ATS ── */}
-            <div>
-              <p style={{ fontWeight: 600, fontSize: '12px', color: '#444', margin: '0 0 8px' }}>
-                Bonus taille d'entreprise
-                <span style={{ fontWeight: 400, color: '#888', marginLeft: '6px' }}>
-                  (sweet spot 50–500 pour les candidatures spontanées)
-                </span>
-              </p>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <tbody>
-                  {SIZE_BONUS_LABELS.map(({ key, label }) => (
-                    <tr key={key}>
-                      <td style={{ padding: '3px 0', color: '#444' }}>{label}</td>
-                      <td style={{ padding: '3px 0 3px 8px', textAlign: 'right', width: '64px' }}>
-                        <input
-                          type="number"
-                          min={0} max={100}
-                          value={weights.sizeBonus[key]}
-                          onChange={(e) => setSizeBonus(key, Number(e.target.value))}
-                          style={{
-                            width: '56px', padding: '2px 6px', borderRadius: '4px',
-                            border: weights.sizeBonus[key] !== DEFAULT_SCORING_WEIGHTS.sizeBonus[key]
-                              ? '1px solid #ff9f0a' : '1px solid #ccc',
-                            fontSize: '12px', textAlign: 'right',
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Bonus ATS */}
-              <p style={{ fontWeight: 600, fontSize: '12px', color: '#444', margin: '14px 0 6px' }}>
-                Autres bonus
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', color: '#444', flex: 1 }}>
-                  🏢 ATS détecté (Lever, Greenhouse, Workday…)
-                </span>
-                <input
-                  type="number"
-                  min={0} max={100}
-                  value={weights.atsBonus}
-                  onChange={(e) => setWeights({ ...weights, atsBonus: Number(e.target.value) })}
-                  style={{
-                    width: '56px', padding: '2px 6px', borderRadius: '4px',
-                    border: weights.atsBonus !== DEFAULT_SCORING_WEIGHTS.atsBonus
-                      ? '1px solid #ff9f0a' : '1px solid #ccc',
-                    fontSize: '12px', textAlign: 'right',
-                  }}
-                />
-              </div>
-
-              {/* Info score max */}
-              <div style={{
-                marginTop: '14px', padding: '10px', background: '#eef4ff',
-                borderRadius: '6px', fontSize: '11px', color: '#3a5a9a',
-              }}>
-                <strong>Score max théorique :</strong>{' '}
-                {100 + 100 + Math.max(...Object.values(weights.emailBonus))
-                  + Math.max(...Object.values(weights.sizeBonus))
-                  + weights.atsBonus} pts
-                <br />
-                <span style={{ color: '#666' }}>
-                  = fraîcheur 100 + pertinence 100 + meilleur email{' '}
-                  ({Math.max(...Object.values(weights.emailBonus))})
-                  + meilleure taille ({Math.max(...Object.values(weights.sizeBonus))})
-                  + ATS ({weights.atsBonus})
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-      </div>
-    </details>
+    </div>
   );
 }
 
