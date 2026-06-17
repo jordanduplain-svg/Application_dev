@@ -375,7 +375,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
           <button onClick={() => onGoToLeads?.()}>
             <ClipboardList size={15} />Mes leads scrapés
           </button>
-          {/* Rapport HTML de performance (généré par le scraper). */}
+          {/* Rapport HTML du scraper (listing des leads collectés, candio_leads.html). */}
           <button
             className="btn-secondary"
             onClick={async () => {
@@ -383,8 +383,8 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               if (m?.htmlPath) await api.invoke('shell:open', m.htmlPath).catch(() => {});
             }}
             disabled={!masterPaths?.htmlPath}
-            title={masterPaths?.htmlPath ? 'Ouvre le rapport HTML de performance' : 'Lance un scraping pour générer le rapport'}>
-            <BarChart3 size={15} />Rapport performance
+            title={masterPaths?.htmlPath ? 'Ouvre le rapport HTML du scraping (liste des leads collectés)' : 'Lance un scraping pour générer le rapport'}>
+            <BarChart3 size={15} />Rapport de scraping
           </button>
         </div>
       </div>
