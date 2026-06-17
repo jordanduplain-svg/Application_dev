@@ -326,9 +326,14 @@ export function setOllamaModel(model: string): Promise<void> {
   return enqueueWrite(() => writeFile({ ...readFile(), ollamaModel: model }));
 }
 
-/** Retourne l'URL du serveur Ollama (défaut 'http://localhost:11434'). */
+/**
+ * Retourne l'URL du serveur Ollama (défaut 'http://127.0.0.1:11434').
+ * 127.0.0.1 et non 'localhost' : sous Windows, 'localhost' résout d'abord en
+ * IPv6 (::1) alors qu'Ollama n'écoute souvent que sur IPv4 → /api/tags renvoie
+ * une liste vide et tous les modèles s'affichent « non installé ».
+ */
 export function getOllamaHost(): string {
-  return readFile().ollamaHost ?? 'http://localhost:11434';
+  return readFile().ollamaHost ?? 'http://127.0.0.1:11434';
 }
 
 export function setOllamaHost(host: string): Promise<void> {

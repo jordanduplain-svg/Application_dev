@@ -97,7 +97,7 @@ export default function SettingsPage() {
   // OLLAMA-1 : provider IA local.
   const [aiProvider, setAiProvider] = useState('openai');
   const [ollamaModel, setOllamaModel] = useState('llama3.2:3b');
-  const [ollamaHost, setOllamaHost] = useState('http://localhost:11434');
+  const [ollamaHost, setOllamaHost] = useState('http://127.0.0.1:11434');
   const [savingOllama, setSavingOllama] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [loadingOllamaModels, setLoadingOllamaModels] = useState(false);
@@ -147,7 +147,7 @@ export default function SettingsPage() {
     // OLLAMA-1 : sync provider + config Ollama.
     setAiProvider(st.aiProvider ?? 'openai');
     setOllamaModel(st.ollamaModel ?? 'llama3.2:3b');
-    setOllamaHost(st.ollamaHost ?? 'http://localhost:11434');
+    setOllamaHost(st.ollamaHost ?? 'http://127.0.0.1:11434');
     // SEC-M1 : sync le timeout de verrouillage.
     setLockTimeout(st.lockTimeoutMinutes ?? 15);
   };
@@ -886,7 +886,7 @@ export default function SettingsPage() {
 
             <h4>Hôte Ollama</h4>
             <input
-              placeholder="http://localhost:11434"
+              placeholder="http://127.0.0.1:11434"
               value={ollamaHost}
               onChange={(e) => setOllamaHost(e.target.value)}
               style={{ width: '240px' }}

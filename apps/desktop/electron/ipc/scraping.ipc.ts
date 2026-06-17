@@ -58,7 +58,7 @@ const DEFAULT_CONFIG: ScrapingConfig = {
   // pas joignable, le pipeline le détecte (ping) et continue sans LLM. Coupe-circuit
   // côté Python si Ollama répond trop lentement. Changeable en OpenAI dans l'UI.
   llmProvider: '',   // désactivé par défaut — utile seulement avec GPU (trop lent sur CPU)
-  ollamaUrl: 'http://localhost:11434',
+  ollamaUrl: 'http://127.0.0.1:11434',
   ollamaModel: 'qwen2.5:3b',   // modèle léger/rapide par défaut (évite les timeouts du 7b)
   // SCRAPE-DESC : modèle dédié aux descriptions (Phase 7b + bouton). Indépendant du
   // crawl : tâche légère (1 résumé/entreprise) → un 7B est rentable côté qualité FR.
