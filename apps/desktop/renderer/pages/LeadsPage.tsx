@@ -313,10 +313,12 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
 
   return (
     <section>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Leads scrapés</h2>
-        <span style={{ color: '#888', fontSize: '13px' }}>{leads.length} entreprise(s)</span>
-        <button onClick={() => void load()} style={{ fontSize: '12px' }} disabled={enriching}>↻ Recharger</button>
+      <div className="page-head">
+        <h2>Leads scrapés</h2>
+        <div className="page-sub">{leads.length} entreprise(s) collectée(s) — enrichis les fiches IA, filtre, et importe dans une campagne.</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <button onClick={() => void load()} className="btn-secondary" style={{ fontSize: '12px' }} disabled={enriching}>↻ Recharger</button>
         <button onClick={() => void enrichDescriptions({})} disabled={enriching || leads.length === 0}
           title="Rédige une fiche IA pour TOUTES les entreprises sans fiche (tout le master)"
           style={{ fontSize: '12px', background: '#0a84ff', color: '#fff', border: 'none',

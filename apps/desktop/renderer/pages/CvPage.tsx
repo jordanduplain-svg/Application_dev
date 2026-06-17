@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { FilePlus2 } from 'lucide-react';
 import type { Cv } from '@candio/shared';
 import { api } from '../lib/api';
 
@@ -229,12 +230,12 @@ export default function CvPage() {
 
   return (
     <section>
-      <h2>Mes CV</h2>
-      <p style={{ color: '#666', marginBottom: '16px', fontSize: '14px', lineHeight: 1.5 }}>
-        Crée un CV par type de poste (ex : un CV Data Analyst, un CV Chef de projet). Importe le PDF
-        de chacun — l'IA en extrait tes compétences. Tu choisiras ensuite quel CV utiliser
-        <strong> pour chaque campagne</strong>.
-      </p>
+      <div className="page-head">
+        <h2>Mes CV</h2>
+        <div className="page-sub">
+          Un CV par type de poste — importe le PDF, l'IA extrait tes compétences, puis tu choisis quel CV utiliser pour chaque campagne.
+        </div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
@@ -255,8 +256,8 @@ export default function CvPage() {
       )}
 
       {/* Création d'un nouveau CV (nom) */}
-      <div className="card" style={{ marginBottom: '16px' }}>
-        <h3>Ajouter un CV</h3>
+      <div className="form-section" style={{ '--m': '#5856d6', marginBottom: '16px' } as React.CSSProperties}>
+        <div className="form-section-title"><span className="fst-ico"><FilePlus2 size={16} /></span>Ajouter un CV</div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             placeholder="Nom du CV (ex : CV Data Analyst)"
@@ -268,18 +269,15 @@ export default function CvPage() {
           <button
             onClick={createAndImport}
             disabled={creating || !newName.trim()}
-            style={{ background: '#0a84ff', color: '#fff', border: 'none', borderRadius: '6px',
-              padding: '8px 14px', cursor: creating || !newName.trim() ? 'default' : 'pointer',
-              fontWeight: 600, whiteSpace: 'nowrap' }}
+            style={{ whiteSpace: 'nowrap' }}
           >
-            {creating ? 'Import en cours…' : '+ Créer et importer le PDF'}
+            <FilePlus2 size={15} />{creating ? 'Import en cours…' : 'Créer et importer le PDF'}
           </button>
-          <button onClick={createCv} disabled={creating || !newName.trim()}
-            style={{ fontSize: '13px', background: 'transparent', border: '1px solid #ccc', color: '#555' }}>
+          <button onClick={createCv} disabled={creating || !newName.trim()} className="btn-secondary" style={{ fontSize: '13px' }}>
             Créer sans PDF
           </button>
         </div>
-        <small style={{ color: '#888', display: 'block', marginTop: '6px' }}>
+        <small style={{ color: 'var(--text-sub)', display: 'block', marginTop: '8px' }}>
           « Créer et importer » crée le CV puis ouvre le sélecteur de PDF (l'IA l'analyse ensuite).
         </small>
       </div>
