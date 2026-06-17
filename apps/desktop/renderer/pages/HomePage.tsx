@@ -26,11 +26,8 @@ interface HomeStats {
   profileOk: boolean; // prénom + nom renseignés (ils signent les lettres)
 }
 
-// SETUP-1 : une alerte par carte = la première « à régler » de la liste (priorité).
+// SETUP-1 : alertes « à régler » d'une carte. On affiche TOUTES celles actives.
 type Alert = { show: boolean; cls: 'red' | 'amber'; label: string; title: string };
-function pickAlert(alerts: Alert[]): Alert | null {
-  return alerts.find((a) => a.show) ?? null;
-}
 
 export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
   const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true, imapOk: true, profileOk: true });
@@ -80,17 +77,24 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
   const ICON = 19;
 
   // SETUP-1 : alertes agrégées par carte (le réglage IA vit dans Profil ET Réglages).
-  const reglagesAlert = pickAlert([
+  const reglagesAlerts: Alert[] = [
     { show: !s.smtpOk, cls: 'red', label: 'SMTP requis', title: 'SMTP non configuré — indispensable pour envoyer les candidatures' },
     { show: !s.imapOk, cls: 'amber', label: 'IMAP requis', title: 'IMAP non configuré — sans lui, les réponses des recruteurs ne sont pas détectées' },
     { show: !s.aiOk, cls: 'red', label: 'IA à choisir', title: 'Moteur IA des lettres non configuré (réglable ici ou dans Profil)' },
-  ]);
-  const profilAlert = pickAlert([
+  ];
+  const profilAlerts: Alert[] = [
     { show: !s.profileOk, cls: 'red', label: 'À compléter', title: 'Renseigne ton prénom et ton nom — ils signent les lettres' },
     { show: !s.aiOk, cls: 'red', label: 'IA à choisir', title: 'Moteur IA des lettres non configuré (réglable ici ou dans Réglages)' },
-  ]);
-  const Badge = ({ a }: { a: Alert | null }) =>
-    a ? <span className={`bento-alert ${a.cls}`} title={a.title}>{a.label}</span> : null;
+  ];
+  // Affiche TOUTES les pastilles actives de la carte (empilées).
+  const Badges = ({ alerts }: { alerts: Alert[] }) => {
+    const list = alerts.filter((a) => a.show);
+    return list.length ? (
+      <div className="bento-alerts">
+        {list.map((a, i) => <span key={i} className={`bento-alert ${a.cls}`} title={a.title}>{a.label}</span>)}
+      </div>
+    ) : null;
+  };
 
   return (
     <section className="home">
@@ -148,7 +152,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Scraping */}
         <div className="bento-card b-scr" onClick={() => onNavigate('scraping')} style={{ background: '#993C1D', color: '#fff' }}>
-          {s.leads === 0 && <span className="bento-alert amber" title="Aucun lead collecté — lance un premier scraping pour alimenter tes campagnes">À lancer</span>}
+          <Badges alerts={[{ show: s.leads === 0, cls: 'amber', label: 'À lancer', title: 'Aucun lead collecté — lance un premier scraping pour alimenter tes campagnes' }]} />
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Radar size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Scraping</div><div className="bento-sub">collecter</div></div>
         </div>
@@ -165,7 +169,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* CV */}
         <div className="bento-card util b-cv" onClick={() => onNavigate('cv')}>
-          {!s.cvOk && <span className="bento-alert amber" title="Aucun CV analysé — ajoute ton CV pour des lettres qui citent tes vraies expériences">À ajouter</span>}
+          <Badges alerts={[{ show: !s.cvOk, cls: 'amber', label: 'À ajouter', title: 'Aucun CV analysé — ajoute ton CV pour des lettres qui citent tes vraies expériences' }]} />
           <div className="bento-top">
             <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><FileText size={ICON} /></div>
             {s.cvOk && <CircleCheck size={16} color="#1D9E75" />}
@@ -175,14 +179,14 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Profil */}
         <div className="bento-card util b-prof" onClick={() => onNavigate('profile')}>
-          <Badge a={profilAlert} />
+          <Badges alerts={profilAlerts} />
           <div className="bento-top"><div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><User size={ICON} /></div></div>
           <div><div className="bento-lbl">Profil</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>identité · contact</div></div>
         </div>
 
         {/* Réglages (large) */}
         <div className="bento-card util row b-set" onClick={() => onNavigate('settings')}>
-          <Badge a={reglagesAlert} />
+          <Badges alerts={reglagesAlerts} />
           <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><Settings size={ICON} /></div>
           <div style={{ flex: 1 }}>
             <div className="bento-lbl">Réglages</div>
