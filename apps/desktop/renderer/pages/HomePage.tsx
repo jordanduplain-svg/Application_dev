@@ -23,10 +23,17 @@ interface HomeStats {
   aiOk: boolean;    // moteur IA des lettres configuré (provider + clé si cloud)
   smtpOk: boolean;  // SMTP d'envoi configuré
   imapOk: boolean;  // IMAP configuré (détection des réponses)
+  profileOk: boolean; // prénom + nom renseignés (ils signent les lettres)
+}
+
+// SETUP-1 : une alerte par carte = la première « à régler » de la liste (priorité).
+type Alert = { show: boolean; cls: 'red' | 'amber'; label: string; title: string };
+function pickAlert(alerts: Alert[]): Alert | null {
+  return alerts.find((a) => a.show) ?? null;
 }
 
 export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
-  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true, imapOk: true });
+  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true, imapOk: true, profileOk: true });
 
   useEffect(() => {
     let alive = true;
@@ -62,6 +69,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
           aiOk,
           smtpOk: !!st?.smtpConfigured,
           imapOk: !!st?.imapConfigured,
+          profileOk: !!(prof?.firstName?.trim() && prof?.lastName?.trim()),
         });
       } catch { /* non bloquant — l'accueil s'affiche avec des valeurs à 0 */ }
     })();
@@ -70,6 +78,19 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const ICON = 19;
+
+  // SETUP-1 : alertes agrégées par carte (le réglage IA vit dans Profil ET Réglages).
+  const reglagesAlert = pickAlert([
+    { show: !s.smtpOk, cls: 'red', label: 'SMTP requis', title: 'SMTP non configuré — indispensable pour envoyer les candidatures' },
+    { show: !s.imapOk, cls: 'amber', label: 'IMAP requis', title: 'IMAP non configuré — sans lui, les réponses des recruteurs ne sont pas détectées' },
+    { show: !s.aiOk, cls: 'red', label: 'IA à choisir', title: 'Moteur IA des lettres non configuré (réglable ici ou dans Profil)' },
+  ]);
+  const profilAlert = pickAlert([
+    { show: !s.profileOk, cls: 'red', label: 'À compléter', title: 'Renseigne ton prénom et ton nom — ils signent les lettres' },
+    { show: !s.aiOk, cls: 'red', label: 'IA à choisir', title: 'Moteur IA des lettres non configuré (réglable ici ou dans Réglages)' },
+  ]);
+  const Badge = ({ a }: { a: Alert | null }) =>
+    a ? <span className={`bento-alert ${a.cls}`} title={a.title}>{a.label}</span> : null;
 
   return (
     <section className="home">
@@ -109,7 +130,6 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Réponses */}
         <div className="bento-card b-rep" onClick={() => onNavigate('replies')} style={{ background: '#0F6E56', color: '#fff' }}>
-          {!s.imapOk && <span className="bento-alert amber" title="IMAP non configuré — sans lui, les réponses des recruteurs ne sont pas détectées automatiquement (Réglages)">IMAP requis</span>}
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Mail size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Réponses</div><div className="bento-sub">à consulter</div></div>
         </div>
@@ -155,14 +175,14 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Profil */}
         <div className="bento-card util b-prof" onClick={() => onNavigate('profile')}>
-          {!s.aiOk && <span className="bento-alert red" title="Moteur IA des lettres non configuré — choisis ton IA (Ollama local ou clé cloud) dans Profil">IA à choisir</span>}
+          <Badge a={profilAlert} />
           <div className="bento-top"><div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><User size={ICON} /></div></div>
           <div><div className="bento-lbl">Profil</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>identité · contact</div></div>
         </div>
 
         {/* Réglages (large) */}
         <div className="bento-card util row b-set" onClick={() => onNavigate('settings')}>
-          {!s.smtpOk && <span className="bento-alert red" title="SMTP non configuré — indispensable pour envoyer les candidatures">SMTP requis</span>}
+          <Badge a={reglagesAlert} />
           <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><Settings size={ICON} /></div>
           <div style={{ flex: 1 }}>
             <div className="bento-lbl">Réglages</div>
