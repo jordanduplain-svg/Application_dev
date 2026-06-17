@@ -151,10 +151,13 @@ STRUCTURE — 3 paragraphes, vouvoiement. Logique VOUS → MOI → NOUS. LONGUEU
    visé] » (SANS l'amorce « concrètement »). C'est cette phrase qui déclenche les réponses : ne l'omets
    jamais, ancre-la dans l'activité réelle de l'entreprise (aucune invention). Puis : disponibilité
    (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint. TERMINE par une CLÔTURE
-   FORMELLE : une phrase qui propose un entretien sur un ton professionnel (ex. « Je me tiens à votre
-   disposition pour un entretien à votre convenance. »), SUIVIE d'une salutation de politesse sur sa propre
-   ligne (« Cordialement, » ou « Bien cordialement, »), avant la signature. JAMAIS une question
-   décontractée du type « Un échange pour en discuter ? » ni une fin abrupte sans salutation.
+   FORMELLE en DEUX temps : (a) une phrase qui propose un échange en l'ORIENTANT vers ta contribution aux
+   projets/besoins de ${i.safeCompany} — formulée dans les termes du poste et du secteur visés (JAMAIS de
+   métier en dur ni de jargon : déduis le domaine du poste/CV), par ex. tournure « Je serais ravi d'échanger
+   sur la façon dont je pourrais contribuer à vos projets. » adaptée au contexte ; (b) une salutation de
+   politesse sur sa propre ligne (« Cordialement, » ou « Bien cordialement, »), avant la signature. JAMAIS
+   une question décontractée (« Un échange pour en discuter ? ») ni une fin abrupte sans salutation. Varie la
+   formulation d'un email à l'autre — ne recopie pas l'exemple mot pour mot.
 
 RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
 - Français NATIF, fluide, grammaticalement irréprochable. Aucune tournure bancale ni calque.
