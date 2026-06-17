@@ -44,6 +44,20 @@ function isDirty(f: CampaignInput): boolean {
 // PERF-1 : pagination côté client.
 const PAGE_SIZE = 20;
 
+// DESIGN-2 : couleur d'accent d'une campagne selon son statut (liseré latéral).
+function statusColor(status: string): string {
+  switch (status) {
+    case 'DRAFT': return '#8E8E93';
+    case 'RUNNING':
+    case 'SENDING': return '#0a84ff';
+    case 'COMPLETED':
+    case 'SENT': return '#1D9E75';
+    case 'FAILED': return '#ff3b30';
+    case 'REPLIED': return '#5856d6';
+    default: return '#0a84ff';
+  }
+}
+
 // Liste des campagnes + formulaire de création inline.
 export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
   onOpen: (id: string) => void;
@@ -278,16 +292,16 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
 
       <ul className="campaigns-list">
         {paginatedList.map((c) => (
-          <li key={c.id}>
+          <li key={c.id} style={{ borderLeft: `4px solid ${statusColor(c.status)}` }}>
             {/* Clic sur le nom ouvre la campagne. */}
             <div className="camp-main" onClick={() => onOpen(c.id)}>
               <div className="camp-name">{c.name}</div>
               <div className="camp-meta">{c.jobTitle} · {c.location || 'Toute la France'}</div>
               {/* UX-9v2 : compteurs en badges. */}
               <div className="camp-stats">
-                <span className="camp-stat"><Building2 size={12} />{c.companiesCount} entreprises</span>
-                <span className="camp-stat"><Send size={12} />{c.sentCount} envoyés</span>
-                <span className="camp-stat"><MessageSquare size={12} />{c.repliedCount} réponses</span>
+                <span className="camp-stat"><Building2 size={12} color="#378ADD" />{c.companiesCount} entreprises</span>
+                <span className="camp-stat"><Send size={12} color="#BA7517" />{c.sentCount} envoyés</span>
+                <span className="camp-stat"><MessageSquare size={12} color="#1D9E75" />{c.repliedCount} réponses</span>
               </div>
             </div>
             {/* UX-7 : statut en français. */}
