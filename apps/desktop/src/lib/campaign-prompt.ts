@@ -193,6 +193,10 @@ RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
 - CONTRAT : annonce uniquement le(s) type(s) fourni(s). N'invente ni dispositif de financement ni
   « expérience » liée à un organisme (ex. pas de fausse « expérience OPCO »).
 - SOBRIÉTÉ : aucun emoji ni symbole décoratif. Coordonnées en texte simple.
+- LIENS & COORDONNÉES : les URL (LinkedIn, GitHub, portfolio), le téléphone et l'email figurent
+  EXCLUSIVEMENT dans la signature, jamais collés dans le corps. Dans le corps, on peut mentionner
+  « portfolio » / « CV joint » en toutes lettres, mais SANS coller d'URL ni l'écrire entre parenthèses.
+  N'écris JAMAIS deux fois la même URL.
 - Pas de variables type [Votre Nom]. Signature = prénom nom + coordonnées fournies.
 - VARIE les formulations d'un email à l'autre (accroche, verbes, transitions).
 
