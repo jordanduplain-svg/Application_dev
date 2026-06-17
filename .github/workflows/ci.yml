@@ -1,44 +1,60 @@
 name: CI
 
+# Filet anti-régression : typecheck + tests à chaque push / PR.
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
 
 jobs:
-  test:
+  desktop:
+    name: Desktop — typecheck + tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - uses: pnpm/action-setup@v3
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 10
-          
-      - uses: actions/setup-node@v4
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
-          
-      - name: Install dependencies
-        run: pnpm install
-        
-      - name: Lint
-        run: pnpm run lint
-        
-      - name: Test (Backend)
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-        run: |
-          cd apps/api
-          pnpm run test
+          cache: pnpm
 
-  docker-build:
+      # postinstall lance `prisma generate` (nécessaire au typecheck/tests).
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc --noEmit)
+        run: pnpm --filter desktop exec tsc --noEmit
+
+      - name: Tests unitaires (vitest)
+        run: pnpm --filter desktop test
+
+  scraper:
+    name: Scraper Python — pyflakes (undefined names)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Docker Image (Verify)
-        run: docker build -t kandi-api -f apps/api/Dockerfile .
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pyflakes
+        run: pip install pyflakes
+
+      # Échec uniquement sur les « undefined name » (classe de bug NameError qui
+      # casse un run réel sans être vue par les tests). Les autres warnings n'échouent pas.
+      - name: pyflakes (undefined names only)
+        run: |
+          out=$(pyflakes scripts/candio_scraper scripts/scrape_leads.py 2>&1 || true)
+          echo "$out"
+          if echo "$out" | grep -q "undefined name"; then
+            echo "::error::pyflakes a détecté un « undefined name »"
+            exit 1
+          fi
