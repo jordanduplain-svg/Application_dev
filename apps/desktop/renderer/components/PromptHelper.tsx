@@ -132,6 +132,8 @@ export default function PromptHelper({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => { touched.current.add(k); setInput({ ...input, [k]: e.target.value }); setDone(false); };
 
+  // Le helper sert à AJOUTER du matériel par-dessus le CV : on exige donc poste +
+  // expérience + compétences pour que l'utilisateur fournisse un vrai contenu enrichissant.
   const canGenerate = input.jobTitle.trim() && input.experience.trim() && input.skills.trim();
 
   // RÉACTIVITÉ : déduit le « mode » du contrat saisi (pré-rempli depuis le haut)
