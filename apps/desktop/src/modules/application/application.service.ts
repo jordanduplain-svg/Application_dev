@@ -308,3 +308,19 @@ export async function listActionRequired(): Promise<Application[]> {
   });
   return rows.map(toDTO);
 }
+
+/**
+ * FOLLOWUP-BATCH : ids des candidatures éligibles à une relance (SENT depuis + de
+ * 7 jours, sans réponse ni relance déjà envoyée), les plus anciennes d'abord.
+ * Sert à la relance en lot. `limit` borne le nombre retourné (quota d'envoi).
+ */
+export async function listFollowUpEligibleIds(limit?: number): Promise<string[]> {
+  const sevenDaysAgo = subDays(new Date(), 7);
+  const rows = await prisma.application.findMany({
+    where: { status: 'SENT', sentAt: { lt: sevenDaysAgo }, followUpSentAt: null },
+    select: { id: true },
+    orderBy: { sentAt: 'asc' },
+    ...(limit && limit > 0 ? { take: limit } : {}),
+  });
+  return rows.map((r) => r.id);
+}

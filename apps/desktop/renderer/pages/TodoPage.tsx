@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CircleCheck } from 'lucide-react';
+import { CircleCheck, Send } from 'lucide-react';
 import type { Application } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
@@ -25,6 +25,9 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  // FOLLOWUP-BATCH : relance en lot des candidatures éligibles.
+  const [followingUp, setFollowingUp] = useState(false);
+  const [followUpMsg, setFollowUpMsg] = useState<string | null>(null);
 
   const isMounted = useRef(true);
   useEffect(() => () => { isMounted.current = false; }, []);
@@ -48,6 +51,29 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
 
   useEffect(() => { loadRef.current = load; });
   useEffect(() => { void load(); }, [load]);
+
+  // FOLLOWUP-BATCH : nb de candidatures relançables (SENT > 7j, surfacé ici).
+  const followUpEligible = apps.filter((a) => a.status === 'SENT').length;
+
+  const followUpAll = async () => {
+    setFollowingUp(true);
+    setFollowUpMsg(null);
+    try {
+      const r = await api.invoke('application:followUpAllEligible');
+      setFollowUpMsg(
+        r.enqueued === 0
+          ? (r.remaining === 0
+              ? 'Plafond d\'envois du jour atteint — réessaie demain.'
+              : 'Aucune candidature éligible à relancer.')
+          : `${r.enqueued} relance(s) en cours${r.enqueued < r.eligible ? ` (sur ${r.eligible} éligibles — limité au quota du jour)` : ''}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de la relance en lot');
+    } finally {
+      if (isMounted.current) setFollowingUp(false);
+    }
+    await load();
+  };
 
   // Se rafraîchit quand une tâche d'envoi se termine.
   useEffect(() => {
@@ -74,14 +100,25 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
 
   return (
     <section>
-      <div className="page-head">
-        <h2>À traiter ({apps.length})</h2>
-        <div className="page-sub">
-          Candidatures nécessitant une action : relances en attente, réponses à qualifier, échecs à renvoyer.
+      <div className="page-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h2>À traiter ({apps.length})</h2>
+          <div className="page-sub">
+            Candidatures nécessitant une action : relances en attente, réponses à qualifier, échecs à renvoyer.
+          </div>
         </div>
+        {followUpEligible > 0 && (
+          <button onClick={followUpAll} disabled={followingUp} title="Envoie une relance à toutes les candidatures sans réponse depuis + de 7 jours (limité au quota d'envoi du jour)">
+            <Send size={15} className={followingUp ? 'spin' : undefined} />
+            {followingUp ? 'Relance…' : `Relancer les éligibles (${followUpEligible})`}
+          </button>
+        )}
       </div>
 
       {error && <p className="error">{error}</p>}
+      {followUpMsg && (
+        <p style={{ fontSize: '13px', color: 'var(--text-sub)', background: '#f2f2f7', borderRadius: '9px', padding: '8px 12px', marginBottom: '12px' }}>{followUpMsg}</p>
+      )}
 
       {apps.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', color: 'var(--text-sub)', padding: '36px', alignItems: 'center' }}>

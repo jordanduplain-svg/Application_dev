@@ -11,7 +11,7 @@ import {
 import * as appService from '../../src/modules/application/application.service';
 import { enqueueGeneration } from '../../src/tasks/generate-email.task';
 import { enqueueSend } from '../../src/tasks/send-email.task';
-import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider } from '../../src/lib/secrets';
+import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider, getDailySendLimit, getDailySendCount } from '../../src/lib/secrets';
 import { getProfile } from '../../src/modules/profile/profile.service';
 import { getCv } from '../../src/modules/cv/cv.service';
 import { prisma } from '../../src/lib/prisma';
@@ -133,6 +133,19 @@ export function registerApplicationHandlers(): void {
     validate(IdSchema, payload);
     const { enqueueFollowUp } = await import('../../src/tasks/send-followup.task');
     await enqueueFollowUp(payload.id);
+  });
+
+  // FOLLOWUP-BATCH : relance en lot toutes les candidatures éligibles (SENT > 7j,
+  // sans réponse/relance), bornée au quota d'envoi restant du jour pour ne pas
+  // dépasser le plafond anti-suspension Gmail. Renvoie le détail pour l'UI.
+  handle('application:followUpAllEligible', async () => {
+    const remaining = Math.max(0, getDailySendLimit() - getDailySendCount().count);
+    const totalEligible = (await appService.listFollowUpEligibleIds()).length;
+    if (remaining === 0) return { enqueued: 0, eligible: totalEligible, remaining };
+    const ids = await appService.listFollowUpEligibleIds(remaining);
+    const { enqueueFollowUp } = await import('../../src/tasks/send-followup.task');
+    for (const id of ids) await enqueueFollowUp(id);
+    return { enqueued: ids.length, eligible: totalEligible, remaining };
   });
 
   handle('application:regenerateOne', async (payload) => {

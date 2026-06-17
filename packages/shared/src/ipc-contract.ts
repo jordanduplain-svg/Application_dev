@@ -692,6 +692,11 @@ export interface IpcRequests {
   'application:addFollowUpNote': { req: { id: string; note: string }; res: void };
   // UX-12 : envoi d'une relance automatique.
   'application:sendFollowUp': { req: { id: string }; res: void };
+  // FOLLOWUP-BATCH : relance en lot des candidatures éligibles (bornée au quota du jour).
+  'application:followUpAllEligible': {
+    req: void;
+    res: { enqueued: number; eligible: number; remaining: number };
+  };
   // UX-1v3 : regénère uniquement cet email sans toucher aux autres.
   'application:regenerateOne': { req: { id: string }; res: void };
   // UX-7v3 : envoie l'email à soi-même pour vérifier le rendu.
