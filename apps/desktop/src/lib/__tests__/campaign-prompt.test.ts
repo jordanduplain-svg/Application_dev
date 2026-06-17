@@ -70,6 +70,27 @@ describe('buildPitchPrompt', () => {
     expect(out).toContain('"subject"');
     expect(out).toContain('"body"');
   });
+
+  it('n\'ajoute PAS le bloc posture freelance pour un contrat salarié', () => {
+    const out = buildPitchPrompt(base); // contractsLine = 'CDI'
+    expect(out).not.toContain('POSTURE FREELANCE');
+  });
+
+  it('ajoute le bloc posture freelance quand le contrat est une prestation', () => {
+    const out = buildPitchPrompt({ ...base, contractsLine: 'Freelance' });
+    expect(out).toContain('POSTURE FREELANCE');
+    expect(out).toContain('mission'); // recadrage prestataire
+  });
+
+  it('détecte aussi « indépendant » / « portage » (insensible à la casse)', () => {
+    expect(buildPitchPrompt({ ...base, contractsLine: 'Indépendant' })).toContain('POSTURE FREELANCE');
+    expect(buildPitchPrompt({ ...base, contractsLine: 'portage salarial' })).toContain('POSTURE FREELANCE');
+  });
+
+  it('le bloc freelance reste neutre au domaine (aucun métier en dur)', () => {
+    const out = buildPitchPrompt({ ...base, safeJob: 'Comptable', contractsLine: 'Freelance' });
+    expect(out).not.toContain('côté data');
+  });
 });
 
 describe('pickCampaignPrompt', () => {

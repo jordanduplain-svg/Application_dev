@@ -90,6 +90,21 @@ export interface PitchPromptInput {
  * toute la sanitisation et le calcul des sections se font en amont dans ai.service.
  */
 export function buildPitchPrompt(i: PitchPromptInput): string {
+  // Détection pilotée par la donnée (aucun domaine en dur) : si le contrat visé
+  // est une prestation indépendante, on recadre la posture salarié → prestataire.
+  const isFreelance = /freelance|ind[ée]pendant|portage|prestation|consultant ind/i.test(i.contractsLine);
+  const freelanceBlock = isFreelance ? `
+POSTURE FREELANCE (le contrat visé est une PRESTATION INDÉPENDANTE — prioritaire sur le cadre salarié) :
+- Le candidat se présente comme un PRESTATAIRE qui propose une mission, PAS comme un futur salarié.
+- BANNIS tout vocabulaire d'embauche : « rejoindre vos équipes », « m'investir durablement », « intégrer
+  l'entreprise », « évoluer chez vous », « poste ». Parle de « mission », « collaboration », « intervention ».
+- Argument central : valeur livrée et autonomie — livrables concrets, prise en main rapide, aucun coût
+  d'onboarding, capacité à intervenir sur un besoin ponctuel ou un projet cadré.
+- §1 : amène le besoin/projet de l'entreprise plutôt qu'une envie d'y travailler. §3 : la disponibilité
+  devient une dispo de démarrage de mission ; la clôture propose d'échanger sur un besoin/une mission
+  (toujours sobre, sans enthousiasme), pas un « entretien d'embauche ».
+- Reste neutre au domaine : déduis la nature de la prestation du CV/poste, n'invente aucun métier.
+` : '';
   return `RÔLE
 Tu rédiges un email de candidature spontanée court, percutant et personnalisé, en français natif.
 Sortie en JSON strict (voir FORMAT). Cible : recruteurs/managers qui scannent l'email en quelques
@@ -110,6 +125,7 @@ DONNÉES D'ENTRÉE :
   « ou toute formule équivalente » (ça sonne comme un menu, ça fait désespéré), et jamais une liste sèche.
   Mieux vaut annoncer UN seul contrat proprement que d'empiler des options.
 - Disponibilité : ${i.dispoLine} → à reprendre en clôture (§3).
+${freelanceBlock}
 - Entreprise ciblée : ${i.safeCompany}
 - Destinataire : ${i.contactLine}${i.companySection}${i.contactSection}
 
