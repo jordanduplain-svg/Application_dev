@@ -22,21 +22,23 @@ interface HomeStats {
   // SETUP-1 : réglages essentiels (pour les pastilles d'alerte de l'accueil).
   aiOk: boolean;    // moteur IA des lettres configuré (provider + clé si cloud)
   smtpOk: boolean;  // SMTP d'envoi configuré
+  imapOk: boolean;  // IMAP configuré (détection des réponses)
 }
 
 export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
-  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true });
+  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true, imapOk: true });
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
-        const [camps, todo, leads, prof, st] = await Promise.all([
+        const [camps, todo, leads, prof, st, cvs] = await Promise.all([
           api.invoke('campaign:list'),
           api.invoke('application:listActionRequired'),
           api.invoke('scraping:listLeads').catch(() => [] as unknown[]),
           api.invoke('profile:get'),
           api.invoke('settings:getStatus').catch(() => null),
+          api.invoke('cv:list').catch(() => [] as { parsed?: boolean }[]),
         ]);
         if (!alive) return;
         const live = camps.filter((c) => !c.archivedAt);
@@ -54,9 +56,12 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
           drafts: live.filter((c) => c.status === 'DRAFT').length,
           todo: todo.length,
           leads: Array.isArray(leads) ? leads.length : 0,
-          cvOk: !!prof?.cvParsed,
+          // CV-MULTI : un CV est « ok » dès qu'au moins un CV analysé existe (modèle Cv,
+          // plus l'ancien champ profile.cvParsed). Repli sur le legacy si la liste échoue.
+          cvOk: (Array.isArray(cvs) && cvs.some((c) => c?.parsed)) || !!prof?.cvParsed,
           aiOk,
           smtpOk: !!st?.smtpConfigured,
+          imapOk: !!st?.imapConfigured,
         });
       } catch { /* non bloquant — l'accueil s'affiche avec des valeurs à 0 */ }
     })();
@@ -104,6 +109,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Réponses */}
         <div className="bento-card b-rep" onClick={() => onNavigate('replies')} style={{ background: '#0F6E56', color: '#fff' }}>
+          {!s.imapOk && <span className="bento-alert amber" title="IMAP non configuré — sans lui, les réponses des recruteurs ne sont pas détectées automatiquement (Réglages)">IMAP requis</span>}
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Mail size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Réponses</div><div className="bento-sub">à consulter</div></div>
         </div>
