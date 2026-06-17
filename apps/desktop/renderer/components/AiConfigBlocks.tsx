@@ -49,6 +49,8 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
     groq: { label: 'Clé Groq', ph: 'gsk_...', ipc: 'settings:setGroqKey', isSet: (s) => !!s?.groqKeySet, help: 'console.groq.com (gratuit)' },
   };
   const keyMeta = KEY_META[lettersProvider]; // undefined si ollama (local, pas de clé)
+  // SETUP-1 : la rédaction IA est « ok » si Ollama (local) ou si la clé cloud est saisie.
+  const lettersOk = lettersProvider === 'ollama' ? true : (keyMeta ? keyMeta.isSet(status) : false);
 
   const saveApiKey = async () => {
     if (!keyMeta || !apiKey.trim()) return;
@@ -114,7 +116,7 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
 
         {/* ───── BLOC 1 : Rédaction IA (Lettres + Fiches) ───── */}
         <div className="card" style={{ ...card, borderLeft: '4px solid #1D9E75' }}>
-          <h3>🤖 Rédaction IA — Lettres + Fiches</h3>
+          <h3>🤖 Rédaction IA — Lettres + Fiches {!lettersOk && <span className="cfg-todo red">à configurer</span>}</h3>
           <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.5 }}>
             IA qui <strong>rédige les lettres de motivation</strong> et les
             <strong> fiches entreprise / actualités</strong>. Une seule clé cloud (OpenAI / Claude /

@@ -74,7 +74,10 @@ export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }
         {/* ── Colonne gauche : identité + CV ── */}
         <div className="form-create" style={{ flex: '0 1 440px', minWidth: '320px' }}>
       <div className="form-section" style={{ '--m': '#5856d6' } as React.CSSProperties}>
-        <div className="form-section-title"><span className="fst-ico"><User size={16} /></span>Identité &amp; contact</div>
+        <div className="form-section-title">
+          <span className="fst-ico"><User size={16} /></span>Identité &amp; contact
+          {!(form.firstName.trim() && form.lastName.trim()) && <span className="cfg-todo red">à compléter</span>}
+        </div>
         <div className="form-grid">
         <label className="full">Prénom
           <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
