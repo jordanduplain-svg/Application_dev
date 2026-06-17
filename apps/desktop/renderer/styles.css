@@ -777,3 +777,31 @@ pre {
 @media (max-width: 560px) {
   .content { padding: 14px 11px; }
 }
+
+/* ============================================================
+   DESIGN-2 — Filets de sécurité responsive GLOBAUX (toute l'app)
+   ============================================================ */
+/* 1. Aucun débordement horizontal : le contenu ne pousse jamais la largeur.
+      (Les tableaux denses gardent leur propre scroll via .table-wrap.) */
+.content { min-width: 0; overflow-x: hidden; }
+.content section, .content section > * { min-width: 0; max-width: 100%; }
+img, pre, table { max-width: 100%; }
+pre { white-space: pre-wrap; word-break: break-word; }
+
+/* 2. Les rangées de boutons/champs passent à la ligne au lieu de déborder.
+      Cible les conteneurs flex en ligne (barres d'action) sans casser les colonnes. */
+section > div[style*="flex"][style*="wrap"] { row-gap: 8px; }
+
+/* 3. Sur écran étroit, on réduit boutons, champs et titres d'un cran pour qu'ils
+      tiennent — appliqué globalement, donc valable sur toutes les pages. */
+@media (max-width: 680px) {
+  button { padding: 7px 12px; font-size: 12.5px; }
+  input, textarea, select { padding: 8px 10px; font-size: 13px; }
+  h2, .page-head h2 { font-size: 20px; }
+  .detail-title { font-size: 22px; }
+  .metric-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .metric .metric-num { font-size: 24px; }
+  /* Boutons pleine largeur dans les barres d'action très étroites = plus lisibles. */
+  .detail-actions { width: 100%; }
+  .detail-actions button { flex: 1 1 auto; justify-content: center; }
+}
