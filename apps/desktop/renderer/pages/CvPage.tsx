@@ -237,6 +237,7 @@ export default function CvPage() {
         </div>
       </div>
 
+      <div className="cv-wrap">
       {error && <p className="error">{error}</p>}
 
       {/* CV-REVIEW : bandeau pendant l'analyse IA (indique le moteur utilisé). */}
@@ -481,6 +482,7 @@ export default function CvPage() {
           </div>
         </div>
       )}
+      </div>{/* fin .cv-wrap */}
     </section>
   );
 }

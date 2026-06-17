@@ -145,10 +145,10 @@ export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }
         </div>{/* ── fin colonne gauche ── */}
 
         {/* ── Colonne droite : configuration IA + emails ── */}
-        <div style={{ flex: '1 1 560px', minWidth: '340px' }}>
-          <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Sparkles size={17} color="var(--accent)" />Configuration IA &amp; emails
-          </h3>
+        <div className="form-create" style={{ flex: '1 1 520px', minWidth: '340px', maxWidth: 'none' }}>
+          <div className="form-section-title" style={{ '--m': '#1D9E75', marginBottom: '4px' } as React.CSSProperties}>
+            <span className="fst-ico"><Sparkles size={16} /></span>Configuration IA &amp; emails
+          </div>
           <AiConfigBlocks
             onGoToSettings={() => onGoToSettings?.()}
             onGoToScraping={() => onGoToScraping?.()}

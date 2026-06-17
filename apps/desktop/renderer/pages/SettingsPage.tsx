@@ -659,8 +659,9 @@ export default function SettingsPage() {
 
       {error && <p className="error">{error}</p>}
 
+      <div className="settings-grid">
       {/* OLLAMA-1 : section provider IA (OpenAI ou Ollama local). */}
-      <div className="card" style={cardAccent('#5856d6')}>
+      <div className="card span-all" style={cardAccent('#5856d6')}>
         <h3 style={shStyle}><Cpu size={17} color="#5856d6" />Moteur IA</h3>
         <p style={{ fontSize: '13px', color: '#555', margin: '0 0 12px', lineHeight: 1.5 }}>
           Ce moteur sert à <strong>rédiger les emails de candidature</strong> et à
@@ -1463,7 +1464,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ADM-3 : zone de danger. */}
-      <div className="card" style={{ borderColor: '#ff453a', borderLeft: '4px solid #ff453a' }}>
+      <div className="card span-all" style={{ borderColor: '#ff453a', borderLeft: '4px solid #ff453a' }}>
         <h3 style={{ ...shStyle, color: '#ff453a' }}><AlertTriangle size={17} color="#ff453a" />Zone de danger</h3>
         <p>Cette action supprimera irrémédiablement toutes vos données (campagnes, entreprises, candidatures).</p>
         <button
@@ -1474,6 +1475,7 @@ export default function SettingsPage() {
           {resetting ? 'Réinitialisation…' : 'Réinitialiser toutes les données'}
         </button>
       </div>
+      </div>{/* fin .settings-grid */}
     </section>
   );
 }

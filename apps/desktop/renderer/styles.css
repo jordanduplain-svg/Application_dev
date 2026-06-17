@@ -632,14 +632,14 @@ pre {
   border-radius: var(--radius-lg); padding: 18px 20px; box-shadow: var(--shadow-sm);
 }
 /* En-tête de section sur un bandeau teinté assorti (comme la page Scraping). */
-.form-section > .form-section-title {
+.form-section-title {
   display: flex; align-items: center; gap: 11px; margin: 0 0 16px;
   font-size: 16px; font-weight: 700; letter-spacing: -0.2px;
   background: color-mix(in srgb, var(--m, var(--accent)) 9%, #fff);
   border: 1px solid color-mix(in srgb, var(--m, var(--accent)) 22%, transparent);
   border-radius: 12px; padding: 10px 13px;
 }
-.form-section > .form-section-title .fst-ico {
+.form-section-title .fst-ico {
   width: 30px; height: 30px; border-radius: 9px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   background: var(--m, var(--accent)); color: #fff;
@@ -701,6 +701,18 @@ pre {
 /* Icône en rotation (spinner pendant le scraping). */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
+
+/* Réglages : grille de cartes qui se reflue (2-3 colonnes large → 1 étroit). */
+.settings-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px; align-items: start;
+}
+.settings-grid > .card { margin: 0; max-width: none; }
+.settings-grid > .span-all { grid-column: 1 / -1; }
+
+/* CV : largeur de contenu bridée et homogène (les blocs ne s'étirent plus). */
+.cv-wrap { max-width: 860px; }
+.cv-wrap .card { max-width: none; }
 
 /* Puces de sélection (types de contrat) — état actif/inactif clair. */
 .chip-toggle {

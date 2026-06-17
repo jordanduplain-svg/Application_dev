@@ -113,7 +113,7 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
         {/* ───── BLOC 1 : Rédaction IA (Lettres + Fiches) ───── */}
-        <div className="card" style={card}>
+        <div className="card" style={{ ...card, borderLeft: '4px solid #1D9E75' }}>
           <h3>🤖 Rédaction IA — Lettres + Fiches</h3>
           <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.5 }}>
             IA qui <strong>rédige les lettres de motivation</strong> et les
@@ -222,7 +222,7 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
         </div>
 
         {/* ───── BLOC 2 : IA Scraping (crawl emails) ───── */}
-        <div className="card" style={card}>
+        <div className="card" style={{ ...card, borderLeft: '4px solid #D85A30' }}>
           <h3>🔍 IA Scraping — crawl emails</h3>
           <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.5 }}>
             Assistant LLM <strong>de secours</strong> pendant le crawl : quand l'extraction par regex
@@ -278,7 +278,7 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
       </div>
 
       {/* ───── Emails : raccourcis SMTP / IMAP ───── */}
-      <div className="card">
+      <div className="card" style={{ borderLeft: '4px solid #378ADD' }}>
         <h3>✉️ Envoi &amp; réception d'emails</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
           <span style={{ fontSize: '13px' }}>SMTP (envoi) : {dot(status?.smtpConfigured ?? false)}</span>
