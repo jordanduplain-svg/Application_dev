@@ -413,6 +413,22 @@ pre {
   transition: transform 0.24s var(--ease-spring), box-shadow 0.24s var(--ease-spring);
   will-change: transform;
 }
+.bento-card { position: relative; }
+/* Pastille d'alerte : réglage essentiel (rouge) ou conseillé (ambre) manquant. */
+.bento-alert {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 700; line-height: 1;
+  padding: 4px 9px; border-radius: 999px; box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.bento-alert.red   { background: #ff3b30; color: #fff; }
+.bento-alert.amber { background: #ff9f0a; color: #fff; }
+.bento-alert.red::before, .bento-alert.amber::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; animation: alert-pulse 1.6s ease-in-out infinite;
+}
+@keyframes alert-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 .bento-card:hover  { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
 .bento-card:active { transform: translateY(-2px) scale(0.992); }
 .bento-card.row    { flex-direction: row; align-items: center; gap: 14px; }

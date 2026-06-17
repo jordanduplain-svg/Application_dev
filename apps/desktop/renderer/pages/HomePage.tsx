@@ -19,23 +19,35 @@ interface HomeStats {
   todo: number;
   leads: number;
   cvOk: boolean;
+  // SETUP-1 : réglages essentiels (pour les pastilles d'alerte de l'accueil).
+  aiOk: boolean;    // moteur IA des lettres configuré (provider + clé si cloud)
+  smtpOk: boolean;  // SMTP d'envoi configuré
 }
 
 export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
-  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false });
+  const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true });
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
-        const [camps, todo, leads, prof] = await Promise.all([
+        const [camps, todo, leads, prof, st] = await Promise.all([
           api.invoke('campaign:list'),
           api.invoke('application:listActionRequired'),
           api.invoke('scraping:listLeads').catch(() => [] as unknown[]),
           api.invoke('profile:get'),
+          api.invoke('settings:getStatus').catch(() => null),
         ]);
         if (!alive) return;
         const live = camps.filter((c) => !c.archivedAt);
+        // Moteur IA des lettres : ollama = local (toujours ok) ; sinon clé requise.
+        const p = st?.aiProvider ?? '';
+        const aiOk = p === 'ollama' ? true
+          : p === 'openai' ? !!st?.openaiKeySet
+          : p === 'anthropic' ? !!st?.anthropicKeySet
+          : p === 'gemini' ? !!st?.geminiKeySet
+          : p === 'groq' ? !!st?.groqKeySet
+          : false;
         setS({
           firstName: prof?.firstName ?? '',
           active: live.filter((c) => c.status !== 'COMPLETED' && c.status !== 'DRAFT').length,
@@ -43,6 +55,8 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
           todo: todo.length,
           leads: Array.isArray(leads) ? leads.length : 0,
           cvOk: !!prof?.cvParsed,
+          aiOk,
+          smtpOk: !!st?.smtpConfigured,
         });
       } catch { /* non bloquant — l'accueil s'affiche avec des valeurs à 0 */ }
     })();
@@ -108,6 +122,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Scraping */}
         <div className="bento-card b-scr" onClick={() => onNavigate('scraping')} style={{ background: '#993C1D', color: '#fff' }}>
+          {s.leads === 0 && <span className="bento-alert amber" title="Aucun lead collecté — lance un premier scraping pour alimenter tes campagnes">À lancer</span>}
           <div className="bento-top"><div className="bento-chip" style={{ background: 'rgba(255,255,255,0.16)', color: '#fff' }}><Radar size={ICON} /></div></div>
           <div><div className="bento-lbl" style={{ color: '#fff' }}>Scraping</div><div className="bento-sub">collecter</div></div>
         </div>
@@ -124,6 +139,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* CV */}
         <div className="bento-card util b-cv" onClick={() => onNavigate('cv')}>
+          {!s.cvOk && <span className="bento-alert amber" title="Aucun CV analysé — ajoute ton CV pour des lettres qui citent tes vraies expériences">À ajouter</span>}
           <div className="bento-top">
             <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><FileText size={ICON} /></div>
             {s.cvOk && <CircleCheck size={16} color="#1D9E75" />}
@@ -133,12 +149,14 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
 
         {/* Profil */}
         <div className="bento-card util b-prof" onClick={() => onNavigate('profile')}>
+          {!s.aiOk && <span className="bento-alert red" title="Moteur IA des lettres non configuré — choisis ton IA (Ollama local ou clé cloud) dans Profil">IA à choisir</span>}
           <div className="bento-top"><div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><User size={ICON} /></div></div>
           <div><div className="bento-lbl">Profil</div><div className="bento-sub" style={{ opacity: 1, color: 'var(--text-sub)' }}>identité · contact</div></div>
         </div>
 
         {/* Réglages (large) */}
         <div className="bento-card util row b-set" onClick={() => onNavigate('settings')}>
+          {!s.smtpOk && <span className="bento-alert red" title="SMTP non configuré — indispensable pour envoyer les candidatures">SMTP requis</span>}
           <div className="bento-chip" style={{ background: '#f2f2f7', color: 'var(--text-sub)' }}><Settings size={ICON} /></div>
           <div style={{ flex: 1 }}>
             <div className="bento-lbl">Réglages</div>
