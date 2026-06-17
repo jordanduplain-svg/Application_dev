@@ -85,5 +85,5 @@ export const FR_CITIES = [
 
 // Types de contrat standard (sélection de campagne).
 export const CONTRACT_TYPES = [
-  'CDI', 'CDD', 'Alternance', 'Stage', 'Freelance', 'Intérim', 'Remote',
+  'CDI', 'CDD', 'Alternance', 'Stage', 'Freelance', 'Remote',
 ];

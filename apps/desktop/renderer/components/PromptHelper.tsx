@@ -67,7 +67,7 @@ ${profile}
 Structure l'email en 4 paragraphes courts :
 1. Accroche : ma situation actuelle (formation/reconversion) + ma disponibilité et le type de contrat.
 2. Mon expérience et mes compétences clés, EXPLICITEMENT reliées à l'activité et aux besoins de l'entreprise destinataire (c'est le paragraphe le plus important — fais un lien concret entre mes compétences et ce que fait l'entreprise).
-3. ${input.financialArg ? "L'argument financier : le coût réduit de l'alternance pour l'employeur grâce à l'OPCO." : "Une phrase montrant ma connaissance ou mon intérêt pour le secteur de l'entreprise."}
+3. ${input.financialArg ? `L'argument financier fourni (${input.financialArg}), présenté du point de vue de l'intérêt pour l'employeur.` : "Une phrase montrant ma connaissance ou mon intérêt pour le secteur de l'entreprise."}
 4. Un appel à l'action : CV en pièce jointe, proposition d'échange en entretien, et ma disponibilité.
 
 ${angle}
@@ -134,6 +134,33 @@ export default function PromptHelper({
 
   const canGenerate = input.jobTitle.trim() && input.experience.trim() && input.skills.trim();
 
+  // RÉACTIVITÉ : déduit le « mode » du contrat saisi (pré-rempli depuis le haut)
+  // pour adapter les exemples grisés et les libellés. Aucun domaine en dur.
+  const ci = (input.contractInfo || '').toLowerCase();
+  const mode: 'freelance' | 'alternance' | 'salarié' =
+    /freelance|ind[ée]pendant|portage|prestation/.test(ci) ? 'freelance'
+    : /alternance|stage|apprentissage/.test(ci) ? 'alternance'
+    : 'salarié';
+  const isRemote = /remote|t[ée]l[ée]travail/.test(ci);
+  const MODE_LABEL = { freelance: 'Freelance', alternance: 'Alternance / Stage', 'salarié': 'CDI / CDD' }[mode];
+  const MODE_COLOR = { freelance: '#5856d6', alternance: '#BA7517', 'salarié': '#1D9E75' }[mode];
+  const PH = {
+    training: mode === 'freelance' ? 'Ex : indépendant depuis 2023, ancien consultant chez X'
+      : mode === 'alternance' ? 'Ex : reconversion au Campus Numérique In The Alps (Grenoble)'
+      : 'Ex : actuellement en poste / en recherche active, 3 ans d\'expérience',
+    contract: mode === 'freelance' ? 'Ex : mission freelance, démarrage immédiat, 2-3 j/semaine'
+      : mode === 'alternance' ? 'Ex : alternance 12 mois, dispo septembre 2026, rythme 3 sem entreprise / 1 sem cours'
+      : 'Ex : CDI, disponible début octobre 2026, préavis 1 mois',
+    financialLabel: mode === 'freelance' ? 'Tarif / facturation (optionnel)'
+      : mode === 'alternance' ? 'Argument financier (optionnel)'
+      : 'Prétentions salariales (optionnel)',
+    financial: mode === 'freelance' ? 'Ex : TJM indicatif, facturation au forfait ou en régie'
+      : mode === 'alternance' ? 'Ex : coût réduit pour l\'employeur via l\'OPCO (~5000€ pris en charge)'
+      : 'Ex : fourchette de rémunération souhaitée (laisser vide si tu préfères ne pas l\'indiquer)',
+    mobility: isRemote ? 'Ex : 100% télétravail, déplacements ponctuels possibles'
+      : 'Ex : basé à Grenoble, mobile Lyon/Paris, présentiel ou télétravail',
+  };
+
   // Génère via l'IA (enrichie par le CV) ; repli sur le template local si l'IA
   // est indisponible ou échoue.
   const handleGenerate = async () => {
@@ -191,6 +218,15 @@ export default function PromptHelper({
             (tes vraies forces et expériences). Tu pourras les ajuster ensuite.
           </p>
 
+          {/* Badge réactif : indique le mode déduit des contrats choisis en haut. */}
+          <div style={{ marginBottom: '10px', fontSize: '12px', color: '#555' }}>
+            Exemples adaptés à :{' '}
+            <span style={{
+              fontWeight: 700, fontSize: '11px', padding: '2px 9px', borderRadius: '999px',
+              background: `${MODE_COLOR}1a`, color: MODE_COLOR,
+            }}>{MODE_LABEL}{isRemote ? ' · Remote' : ''}</span>
+          </div>
+
           <label style={labelStyle}>
             Poste visé <span style={hintStyle}>· obligatoire</span>
             <input style={fieldStyle} value={input.jobTitle} onChange={set('jobTitle')}
@@ -200,13 +236,13 @@ export default function PromptHelper({
           <label style={labelStyle}>
             Formation / situation actuelle
             <input style={fieldStyle} value={input.training} onChange={set('training')}
-              placeholder="Ex : reconversion au Campus Numérique In The Alps (Grenoble)" />
+              placeholder={PH.training} />
           </label>
 
           <label style={labelStyle}>
             Contrat & disponibilité <span style={hintStyle}>· pré-rempli depuis le haut (types de contrat + disponibilité)</span>
             <input style={fieldStyle} value={input.contractInfo} onChange={set('contractInfo')}
-              placeholder="Ex : alternance 12 mois, dispo janvier 2026, rythme 1 sem cours / 3 sem entreprise" />
+              placeholder={PH.contract} />
           </label>
 
           <label style={labelStyle}>
@@ -222,15 +258,15 @@ export default function PromptHelper({
           </label>
 
           <label style={labelStyle}>
-            Argument financier (optionnel)
+            {PH.financialLabel}
             <input style={fieldStyle} value={input.financialArg} onChange={set('financialArg')}
-              placeholder="Ex : coût réduit pour l'employeur via l'OPCO (~5000€ pris en charge)" />
+              placeholder={PH.financial} />
           </label>
 
           <label style={labelStyle}>
             Mobilité (optionnel)
             <input style={fieldStyle} value={input.mobility} onChange={set('mobility')}
-              placeholder="Ex : basé à Grenoble, mobile Lyon/Paris, présentiel ou télétravail" />
+              placeholder={PH.mobility} />
           </label>
 
           <button
