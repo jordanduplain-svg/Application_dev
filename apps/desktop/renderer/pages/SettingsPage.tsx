@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
+import {
+  Cpu, Send, Inbox, Gauge, Save, Radar, ScrollText, Lock, Wrench, AlertTriangle,
+} from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { SettingsStatus, SmtpInput, ImapInput, DkimInput, HardwareInfo } from '@candio/shared';
 import { api } from '../lib/api';
 import { MODEL_CATALOG, qualityStars, compatLabel, type ModelSpec } from '../lib/ollamaModels';
+
+// DESIGN-2 : liseré latéral coloré + en-tête de section à icône (style harmonisé).
+const cardAccent = (c: string): CSSProperties => ({ borderLeft: `4px solid ${c}` });
+const shStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px' };
 
 // Styles partagés des champs de formulaire (libellés clairs au-dessus des inputs).
 const fieldLabel: CSSProperties = {
@@ -645,13 +652,16 @@ export default function SettingsPage() {
 
   return (
     <section>
-      <h2>Réglages</h2>
+      <div className="page-head">
+        <h2>Réglages</h2>
+        <div className="page-sub">Moteur IA, envoi (SMTP), détection des réponses (IMAP), sécurité et maintenance.</div>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
       {/* OLLAMA-1 : section provider IA (OpenAI ou Ollama local). */}
-      <div className="card">
-        <h3>Moteur IA</h3>
+      <div className="card" style={cardAccent('#5856d6')}>
+        <h3 style={shStyle}><Cpu size={17} color="#5856d6" />Moteur IA</h3>
         <p style={{ fontSize: '13px', color: '#555', margin: '0 0 12px', lineHeight: 1.5 }}>
           Ce moteur sert à <strong>rédiger les emails de candidature</strong> et à
           <strong> analyser les CV</strong>. Les modèles utilisés pour le <strong>scraping</strong> et
@@ -1102,8 +1112,8 @@ export default function SettingsPage() {
       {/* Section Hunter.io retirée d'ici — la clé se configure directement dans
           la page Scraping (zone Recherche), au plus près de son usage. */}
 
-      <div className="card">
-        <h3>SMTP — envoi des candidatures {status?.smtpConfigured && '✓'}</h3>
+      <div className="card" style={cardAccent('#378ADD')}>
+        <h3 style={shStyle}><Send size={17} color="#378ADD" />SMTP — envoi des candidatures {status?.smtpConfigured && '✓'}</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           Le <strong>SMTP</strong> est le service qui <strong>envoie</strong> tes emails de candidature
           depuis ta boîte mail. Sans ça, l'app ne peut pas envoyer.<br />
@@ -1156,8 +1166,8 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="card">
-        <h3>IMAP — détection des réponses {status?.imapConfigured && '✓'}</h3>
+      <div className="card" style={cardAccent('#1D9E75')}>
+        <h3 style={shStyle}><Inbox size={17} color="#1D9E75" />IMAP — détection des réponses {status?.imapConfigured && '✓'}</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           L'<strong>IMAP</strong> sert à <strong>lire</strong> ta boîte mail pour détecter quand une
           entreprise t'a répondu (et le classer dans l'onglet Réponses). C'est l'inverse du SMTP :
@@ -1229,8 +1239,8 @@ export default function SettingsPage() {
       </div>
 
       {/* FM-02 + Strat #3 : limite quotidienne progressive cyclique. */}
-      <div className="card">
-        <h3>Limite quotidienne d'envois — automatique</h3>
+      <div className="card" style={cardAccent('#BA7517')}>
+        <h3 style={shStyle}><Gauge size={17} color="#BA7517" />Limite quotidienne d'envois — automatique</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           Gmail suspend les comptes qui envoient trop d'emails d'un coup. L'app gère
           ça <strong>automatiquement</strong> avec un volume qui varie chaque jour pour rester
@@ -1264,8 +1274,8 @@ export default function SettingsPage() {
       </div>
 
       {/* F9 + SEC-1 : sauvegarde et restauration. */}
-      <div className="card">
-        <h3>Sauvegarde</h3>
+      <div className="card" style={cardAccent('#0a84ff')}>
+        <h3 style={shStyle}><Save size={17} color="#0a84ff" />Sauvegarde</h3>
         <p>Exporte la base de données locale (candidatures, campagnes) vers un fichier de votre choix.</p>
         <button onClick={backup} disabled={isBackingUp}>
           {isBackingUp ? 'Sauvegarde…' : 'Créer une sauvegarde (.db)'}
@@ -1287,8 +1297,8 @@ export default function SettingsPage() {
         {exportStatus && <p>{exportStatus}</p>}
       </div>
 
-      <div className="card">
-        <h3>Recherche automatique d'entreprises</h3>
+      <div className="card" style={cardAccent('#D85A30')}>
+        <h3 style={shStyle}><Radar size={17} color="#D85A30" />Recherche automatique d'entreprises</h3>
         <label>
           <input type="checkbox"
                  checked={status?.scrapingEnabled ?? false}
@@ -1305,8 +1315,8 @@ export default function SettingsPage() {
       </div>
 
       {/* ADM-2 : visionneuse de logs. */}
-      <div className="card">
-        <h3>Journal (logs)</h3>
+      <div className="card" style={cardAccent('#8E8E93')}>
+        <h3 style={shStyle}><ScrollText size={17} color="#8E8E93" />Journal (logs)</h3>
         <button onClick={showLogs} disabled={loadingLogs}>
           {loadingLogs ? 'Chargement…' : 'Afficher les logs'}
         </button>
@@ -1322,8 +1332,8 @@ export default function SettingsPage() {
       </div>
 
       {/* SEC-M1 : verrouillage automatique. */}
-      <div className="card">
-        <h3>Verrouillage automatique {status?.lockEnabled && '✓'}</h3>
+      <div className="card" style={cardAccent('#5856d6')}>
+        <h3 style={shStyle}><Lock size={17} color="#5856d6" />Verrouillage automatique {status?.lockEnabled && '✓'}</h3>
         <p style={{ fontSize: '13px', color: '#555' }}>
           Protégez l'accès à l'application avec un code PIN.
           {status?.lockEnabled ? ' Verrouillage actif.' : ' Verrouillage inactif.'}
@@ -1365,8 +1375,8 @@ export default function SettingsPage() {
       </div>
 
       {/* ADM-S13 : maintenance des données. */}
-      <div className="card">
-        <h3>Maintenance des données</h3>
+      <div className="card" style={cardAccent('#1D9E75')}>
+        <h3 style={shStyle}><Wrench size={17} color="#1D9E75" />Maintenance des données</h3>
         <button onClick={loadMaintenanceStats} disabled={loadingMaintenance}>
           {loadingMaintenance ? 'Chargement…' : 'Analyser les données'}
         </button>
@@ -1453,8 +1463,8 @@ export default function SettingsPage() {
       </div>
 
       {/* ADM-3 : zone de danger. */}
-      <div className="card" style={{ borderColor: '#ff453a' }}>
-        <h3>Zone de danger</h3>
+      <div className="card" style={{ borderColor: '#ff453a', borderLeft: '4px solid #ff453a' }}>
+        <h3 style={{ ...shStyle, color: '#ff453a' }}><AlertTriangle size={17} color="#ff453a" />Zone de danger</h3>
         <p>Cette action supprimera irrémédiablement toutes vos données (campagnes, entreprises, candidatures).</p>
         <button
           onClick={resetData}
