@@ -1114,7 +1114,9 @@ export default function SettingsPage() {
           la page Scraping (zone Recherche), au plus près de son usage. */}
 
       <div className="card" style={cardAccent('#378ADD')}>
-        <h3 style={shStyle}><Send size={17} color="#378ADD" />SMTP — envoi des candidatures {status?.smtpConfigured && '✓'}</h3>
+        <h3 style={shStyle}><Send size={17} color="#378ADD" />SMTP — envoi des candidatures {status?.smtpConfigured
+          ? '✓'
+          : <span className="cfg-todo red">à configurer</span>}</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           Le <strong>SMTP</strong> est le service qui <strong>envoie</strong> tes emails de candidature
           depuis ta boîte mail. Sans ça, l'app ne peut pas envoyer.<br />
@@ -1168,7 +1170,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="card" style={cardAccent('#1D9E75')}>
-        <h3 style={shStyle}><Inbox size={17} color="#1D9E75" />IMAP — détection des réponses {status?.imapConfigured && '✓'}</h3>
+        <h3 style={shStyle}><Inbox size={17} color="#1D9E75" />IMAP — détection des réponses {status?.imapConfigured
+          ? '✓'
+          : <span className="cfg-todo amber">à configurer</span>}</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           L'<strong>IMAP</strong> sert à <strong>lire</strong> ta boîte mail pour détecter quand une
           entreprise t'a répondu (et le classer dans l'onglet Réponses). C'est l'inverse du SMTP :
