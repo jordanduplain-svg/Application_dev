@@ -7,6 +7,20 @@ import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
 import type { CvParsed } from '@candio/shared';
 
+/**
+ * Consigne de relance (directive passée à generatePitch, qui applique par-dessus
+ * toutes les règles de style « voix humaine » du prompt principal). Mêmes
+ * exigences : naturel, professionnel, sobre, sans cliché ni marqueur d'IA, et
+ * clôture formelle. Volontairement TRÈS courte — c'est un simple rappel courtois.
+ */
+function followUpDirective(subject: string): string {
+  return `Tu rédiges une RELANCE d'une candidature spontanée déjà envoyée (objet « ${subject} »). TRÈS COURTE : 3 à 4 phrases maximum.
+- Contenu : rappelle brièvement la candidature envoyée, puis demande poliment si elle a bien été reçue et si un échange est envisageable. N'AJOUTE aucun nouvel argument, chiffre ni réalisation — c'est un simple rappel, pas une nouvelle lettre.
+- TON : humain, naturel et professionnel, comme un pro qui réécrit en une minute. Pas de flagornerie ni d'enthousiasme excessif (proscris « ravi », « heureux », « hâte »), aucun cliché ni tournure d'IA.
+- N'invente rien (faits entreprise/candidat uniquement réels). Aucune URL dans le corps : les liens restent dans la signature.
+- Termine par une formule de politesse sobre (« Cordialement, » ou « Bien cordialement, ») suivie de la signature.`;
+}
+
 /** Charge le CvParsed + le chemin PDF du CV d'une campagne (CV-MULTI). */
 async function loadCampaignCv(campaignId: string): Promise<{ parsed: CvParsed; filePath: string | null } | null> {
   const camp = await prisma.campaign.findUnique({
@@ -39,8 +53,7 @@ export async function generateFollowUpContent(
   // BUG-M1 fix : passer le profil pour inclure téléphone/LinkedIn/portfolio.
   const generated = await generatePitch(
     app.subject,
-    `Tu rédiges une RELANCE COURTE (2-3 phrases max) suite à une candidature spontanée envoyée.
-Rappelle la candidature envoyée pour le sujet "${app.subject}" et demande poliment si la candidature a été reçue.`,
+    followUpDirective(app.subject),
     app.companyName,
     null,
     cvParsed,
@@ -95,8 +108,7 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
         // dans le prompt IA de la relance (cohérence avec les emails initiaux FM-05).
         const generated = await generatePitch(
           app.subject,
-          `Tu rédiges une RELANCE COURTE (2-3 phrases max) suite à une candidature spontanée envoyée.
-Rappelle la candidature envoyée pour le sujet "${app.subject}" et demande poliment si la candidature a été reçue.`,
+          followUpDirective(app.subject),
           app.companyName,
           null,
           cvParsed,
