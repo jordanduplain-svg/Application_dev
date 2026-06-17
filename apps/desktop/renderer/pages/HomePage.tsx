@@ -68,7 +68,7 @@ export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void 
           imapOk: !!st?.imapConfigured,
           profileOk: !!(prof?.firstName?.trim() && prof?.lastName?.trim()),
         });
-      } catch { /* non bloquant — l'accueil s'affiche avec des valeurs à 0 */ }
+      } catch (e) { console.warn('[Home] chargement des stats d\'accueil échoué', e); /* non bloquant */ }
     })();
     return () => { alive = false; };
   }, []);

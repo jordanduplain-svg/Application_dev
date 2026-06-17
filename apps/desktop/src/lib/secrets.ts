@@ -452,7 +452,10 @@ export function setDailySendLimit(limit: number): Promise<void> {
  * Si la date stockée n'est pas aujourd'hui, le compteur est considéré à 0.
  */
 function todayString(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  // Date LOCALE (et non UTC) : le compteur quotidien doit se réinitialiser à
+  // minuit heure de l'utilisateur, pas à 01h-02h (décalage UTC). 'sv-SE' rend
+  // un format ISO « YYYY-MM-DD ».
+  return new Date().toLocaleDateString('sv-SE');
 }
 
 export function getDailySendCount(): { count: number; date: string } {

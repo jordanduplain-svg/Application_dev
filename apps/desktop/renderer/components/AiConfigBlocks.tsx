@@ -30,9 +30,11 @@ export default function AiConfigBlocks({ onGoToSettings, onGoToScraping }: {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      try { const st = await api.invoke('settings:getStatus'); if (alive) { setStatus(st); setLettersProvider(st.aiProvider || 'openai'); } } catch { /* */ }
-      try { const c = await api.invoke('scraping:getConfig'); if (alive) setCfg(c); } catch { /* */ }
-      try { const { models } = await api.invoke('settings:getOllamaModels'); if (alive) setInstalled(models); } catch { /* */ }
+      try { const st = await api.invoke('settings:getStatus'); if (alive) { setStatus(st); setLettersProvider(st.aiProvider || 'openai'); } } catch (e) { console.warn('[AiConfig] settings:getStatus a échoué', e); }
+      try { const c = await api.invoke('scraping:getConfig'); if (alive) setCfg(c); } catch (e) { console.warn('[AiConfig] scraping:getConfig a échoué', e); }
+      // Ne pas avaler cette erreur en silence : c'est elle qui masquait le souci
+      // Ollama « localhost » (modèles affichés « non installé »).
+      try { const { models } = await api.invoke('settings:getOllamaModels'); if (alive) setInstalled(models); } catch (e) { console.warn('[AiConfig] settings:getOllamaModels a échoué — Ollama injoignable ?', e); }
     })();
     return () => { alive = false; };
   }, []);
