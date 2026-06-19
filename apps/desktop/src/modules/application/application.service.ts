@@ -1,4 +1,3 @@
-import { subDays } from 'date-fns';
 import type { Application, ApplicationStatus } from '@candio/shared';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -290,8 +289,7 @@ export async function setManualStatus(
  * UX-5v3 : liste les candidatures nécessitant une action (relance, qualification, réessai).
  */
 export async function listActionRequired(): Promise<Application[]> {
-  // M7 : utiliser date-fns pour remplacer le calcul manuel de date.
-  const sevenDaysAgo = subDays(new Date(), 7);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 864e5); // il y a 7 jours
   const rows = await prisma.application.findMany({
     where: {
       OR: [
@@ -315,7 +313,7 @@ export async function listActionRequired(): Promise<Application[]> {
  * Sert à la relance en lot. `limit` borne le nombre retourné (quota d'envoi).
  */
 export async function listFollowUpEligibleIds(limit?: number): Promise<string[]> {
-  const sevenDaysAgo = subDays(new Date(), 7);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 864e5); // il y a 7 jours
   const rows = await prisma.application.findMany({
     where: { status: 'SENT', sentAt: { lt: sevenDaysAgo }, followUpSentAt: null },
     select: { id: true },

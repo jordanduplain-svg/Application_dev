@@ -4,7 +4,6 @@ import {
   Building2, Send, Mail, Percent, Sparkles, Download, Plus, X, Search,
   Briefcase, MapPin, FileText, Euro,
 } from 'lucide-react';
-import { subDays, isBefore, parseISO } from 'date-fns';
 import type { Application, Campaign, CampaignInput, Company, Cv } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
@@ -671,10 +670,9 @@ export default function CampaignDetailPage({
   const replyRate = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
 
   // UX-12 : candidatures éligibles à une relance (SENT > 7 jours, pas de réponse).
-  // M7 : utiliser date-fns pour remplacer le calcul manuel de date.
-  const sevenDaysAgo = subDays(new Date(), 7);
+  const sevenDaysAgo = Date.now() - 7 * 864e5;
   const isFollowUpEligible = (a: Application) =>
-    a.status === 'SENT' && a.sentAt !== null && isBefore(parseISO(a.sentAt), sevenDaysAgo);
+    a.status === 'SENT' && a.sentAt !== null && new Date(a.sentAt).getTime() < sevenDaysAgo;
 
   if (!campaign) return <p>{error ?? 'Chargement…'}</p>;
 
