@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import type { SettingsStatus, SmtpInput, ImapInput, DkimInput, HardwareInfo } from '@candio/shared';
 import { api } from '../lib/api';
 import { MODEL_CATALOG, qualityStars, compatLabel, type ModelSpec } from '../lib/ollamaModels';
+import OptOutManager from '../components/OptOutManager';
 
 // DESIGN-2 : liseré latéral coloré + en-tête de section à icône (style harmonisé).
 const cardAccent = (c: string): CSSProperties => ({ borderLeft: `4px solid ${c}` });
@@ -88,6 +89,11 @@ export default function SettingsPage() {
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreStatus, setRestoreStatus] = useState<string | null>(null);
+  // SEC : sauvegarde chiffrée par mot de passe.
+  const [encPass, setEncPass] = useState('');
+  const [isEncBacking, setIsEncBacking] = useState(false);
+  const [isEncRestoring, setIsEncRestoring] = useState(false);
+  const [encStatus, setEncStatus] = useState<string | null>(null);
   // UX-11 : intervalle de polling.
   const [pollInterval, setPollInterval] = useState(10);
   const [savingPollInterval, setSavingPollInterval] = useState(false);
@@ -325,6 +331,34 @@ export default function SettingsPage() {
     } finally {
       setIsRestoring(false);
     }
+  };
+
+  // SEC : sauvegarde chiffrée par mot de passe (AES-256-GCM, portable).
+  const backupEncrypted = async () => {
+    if (isEncBacking) return;
+    if (encPass.length < 8) { setEncStatus('✗ Mot de passe trop court (8 caractères minimum).'); return; }
+    setIsEncBacking(true); setEncStatus(null);
+    try {
+      const result = await api.invoke('db:backupEncrypted', { passphrase: encPass });
+      setEncStatus(result ? `✓ Sauvegarde chiffrée : ${result.path}` : null);
+      if (result) setEncPass('');
+    } catch (e) {
+      setEncStatus(`✗ ${e instanceof Error ? e.message : 'Erreur lors de la sauvegarde chiffrée'}`);
+    } finally { setIsEncBacking(false); }
+  };
+
+  const restoreEncrypted = async () => {
+    if (isEncRestoring) return;
+    if (!encPass) { setEncStatus('✗ Saisissez le mot de passe de la sauvegarde.'); return; }
+    setIsEncRestoring(true); setEncStatus(null);
+    try {
+      const result = await api.invoke('db:restoreEncrypted', { passphrase: encPass });
+      setEncStatus(result.success
+        ? '✓ Sauvegarde chiffrée restaurée — redémarrage…'
+        : `✗ ${result.error ?? 'Erreur lors de la restauration'}`);
+    } catch (e) {
+      setEncStatus(`✗ ${e instanceof Error ? e.message : 'Erreur'}`);
+    } finally { setIsEncRestoring(false); }
   };
 
   const toggleScraping = async () => {
@@ -1300,7 +1334,38 @@ export default function SettingsPage() {
           {isExporting ? 'Export…' : 'Exporter toutes les données (.json)'}
         </button>
         {exportStatus && <p>{exportStatus}</p>}
+
+        {/* SEC : sauvegarde chiffrée par mot de passe (portable, hors de cette machine). */}
+        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #eee' }}>
+          <h4 style={{ ...shStyle, fontSize: '14px', margin: '0 0 4px' }}>
+            <Lock size={15} color="#0a84ff" />Sauvegarde chiffrée (portable)
+          </h4>
+          <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.5 }}>
+            Protège la sauvegarde par un mot de passe (AES-256). Indispensable si vous la stockez
+            sur un cloud ou une clé USB. <strong>Sans ce mot de passe, le fichier est irrécupérable</strong> —
+            notez-le précieusement.
+          </p>
+          <input
+            type="password"
+            placeholder="Mot de passe (8 caractères min.)"
+            value={encPass}
+            onChange={(e) => setEncPass(e.target.value)}
+            style={{ maxWidth: '280px' }}
+          />
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+            <button onClick={backupEncrypted} disabled={isEncBacking || encPass.length < 8}>
+              {isEncBacking ? 'Chiffrement…' : 'Sauvegarde chiffrée (.cjenc)'}
+            </button>
+            <button onClick={restoreEncrypted} disabled={isEncRestoring || !encPass} className="btn-secondary">
+              {isEncRestoring ? 'Restauration…' : 'Restaurer une sauvegarde chiffrée…'}
+            </button>
+          </div>
+          {encStatus && <p style={{ wordBreak: 'break-all' }}>{encStatus}</p>}
+        </div>
       </div>
+
+      {/* RGPD : liste « ne pas contacter » + droit à l'effacement. */}
+      <OptOutManager />
 
       <div className="card" style={cardAccent('#D85A30')}>
         <h3 style={shStyle}><Radar size={17} color="#D85A30" />Recherche automatique d'entreprises</h3>

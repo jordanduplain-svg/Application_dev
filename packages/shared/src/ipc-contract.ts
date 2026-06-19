@@ -701,6 +701,9 @@ export interface IpcRequests {
   'application:regenerateOne': { req: { id: string }; res: void };
   // UX-7v3 : envoie l'email à soi-même pour vérifier le rendu.
   'application:sendTest': { req: { id: string }; res: void };
+  // TEST-CAMPAGNE : s'envoie TOUS les brouillons/échecs en test (rendu + CV joint)
+  // sans rien envoyer aux destinataires réels ni modifier les statuts.
+  'application:sendTestAll': { req: { campaignId: string }; res: { sent: number; total: number } };
   // UX-4v3 : définit le statut manuel post-réponse.
   'application:setManualStatus': { req: { id: string; manualStatus: string | null }; res: void };
   // UX-5v3 : liste toutes les candidatures nécessitant une action.
@@ -777,6 +780,9 @@ export interface IpcRequests {
   'db:reset': { req: void; res: void };
   // ADM-4v3 : export global toutes données en JSON.
   'db:exportAll': { req: void; res: { path: string } | null };
+  // SEC : sauvegarde/restauration CHIFFRÉE par mot de passe (AES-256-GCM, portable).
+  'db:backupEncrypted': { req: { passphrase: string }; res: { path: string } | null };
+  'db:restoreEncrypted': { req: { passphrase: string }; res: { success: boolean; error?: string } };
 
   // M2 (revue 6) : boîte de confirmation native Electron — remplace window.confirm()
   // synchrone qui bloque le renderer et peut être silencieusement ignoré.
@@ -796,6 +802,22 @@ export interface IpcRequests {
 
   // INT-2v3 : planification de l'envoi d'une campagne.
   'campaign:schedule': { req: { id: string; scheduledAt: string | null }; res: Campaign };
+
+  // RGPD : liste « ne pas contacter » (opt-out / droit d'opposition).
+  'optout:list': { req: void; res: OptOutEntry[] };
+  'optout:add': { req: { value: string; reason?: string }; res: OptOutEntry };
+  'optout:remove': { req: { id: string }; res: void };
+  // Droit à l'effacement : opt-out + suppression de toutes les données du contact.
+  'optout:erase': { req: { email: string; reason?: string }; res: { erased: number } };
+}
+
+/** RGPD : entrée de la liste « ne pas contacter » exposée au renderer. */
+export interface OptOutEntry {
+  id: string;
+  value: string;
+  kind: 'email' | 'domain';
+  reason: string | null;
+  createdAt: string;
 }
 
 export type IpcChannel = keyof IpcRequests;

@@ -210,8 +210,13 @@ STYLE — VOIX HUMAINE (anti-signature IA). Un mail trop « ciselé » se repèr
   « de X à Y ». Pas de formule grandiloquente (« c'est dans cet environnement que… », « à l'heure où… »,
   « là où… »). Phrases de longueurs INÉGALES : au moins une phrase courte, sèche. Tu PEUX faire une
   phrase nominale (sans verbe) ou commencer une phrase par « Et »/« Mais »/« Du coup » (1 fois MAX).
-- LEXIQUE : bannis « notamment », « par ailleurs », « en effet », « ainsi », « véritable », « il convient
-  de », « force est de constater ». AU PLUS UNE fois sur tout le mail, jamais en ouverture de phrase :
+- CONNECTEURS NATURELS : pour fluidifier, tu PEUX ouvrir une ou deux phrases par un ancrage temporel ou
+  logique qui sonne humain (« Jusqu'à présent, », « Aujourd'hui, », « Après plusieurs années en…, »,
+  « Concrètement, », « D'ailleurs, »). Sobre et VARIÉ : jamais le même connecteur deux fois, jamais en
+  réflexe à chaque paragraphe. C'est un liant occasionnel, pas une béquille.
+- LEXIQUE : bannis « notamment », « ainsi », « véritable », « il convient de », « force est de constater ».
+  « en effet » et « par ailleurs » : AU PLUS UNE fois sur tout le mail, et seulement si ça coule vraiment
+  (sinon coupe). AU PLUS UNE fois sur tout le mail, jamais en ouverture de phrase :
   « concrètement », « optimiser », « valoriser », « s'inscrire dans », « tirer parti », « actionnable »,
   « robuste », « écosystème ». INTERDIT : « je suis convaincu que », « il ne fait aucun doute que ».
 - SPÉCIFICITÉ > LISSAGE : un détail concret, presque trop précis, sonne plus humain qu'une généralité

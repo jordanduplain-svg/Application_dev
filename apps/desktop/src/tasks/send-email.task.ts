@@ -12,6 +12,7 @@ import {
 } from '../modules/application/application.service';
 import { prisma } from '../lib/prisma';
 import { tryIncrementDailySend, getDailySendLimit } from '../lib/secrets';
+import { isOptedOut } from '../modules/optout/optout.service';
 
 /**
  * Envoi SMTP d'une candidature.
@@ -76,6 +77,17 @@ export async function enqueueSend(applicationId: string): Promise<void> {
           `⚠️ À vérifier — l'adresse ${app.contactEmail} a été générée automatiquement ` +
             `(format « pattern », non confirmée) et risque de rebondir. ` +
             `Vérifiez/corrigez l'email du contact avant de l'envoyer.`
+        );
+        await refreshCampaignStatus(app.campaignId);
+        return;
+      }
+
+      // RGPD : ne jamais envoyer à un contact figurant dans la liste opt-out
+      // (« ne pas contacter »). On marque la candidature en échec explicite.
+      if (await isOptedOut(app.contactEmail)) {
+        await markFailed(
+          applicationId,
+          `Envoi bloqué — ${app.contactEmail} figure dans la liste « ne pas contacter » (RGPD).`,
         );
         await refreshCampaignStatus(app.campaignId);
         return;

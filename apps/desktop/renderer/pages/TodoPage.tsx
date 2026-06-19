@@ -52,8 +52,13 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
   useEffect(() => { loadRef.current = load; });
   useEffect(() => { void load(); }, [load]);
 
-  // FOLLOWUP-BATCH : nb de candidatures relançables (SENT > 7j, surfacé ici).
-  const followUpEligible = apps.filter((a) => a.status === 'SENT').length;
+  // FOLLOWUP-BATCH : nb de candidatures réellement relançables — mêmes critères
+  // que le serveur (SENT depuis + de 7 jours). BUG-C fix : on ne comptait que
+  // le statut SENT, ce qui sur-estimait le nombre annoncé sur le bouton.
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  const followUpEligible = apps.filter(
+    (a) => a.status === 'SENT' && a.sentAt && Date.now() - new Date(a.sentAt).getTime() > SEVEN_DAYS_MS,
+  ).length;
 
   const followUpAll = async () => {
     setFollowingUp(true);

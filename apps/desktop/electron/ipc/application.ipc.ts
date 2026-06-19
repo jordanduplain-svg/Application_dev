@@ -11,8 +11,9 @@ import {
 import * as appService from '../../src/modules/application/application.service';
 import { enqueueGeneration } from '../../src/tasks/generate-email.task';
 import { enqueueSend } from '../../src/tasks/send-email.task';
-import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider, getDailySendLimit, getDailySendCount } from '../../src/lib/secrets';
+import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider, getDailySendLimit, getDailySendCount, tryIncrementDailySend } from '../../src/lib/secrets';
 import { getProfile } from '../../src/modules/profile/profile.service';
+import { isOptedOut } from '../../src/modules/optout/optout.service';
 import { getCv } from '../../src/modules/cv/cv.service';
 import { prisma } from '../../src/lib/prisma';
 import { generatePitch, generateCampaignPrompts } from '../../src/modules/ai/ai.service';
@@ -220,6 +221,40 @@ export function registerApplicationHandlers(): void {
     });
   });
 
+  // TEST-CAMPAGNE : s'envoie en test TOUS les brouillons/échecs de la campagne
+  // (rendu réel + CV joint), à sa propre adresse. Ne touche pas aux statuts et
+  // n'envoie rien aux destinataires réels — sert à valider la campagne avant le
+  // vrai « Tout envoyer ». Throttle 8 s appliqué comme un envoi normal.
+  handle('application:sendTestAll', async (payload) => {
+    const { campaignId } = validate(CampaignIdSchema, payload);
+    const profile = await getProfile();
+    if (!profile?.emailSender) {
+      throw new Error('Adresse email non configurée dans le Profil.');
+    }
+    const targetIds = await appService.listDraftAndFailedIds(campaignId);
+    if (targetIds.length === 0) return { sent: 0, total: 0 };
+
+    let sent = 0;
+    for (const appId of targetIds) {
+      const app = await prisma.application.findUnique({
+        where: { id: appId },
+        include: { company: true, campaign: { include: { cv: true } } },
+      });
+      if (!app || !app.body) continue;
+      await throttleSend();
+      await sendApplicationEmail({
+        fromName: `${profile.firstName} ${profile.lastName}`,
+        fromEmail: profile.emailSender,
+        to: profile.emailSender,
+        subject: `[TEST → ${app.company.name}] ${app.subject}`,
+        body: app.body,
+        cvPath: app.campaign.cv?.filePath ?? undefined,
+      });
+      sent++;
+    }
+    return { sent, total: targetIds.length };
+  });
+
   handle('application:setManualStatus', async (payload) => {
     const data = validate(ManualStatusSchema, payload);
     await appService.setManualStatus(data.id, data.manualStatus);
@@ -260,8 +295,31 @@ export function registerApplicationHandlers(): void {
     const app = await appService.getApplication(id);
     if (!app) throw new Error('Candidature introuvable.');
 
+    // RGPD : ne pas relancer un contact désinscrit. On annule le claim.
+    if (await isOptedOut(app.contactEmail)) {
+      await prisma.application.update({
+        where: { id },
+        data: { status: 'SENT', followUpSentAt: null },
+      });
+      throw new Error('Relance bloquée — ce contact figure dans la liste « ne pas contacter » (RGPD).');
+    }
+
     const profile = await getProfile();
-    if (!profile?.emailSender) throw new Error('Email de profil non configuré.');
+    if (!profile?.emailSender) {
+      // Annule le claim : la candidature reste relançable une fois le profil configuré.
+      await prisma.application.update({ where: { id }, data: { status: 'SENT', followUpSentAt: null } });
+      throw new Error('Email de profil non configuré.');
+    }
+
+    // BUG-A : la relance compte dans le plafond quotidien. Annule le claim si atteint.
+    const allowed = await tryIncrementDailySend();
+    if (!allowed) {
+      await prisma.application.update({
+        where: { id },
+        data: { status: 'SENT', followUpSentAt: null },
+      });
+      throw new Error(`Plafond d'envois du jour atteint (${getDailySendLimit()}/jour) — réessaie demain.`);
+    }
 
     // BUG-H4 fix : appliquer le même throttle 8 s que le task-runner pour
     // éviter de contourner le délai anti-spam en passant par ce handler direct.

@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { levenshteinSimilarity } from '../../lib/levenshtein';
 import { classifyReplySentiment } from '../../tasks/reply-matching';
+import { isOptedOut, matchesOptOut } from '../optout/optout.service';
 
 // Gestion des entreprises cibles : saisie manuelle ou import CSV.
 
@@ -70,6 +71,10 @@ export async function listByCampaign(campaignId: string): Promise<Company[]> {
 }
 
 export async function addCompany(input: CompanyInput): Promise<Company> {
+  // RGPD : refuser l'ajout d'un contact figurant dans la liste « ne pas contacter ».
+  if (await isOptedOut(input.contactEmail)) {
+    throw new Error(`${input.contactEmail} figure dans la liste « ne pas contacter » (RGPD) — ajout refusé.`);
+  }
   try {
     const c = await prisma.company.create({ data: input });
     return toDTO(c);
@@ -551,6 +556,12 @@ export async function importCsvContent(
     rowsToInsert = filterBySectors(validRows, prefKeys).rows;
   } catch { /* pas de campagne / colonne absente → import complet */ }
 
+  // RGPD : retire les contacts de la liste « ne pas contacter » avant insertion.
+  const optOuts = await prisma.optOut.findMany({ select: { value: true, kind: true } });
+  const beforeOptOut = rowsToInsert.length;
+  rowsToInsert = rowsToInsert.filter((r) => !matchesOptOut(r.contactEmail, optOuts));
+  const optedOutSkipped = beforeOptOut - rowsToInsert.length;
+
   // H4 : insertion ligne à ligne avec skip des emails déjà présents (P2002).
   let added = 0;
   let duplicatesSkipped = 0;
@@ -571,7 +582,7 @@ export async function importCsvContent(
     }
   }
 
-  return { added, skipped: skipped + duplicatesSkipped };
+  return { added, skipped: skipped + duplicatesSkipped + optedOutSkipped };
 }
 
 /**
@@ -626,10 +637,14 @@ export async function importLeadsFromMasterContent(
   widened = widened || sectorFiltered.widened;
   const matched = pool.length;
 
-  // 3) Exclut les leads déjà utilisés dans une campagne (toutes campagnes).
+  // 3) Exclut les leads déjà utilisés dans une campagne (toutes campagnes) ET
+  //    les contacts de la liste « ne pas contacter » (RGPD).
   const usedKeys = new Set(await listUsedLeadKeys());
+  const optOuts = await prisma.optOut.findMany({ select: { value: true, kind: true } });
   const before = pool.length;
-  const fresh = pool.filter((r) => !usedKeys.has(leadKey(r.name, r.contactEmail, r.website)));
+  const fresh = pool.filter(
+    (r) => !usedKeys.has(leadKey(r.name, r.contactEmail, r.website)) && !matchesOptOut(r.contactEmail, optOuts),
+  );
   const skippedUsed = before - fresh.length;
 
   // 4) Tri par score décroissant (pertinence + fraîcheur) puis plafond.

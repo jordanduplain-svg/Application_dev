@@ -13,6 +13,7 @@ import { registerLogsHandlers } from './logs.ipc';
 import { registerSearchHandlers } from './search.ipc';
 import { registerMaintenanceHandlers } from './maintenance.ipc';
 import { registerScrapingHandlers } from './scraping.ipc';
+import { registerOptOutHandlers } from './optout.ipc';
 
 /**
  * Helper de déclaration d'un handler IPC typé. Le type du payload et du
@@ -47,4 +48,6 @@ export function registerIpcHandlers(): void {
   registerMaintenanceHandlers();
   // SCRAPE-01 : scraper Python + schedule mensuel.
   registerScrapingHandlers();
+  // RGPD : liste « ne pas contacter » (opt-out / droit à l'effacement).
+  registerOptOutHandlers();
 }

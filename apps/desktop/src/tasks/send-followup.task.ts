@@ -5,6 +5,8 @@ import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
 import { getApplication } from '../modules/application/application.service';
 import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
+import { tryIncrementDailySend, getDailySendLimit } from '../lib/secrets';
+import { isOptedOut } from '../modules/optout/optout.service';
 import type { CvParsed } from '@candio/shared';
 
 /**
@@ -94,6 +96,37 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
         await prisma.application.update({
           where: { id: applicationId },
           data: { status: 'SENT', followUpSentAt: null },
+        });
+        return;
+      }
+
+      // RGPD : ne jamais relancer un contact qui s'est désinscrit (opt-out).
+      // On annule le claim et on neutralise la candidature pour qu'elle ne
+      // ressorte plus comme « relançable ».
+      if (await isOptedOut(app.contactEmail)) {
+        await prisma.application.update({
+          where: { id: applicationId },
+          data: {
+            status: 'SENT',
+            followUpSentAt: new Date(), // marque comme « relance traitée » → plus jamais éligible
+            errorMessage: 'Relance bloquée — le contact figure dans la liste « ne pas contacter » (RGPD).',
+          },
+        });
+        return;
+      }
+
+      // BUG-A : une relance compte dans le plafond d'envoi quotidien, comme un
+      // envoi initial (anti-suspension Gmail). Si le plafond est atteint, on
+      // annule le claim — la candidature redevient relançable dès demain.
+      const allowed = await tryIncrementDailySend();
+      if (!allowed) {
+        await prisma.application.update({
+          where: { id: applicationId },
+          data: {
+            status: 'SENT',
+            followUpSentAt: null,
+            errorMessage: `Relance reportée — plafond d'envois du jour atteint (${getDailySendLimit()}/jour).`,
+          },
         });
         return;
       }

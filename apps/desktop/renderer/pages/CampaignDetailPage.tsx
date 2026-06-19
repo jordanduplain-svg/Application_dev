@@ -89,6 +89,10 @@ export default function CampaignDetailPage({
   // FM12 : rapport post-envoi (X envoyés, Y en erreur).
   const [sendReport, setSendReport] = useState<string | null>(null);
 
+  // TEST-CAMPAGNE : envoi de test de toute la campagne à soi-même.
+  const [isTestingAll, setIsTestingAll] = useState(false);
+  const [testAllReport, setTestAllReport] = useState<string | null>(null);
+
   // (Sélecteur IA extrait dans le composant partagé AiModelSelector.)
 
   // FM-04 : doublons détectés avant ajout d'une entreprise.
@@ -574,6 +578,27 @@ export default function CampaignDetailPage({
     if (isMounted.current) setSendingTestId(null);
   };
 
+  // TEST-CAMPAGNE : s'envoie en test tous les brouillons/échecs de la campagne.
+  const sendTestAll = async () => {
+    const drafts = apps.filter((a) => a.status === 'DRAFT' || a.status === 'FAILED');
+    if (drafts.length === 0) { setError('Aucun brouillon ou échec à tester.'); return; }
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Tester toute la campagne',
+      message: `Vous allez recevoir ${drafts.length} email(s) de test sur votre propre adresse (rien n'est envoyé aux entreprises). Continuer ?`,
+    });
+    if (!ok) return;
+    setIsTestingAll(true);
+    setTestAllReport(null);
+    try {
+      const r = await api.invoke('application:sendTestAll', { campaignId: id });
+      setTestAllReport(`${r.sent}/${r.total} email(s) de test envoyé(s) sur votre adresse — vérifiez votre boîte de réception.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du test de campagne');
+    } finally {
+      if (isMounted.current) setIsTestingAll(false);
+    }
+  };
+
   // UX-8v3 : fermer le modal avec avertissement si modifications non sauvegardées.
   const closeModal = async () => {
     if (draftBodyChanged) {
@@ -1057,9 +1082,25 @@ export default function CampaignDetailPage({
           <Send size={15} />
           {isSendingAll ? 'Envoi en cours…' : 'Tout envoyer (brouillons + échecs)'}
         </button>
+        {/* TEST-CAMPAGNE : envoi de test de tous les brouillons à soi-même. */}
+        <button onClick={sendTestAll} disabled={isTestingAll || isSendingAll} className="btn-secondary" title="S'envoyer tous les brouillons en test (rendu + CV) sans rien envoyer aux entreprises">
+          <Send size={15} />{isTestingAll ? 'Test en cours…' : 'Tester (m\'envoyer les brouillons)'}
+        </button>
         {/* UX-9 : export CSV. */}
         <button onClick={exportCsv} className="btn-secondary"><Download size={15} />Exporter en CSV</button>
       </div>
+
+      {/* TEST-CAMPAGNE : rapport du test de campagne. */}
+      {testAllReport && (
+        <div style={{
+          background: '#eef6ff', border: '1px solid #5ac8fa', borderRadius: '6px',
+          padding: '10px 16px', marginBottom: '8px', fontSize: '13px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>{testAllReport}</span>
+          <button onClick={() => setTestAllReport(null)} style={{ fontSize: '12px' }}>×</button>
+        </div>
+      )}
 
       {/* FM11 : panneau d'aperçu avant envoi en masse. */}
       {sendPreview?.visible && (

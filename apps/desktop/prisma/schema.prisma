@@ -129,6 +129,22 @@ model Company {
   @@index([campaignId])
 }
 
+// RGPD : liste « ne pas contacter » (opt-out / droit d'opposition).
+// Globale (toutes campagnes confondues) et persistante : un contact qui demande
+// à ne plus être démarché y est ajouté, et ne pourra plus jamais être réimporté
+// ni recevoir d'email (initial ou relance). Survit aux suppressions d'entreprises.
+model OptOut {
+  id        String   @id @default(cuid())
+  // Valeur normalisée (minuscules, sans espaces). Soit un email complet, soit un
+  // domaine nu (ex. "acme.com") qui bloque toutes les adresses @acme.com.
+  value     String   @unique
+  // "email" | "domain"
+  kind      String
+  // Raison libre (ex. « désinscription demandée par email le 2026-06-19 »).
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
 // Candidature : l'email généré pour une entreprise cible, et son suivi.
 model Application {
   id         String   @id @default(cuid())

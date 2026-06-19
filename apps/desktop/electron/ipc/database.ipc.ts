@@ -1,7 +1,8 @@
 import { app, dialog } from 'electron';
-import { copyFile, unlink, writeFile } from 'fs/promises';
+import { copyFile, unlink, writeFile, readFile } from 'fs/promises';
 import { existsSync, readdirSync } from 'fs';
 import { resolve, join } from 'path';
+import { encryptBuffer, decryptBuffer } from '../../src/lib/db-crypto';
 // MOD-06 : import better-sqlite3 pour des WAL checkpoints fiables.
 import Database from 'better-sqlite3';
 import { handle } from './registry';
@@ -64,6 +65,81 @@ export function registerDatabaseHandlers(): void {
     await copyFile(srcPath, dstPath);
     logger.info(`[backup] Base de données sauvegardée : ${result.filePath}`);
     return { path: result.filePath };
+  });
+
+  // RGPD/SEC : sauvegarde CHIFFRÉE par mot de passe (AES-256-GCM, portable).
+  // Contrairement à db:backup (copie en clair), le fichier produit est inutilisable
+  // sans le mot de passe — adapté à une sauvegarde stockée sur cloud/clé USB.
+  handle('db:backupEncrypted', async ({ passphrase }) => {
+    if (!passphrase || passphrase.length < 8) {
+      throw new Error('Mot de passe trop court (8 caractères minimum).');
+    }
+    const date = new Date().toISOString().slice(0, 10);
+    const result = await dialog.showSaveDialog({
+      title: 'Sauvegarde chiffrée de la base',
+      defaultPath: `carreerops-backup-${date}.cjenc`,
+      filters: [{ name: 'Sauvegarde chiffrée Carreer-ops', extensions: ['cjenc'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    // Checkpoint WAL pour une copie cohérente, puis chiffrement en mémoire.
+    try { walCheckpointTruncate(); } catch { /* non bloquant */ }
+    const plain = await readFile(resolve(getDbPath()));
+    const encrypted = encryptBuffer(plain, passphrase);
+    await writeFile(resolve(result.filePath), encrypted);
+    logger.info(`[backup] Sauvegarde chiffrée créée : ${result.filePath}`);
+    return { path: result.filePath };
+  });
+
+  // RGPD/SEC : restauration d'une sauvegarde chiffrée (.cjenc).
+  handle('db:restoreEncrypted', async ({ passphrase }) => {
+    if (!passphrase) return { success: false, error: 'Mot de passe requis.' };
+    const picked = await dialog.showOpenDialog({
+      title: 'Restaurer une sauvegarde chiffrée',
+      filters: [{ name: 'Sauvegarde chiffrée Carreer-ops', extensions: ['cjenc'] }],
+      properties: ['openFile'],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { success: false, error: 'Annulé' };
+    }
+
+    const dbPath = resolve(getDbPath());
+    const tmpPath = dbPath + '.restore.tmp';
+    logger.warn('[AUDIT] db:restoreEncrypted déclenché depuis', picked.filePaths[0]);
+
+    try {
+      const container = await readFile(resolve(picked.filePaths[0]));
+      const plain = decryptBuffer(container, passphrase); // lève si mauvais mot de passe
+      // Écrit le clair déchiffré dans un fichier temporaire, qu'on valide avant d'écraser la base.
+      await writeFile(tmpPath, plain);
+      await assertValidSqliteFile(tmpPath);
+
+      await Promise.race([
+        prisma.$disconnect(),
+        new Promise<void>((resolve) => setTimeout(resolve, 3_000)),
+      ]);
+      await copyFile(tmpPath, dbPath);
+      await unlink(tmpPath).catch(() => {});
+      await prisma.$connect();
+
+      logger.info('[restore] Base restaurée depuis une sauvegarde chiffrée.');
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Redémarrage requis',
+        message: 'Redémarrage requis',
+        detail: 'La base a été restaurée. L\'application va redémarrer.',
+        buttons: ['Redémarrer maintenant'],
+      });
+      app.relaunch();
+      app.exit(0);
+      return { success: true };
+    } catch (err) {
+      await unlink(tmpPath).catch(() => {});
+      await prisma.$connect().catch(() => {});
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error('[restore] Échec de la restauration chiffrée', err);
+      return { success: false, error: message };
+    }
   });
 
   // SEC-1 : restauration d'une sauvegarde SQLite.
