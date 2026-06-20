@@ -12,10 +12,9 @@ import {
   ClipboardList, BarChart3, Play, Square, Loader2, Rocket,
   Briefcase, Layers, MapPin, Users, Radio, Hash, Clock, ArrowDownWideNarrow,
 } from 'lucide-react';
-import type { ScrapingConfig, HardwareInfo } from '@candio/shared';
+import type { ScrapingConfig } from '@candio/shared';
 import { api } from '../lib/api';
 import { COUNTRIES, FR_DEPTS_BY_REGION, FR_REGIONS, FR_CITIES } from '../lib/geo';
-import { SCRAPING_MODEL_CATALOG, qualityStars, compatLabel } from '../lib/ollamaModels';
 import { INDUSTRY_GROUPS, INDUSTRY_CHOICES } from '../lib/sectors';
 
 // Sources de collecte : job boards (offres actives) vs annuaires (toutes entreprises).
@@ -92,14 +91,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
   const [resumeAvailable, setResumeAvailable] = useState(false);
   // Réinitialisation des curseurs de pagination des sources.
   const [resettingPagination, setResettingPagination] = useState(false);
-  // Modèles Ollama installés localement (menu déroulant) + téléchargement.
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [pullName, setPullName] = useState('');
-  const [pulling, setPulling] = useState(false);
-  // SCRAPE-DESC : détection hardware pour recommander un modèle de descriptions.
-  const [hardware, setHardware] = useState<HardwareInfo | null>(null);
-  const [detectingHw, setDetectingHw] = useState(false);
-  const [hwError, setHwError] = useState<string | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const isMounted = useRef(true);
   // Dropdown secteurs d'activité — ouverture/fermeture.
@@ -157,73 +148,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
       }
     });
   }, []);
-
-  // ── Liste des modèles Ollama installés (menu déroulant) ──────────────────
-  const refreshOllamaModels = useCallback(() => {
-    api.invoke('ollama:listModels')
-      .then((models) => { if (isMounted.current) setOllamaModels(models); })
-      .catch(() => {});
-  }, []);
-  useEffect(() => { refreshOllamaModels(); }, [refreshOllamaModels]);
-
-  // Déclenche le téléchargement (pull) d'un modèle Ollama ; suit la progression dans le log.
-  const handlePullModel = useCallback(async () => {
-    const name = pullName.trim();
-    if (!name || pulling) return;
-    setPulling(true);
-    try {
-      const res = await api.invoke('ollama:pullModel', name);
-      if (res.ok) {
-        setPullName('');
-        refreshOllamaModels();
-        // Sélectionne automatiquement le modèle fraîchement téléchargé.
-        setConfig((c) => (c ? { ...c, ollamaModel: name } : c));
-      }
-    } finally {
-      if (isMounted.current) setPulling(false);
-    }
-  }, [pullName, pulling, refreshOllamaModels]);
-
-  // SCRAPE-DESC : détecte le hardware (RAM/GPU) + recharge les modèles installés,
-  // pour recommander un modèle de descriptions adapté à la machine (comme Réglages).
-  const analyzeHardware = useCallback(async () => {
-    setDetectingHw(true);
-    setHwError(null);
-    try {
-      const hw = await api.invoke('settings:getHardwareInfo');
-      if (isMounted.current) setHardware(hw);
-      refreshOllamaModels();
-    } catch (e) {
-      if (isMounted.current) setHwError(e instanceof Error ? e.message : 'Erreur de détection');
-    } finally {
-      if (isMounted.current) setDetectingHw(false);
-    }
-  }, [refreshOllamaModels]);
-
-  // SCRAPE-DESC : change le modèle des descriptions ET le persiste IMMÉDIATEMENT.
-  // Sinon le changement n'est sauvé qu'au lancement d'un scrape → la page Leads
-  // (bouton Enrichir) lit la config disque inchangée et le menu « revient » à l'ancien.
-  const setDescribeModel = useCallback((model: string) => {
-    setConfig((c) => {
-      if (!c) return c;
-      const next = { ...c, describeModel: model };
-      void api.invoke('scraping:saveConfig', next).catch(() => {});
-      return next;
-    });
-  }, []);
-
-  // SCRAPE-DESC : télécharge le modèle de descriptions sélectionné (s'il manque).
-  const handlePullDescribeModel = useCallback(async () => {
-    const name = (config?.describeModel ?? '').trim();
-    if (!name || pulling) return;
-    setPulling(true);
-    try {
-      const res = await api.invoke('ollama:pullModel', name);
-      if (res.ok) refreshOllamaModels();
-    } finally {
-      if (isMounted.current) setPulling(false);
-    }
-  }, [config?.describeModel, pulling, refreshOllamaModels]);
 
   // ── Re-vérification checkpoint quand sector ou city changent ─────────────
   useEffect(() => {

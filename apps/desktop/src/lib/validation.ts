@@ -18,10 +18,3 @@ export function assertNonEmpty(value: string, label = 'Champ'): void {
     throw new Error(`${label} ne peut pas être vide`);
   }
 }
-
-/** Valide un nombre positif optionnel. */
-export function assertPositiveOrNull(value: number | null, label = 'Valeur'): void {
-  if (value !== null && (isNaN(value) || value < 0)) {
-    throw new Error(`${label} doit être un nombre positif`);
-  }
-}

@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Permet de lancer le job e2e Electron à la main (instable en headless,
+  # donc pas exécuté sur chaque push).
+  workflow_dispatch:
 
 jobs:
   desktop:
@@ -33,6 +36,31 @@ jobs:
 
       - name: Tests unitaires (vitest)
         run: pnpm --filter desktop test
+
+  e2e:
+    name: Desktop — e2e Electron (manuel)
+    # Uniquement sur déclenchement manuel : Electron headless est instable en CI.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Build de l'app : les tests e2e lancent out/main/index.js.
+      - name: Build
+        run: pnpm --filter desktop build
+      # xvfb : serveur d'affichage virtuel pour la fenêtre Electron.
+      - name: Tests e2e (xvfb)
+        run: xvfb-run --auto-servernum pnpm --filter desktop test:e2e
 
   scraper:
     name: Scraper Python — pyflakes (undefined names)

@@ -1,8 +1,5 @@
-import { dialog } from 'electron';
-import { writeFile } from 'fs/promises';
 import { handle } from './registry';
 import { prisma } from '../../src/lib/prisma';
-import { logger } from '../../src/lib/logger';
 
 const SENT_STATUSES = ['SENT', 'REPLIED', 'FOLLOWED_UP'] as const;
 
@@ -154,68 +151,6 @@ export function registerStatsHandlers(): void {
       });
     }
     return result;
-  });
-
-  // ANA-S3 : heatmap des envois par heure et jour de semaine.
-  handle('stats:getHeatmap', async () => {
-    // MOD-03 : utilise datetime(sentAt, 'localtime') pour convertir UTC → heure locale
-    // avant l'agrégation. SQLite supporte nativement 'localtime' dans datetime().
-    const rows = await prisma.$queryRaw<
-      { hour: number; day: number; sent: number; replied: number }[]
-    >`
-      SELECT
-        CAST(strftime('%H', datetime(sentAt, 'localtime')) AS INTEGER) AS hour,
-        CAST(strftime('%w', datetime(sentAt, 'localtime')) AS INTEGER) AS day,
-        COUNT(*) AS sent,
-        SUM(CASE WHEN status = 'REPLIED' THEN 1 ELSE 0 END) AS replied
-      FROM Application
-      WHERE sentAt IS NOT NULL AND status IN ('SENT', 'REPLIED', 'FOLLOWED_UP')
-      GROUP BY hour, day
-    `;
-
-    // BUG-06 : $queryRaw SQLite retourne des BigInt pour les colonnes INTEGER.
-    // Number() est requis avant toute comparaison et avant la sérialisation JSON.
-    // Convertir aussi jour SQLite (0=dim..6=sam) en (0=lun..6=dim).
-    return rows.map((r) => {
-      const rawDay = Number(r.day);
-      const day = rawDay === 0 ? 6 : rawDay - 1;
-      const count = Number(r.sent);
-      const replyRate = count > 0 ? Math.round((Number(r.replied) / count) * 100) : 0;
-      return { hour: Number(r.hour), day, replyRate, count };
-    });
-  });
-
-  // ANA-S4 : export CSV de toutes les candidatures.
-  handle('stats:exportCsv', async () => {
-    const result = await dialog.showSaveDialog({
-      title: 'Exporter les statistiques CSV',
-      defaultPath: `candidatures-${new Date().toISOString().slice(0, 10)}.csv`,
-      filters: [{ name: 'CSV', extensions: ['csv'] }],
-    });
-    if (result.canceled || !result.filePath) return null;
-
-    const apps = await prisma.application.findMany({
-      include: { company: true, campaign: true },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
-    const rows = [
-      ['Date envoi', 'Entreprise', 'Campagne', 'Statut', 'sentAt', 'repliedAt', 'Statut manuel'].join(','),
-      ...apps.map((a) => [
-        a.sentAt ? a.sentAt.toISOString().slice(0, 10) : '',
-        escape(a.company.name),
-        escape(a.campaign.name),
-        a.status,
-        a.sentAt ? a.sentAt.toISOString() : '',
-        a.repliedAt ? a.repliedAt.toISOString() : '',
-        a.manualStatus ?? '',
-      ].join(',')),
-    ];
-
-    await writeFile(result.filePath, rows.join('\n'), 'utf8');
-    logger.info(`[stats] Export CSV créé : ${result.filePath}`);
-    return { path: result.filePath };
   });
 
   // FM-02 : comparaison A/B — taux de réponse par variante de prompt par campagne.

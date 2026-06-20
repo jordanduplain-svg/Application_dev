@@ -12,6 +12,16 @@ directories:
   output: dist
   buildResources: build
 
+# MAJ-AUTO : flux de mise à jour (electron-updater lit latest.yml depuis les
+# GitHub Releases du dépôt). electron-builder génère latest.yml au build ; il faut
+# publier une Release avec le .exe + latest.yml (ex. `electron-builder --win --publish always`
+# avec GH_TOKEN) pour que les clients installés se mettent à jour. Sans release, l'app
+# ne fait rien (la vérification échoue silencieusement).
+publish:
+  provider: github
+  owner: jordanduplain-svg
+  repo: Application-dev
+
 # Fichiers de l'app à empaqueter. Les node_modules de production sont copiés
 # automatiquement ; on n'ajoute ici que ce qu'electron-builder ne détecte pas.
 files:

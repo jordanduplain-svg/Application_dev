@@ -76,12 +76,6 @@ export async function updateProfile(input: ProfileInput): Promise<Profile> {
   }
 }
 
-export async function setCvPath(cvPath: string): Promise<void> {
-  const existing = await prisma.profile.findFirst();
-  if (!existing) throw new Error("Profil inexistant — créez-le d'abord");
-  await prisma.profile.update({ where: { id: existing.id }, data: { cvPath } });
-}
-
 export async function setCvParsed(parsed: CvParsed): Promise<void> {
   const existing = await prisma.profile.findFirst();
   if (!existing) throw new Error('Profil inexistant');
@@ -91,15 +85,3 @@ export async function setCvParsed(parsed: CvParsed): Promise<void> {
   });
 }
 
-/**
- * UX-6v3 : met à jour les données CV extraites par l'IA (correction manuelle).
- */
-export async function updateCvParsed(cvParsed: CvParsed): Promise<Profile> {
-  const existing = await prisma.profile.findFirst();
-  if (!existing) throw new Error('Profil inexistant — créez-le d\'abord');
-  const p = await prisma.profile.update({
-    where: { id: existing.id },
-    data: { cvParsed: JSON.stringify(cvParsed) },
-  });
-  return toDTO(p);
-}

@@ -112,3 +112,56 @@ export function classifyReplySentiment(text: string | null | undefined): ReplySe
   if (_REJECTION_PATTERNS.some((re) => re.test(t))) return 'rejection';
   return 'neutral';
 }
+
+// RGPD — marqueurs d'une demande de DÉSINSCRIPTION / opposition (FR + EN).
+// Volontairement spécifiques pour éviter les faux positifs : un refus de
+// candidature poli (« nous ne donnons pas suite ») n'est PAS une demande de ne
+// plus être contacté. On ne déclenche que sur des formules explicites de retrait.
+const _OPT_OUT_PATTERNS: RegExp[] = [
+  /désinscri/i,                                              // désinscription / désinscrire / désinscrivez
+  /ne\s+(?:plus|souhaite\s+plus|veux\s+plus)\s+(?:me\s+)?(?:être\s+)?(?:contact|sollicit|démarch|recevoir|écri)/i,
+  /ne\s+(?:pas|plus)\s+me\s+(?:contacter|solliciter|écrire|démarcher)/i,
+  /(?:retir|supprim|enlev|ôt)(?:ez|er|e)[-\s]?(?:moi|nous)?.{0,25}(?:liste|fichier|base|contact|diffusion)/i,
+  /ne\s+plus\s+être\s+(?:contacté|sollicité|démarché)/i,
+  /unsubscribe/i,
+  /opt[\s-]?out/i,
+  /remove\s+(?:me|us)\s+(?:from\s+)?(?:your\s+)?(?:list|mailing|database|contacts?)/i,
+  /(?:please\s+)?(?:stop|no\s+more)\s+(?:contact|emails?|messages?|sending)/i,
+  /please\s+(?:stop|do\s*n['’]?t)\s+(?:contact|email|messag)/i,
+  /^\s*stop\.?\s*$/im,                                       // réponse réduite à « STOP » (cf. pied d'email opt-out)
+];
+
+/**
+ * RGPD — vrai si la réponse exprime une demande explicite de ne plus être
+ * contacté (désinscription / droit d'opposition). Pure et bornée aux premières
+ * lignes ; les marqueurs sont conservateurs pour ne pas confondre un refus de
+ * candidature (« pas de poste ») avec une demande de retrait.
+ */
+export function detectOptOutRequest(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.slice(0, 4000);
+  return _OPT_OUT_PATTERNS.some((re) => re.test(t));
+}
+
+// Sujets typiques d'une réponse automatique d'absence (FR + EN).
+const _AUTO_REPLY_SUBJECT_RE =
+  /out of office|automatic reply|auto.?reply|automated response|réponse automatique|absence du bureau|absent[e]? du bureau|message d'absence|en cong[ée]s?|de retour le|currently (?:out|away|on leave)/i;
+
+/**
+ * Vrai si un message reçu est une réponse AUTOMATIQUE (absence du bureau, accusé
+ * auto), à ne pas confondre avec une vraie réponse du recruteur.
+ *
+ * Signal de référence = en-tête RFC 3834 `Auto-Submitted` (valeur ≠ « no » ⇒
+ * automatique). Repli sur l'en-tête `X-Autoreply` et sur le sujet. Pur/testable :
+ * imap.ts extrait les en-têtes et passe leurs valeurs ici.
+ */
+export function isAutoReply(opts: {
+  autoSubmitted?: string | null;
+  xAutoreply?: string | null;
+  subject?: string | null;
+}): boolean {
+  const auto = (opts.autoSubmitted ?? '').trim().toLowerCase();
+  if (auto && auto !== 'no') return true;        // auto-replied / auto-generated
+  if ((opts.xAutoreply ?? '').trim()) return true;
+  return _AUTO_REPLY_SUBJECT_RE.test(opts.subject ?? '');
+}

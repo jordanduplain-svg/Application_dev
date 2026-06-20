@@ -9,7 +9,8 @@ import {
   markBounced,
 } from '../modules/application/application.service';
 import { logger } from '../lib/logger';
-import { matchReply, inboxKey } from './reply-matching';
+import { matchReply, inboxKey, detectOptOutRequest } from './reply-matching';
+import { addOptOut } from '../modules/optout/optout.service';
 
 export function enqueuePollReplies(): void {
   if (!getImap()) return;
@@ -44,6 +45,15 @@ export function enqueuePollReplies(): void {
         );
         if (reply) {
           usedInboxKeys.add(inboxKey(reply));
+
+          // AUTO-REPLY : une réponse automatique (absence du bureau) n'est PAS une
+          // vraie réponse à qualifier. On la consomme (pour ne pas la rematcher) mais
+          // on laisse la candidature en SENT — une vraie réponse pourra matcher ensuite.
+          if (reply.isAutoReply) {
+            logger.info(`[AUTO-REPLY] Réponse automatique ignorée de ${reply.from} (${app.company.name}).`);
+            continue;
+          }
+
           const MAX_REPLY_LENGTH = 50_000;
           const { marked } = await markReplied(app.id, reply.text.slice(0, MAX_REPLY_LENGTH));
           if (marked) {
@@ -53,6 +63,21 @@ export function enqueuePollReplies(): void {
                 companyName: app.company.name,
                 applicantName: `${profile.firstName} ${profile.lastName}`,
               });
+            }
+
+            // RGPD (option A) : si la réponse demande explicitement une
+            // désinscription, on ajoute le contact à la liste « ne pas contacter »
+            // pour qu'il ne reçoive plus aucune relance ni futur envoi.
+            if (detectOptOutRequest(reply.text)) {
+              try {
+                await addOptOut(
+                  app.company.contactEmail,
+                  `Désinscription détectée dans une réponse (${app.company.name})`,
+                );
+                logger.info(`[RGPD] Opt-out auto : ${app.company.contactEmail} (désinscription détectée dans la réponse).`);
+              } catch (err) {
+                logger.warn('Impossible d\'ajouter le contact à la liste opt-out', err);
+              }
             }
           }
         }

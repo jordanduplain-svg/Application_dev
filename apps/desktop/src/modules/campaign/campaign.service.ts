@@ -225,15 +225,6 @@ export async function deleteCampaign(id: string): Promise<void> {
   });
 }
 
-export async function scheduleCampaign(id: string, scheduledAt: string | null): Promise<Campaign> {
-  const c = await prisma.campaign.update({
-    where: { id },
-    data: { scheduledAt: scheduledAt ? new Date(scheduledAt) : null },
-    include: includeCount,
-  });
-  return withCounts(c);
-}
-
 export async function refreshCampaignStatus(campaignId: string): Promise<void> {
   const groups = await prisma.application.groupBy({
     by: ['status'],

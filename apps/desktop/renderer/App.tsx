@@ -1,20 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'sonner';
 import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings } from 'lucide-react';
 import type { TaskProgress, ReplyNotification, SettingsStatus, SearchResult } from '@candio/shared';
 import { api } from './lib/api';
-import ProfilePage from './pages/ProfilePage';
-import CvPage from './pages/CvPage';
-import LeadsPage from './pages/LeadsPage';
-import CampaignsPage from './pages/CampaignsPage';
-import CampaignDetailPage from './pages/CampaignDetailPage';
-import RepliesPage from './pages/RepliesPage';
-import SettingsPage from './pages/SettingsPage';
-import DashboardPage from './pages/DashboardPage';
+// PERF : HomePage (route par défaut) reste en import direct ; les autres pages sont
+// chargées à la demande (code-splitting) pour alléger le bundle initial.
 import HomePage from './pages/HomePage';
-import TodoPage from './pages/TodoPage';
-import ScrapingPage from './pages/ScrapingPage';
 import LockScreen from './components/LockScreen';
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CvPage = lazy(() => import('./pages/CvPage'));
+const LeadsPage = lazy(() => import('./pages/LeadsPage'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
+const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
+const RepliesPage = lazy(() => import('./pages/RepliesPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const TodoPage = lazy(() => import('./pages/TodoPage'));
+const ScrapingPage = lazy(() => import('./pages/ScrapingPage'));
 
 // Navigation maison. La sélection d'une campagne emporte l'id dans la route.
 type Route =
@@ -350,6 +352,8 @@ export default function App() {
       </nav>
 
       <main className="content">
+        {/* PERF : fallback pendant le chargement à la demande d'une page (code-splitting). */}
+        <Suspense fallback={<div style={{ padding: '24px', color: 'var(--text-sub)' }}>Chargement…</div>}>
         {/* DESIGN-2 : toutes les cibles de HomePage sont des routes sans paramètre → cast sûr. */}
         {route.name === 'home' && <HomePage onNavigate={(n) => setRoute({ name: n } as Route)} />}
         {route.name === 'stats' && <DashboardPage onOpenCampaign={openCampaign} />}
@@ -382,6 +386,7 @@ export default function App() {
         {route.name === 'scraping' && <ScrapingPage onGoToLeads={() => setRoute({ name: 'leads' })} />}
         {route.name === 'leads' && <LeadsPage onGoToScraping={() => setRoute({ name: 'scraping' })} />}
         {route.name === 'settings' && <SettingsPage />}
+        </Suspense>
       </main>
     </div>
     </>

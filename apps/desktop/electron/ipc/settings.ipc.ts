@@ -17,8 +17,6 @@ import {
   setGroqKey,
   clearGroqKey,
   getHunterKey,
-  setHunterKey,
-  clearHunterKey,
   getSmtp,
   setSmtp,
   getImap,
@@ -28,6 +26,8 @@ import {
   clearDkim,
   getScrapingEnabled,
   setScrapingEnabled,
+  getAutoFollowUpEnabled,
+  setAutoFollowUpEnabled,
   getImapPollInterval,
   setImapPollInterval,
   getAiModel,
@@ -43,7 +43,6 @@ import {
   setLastSmtpCheck,
   setLastImapCheck,
   getDailySendLimit,
-  setDailySendLimit,
   getDailySendCount,
   getAiProvider,
   setAiProvider,
@@ -52,7 +51,6 @@ import {
   getOllamaHost,
   setOllamaHost,
 } from '../../src/lib/secrets';
-import { taskRunner } from '../../src/lib/task-runner';
 import { verifySmtp } from '../../src/lib/mailer';
 import { verifyImap } from '../../src/lib/imap';
 import { enqueuePollReplies } from '../../src/tasks/poll-replies.task';
@@ -79,6 +77,7 @@ export function registerSettingsHandlers(): void {
       dailySendLimit: getDailySendLimit(),
       dailySendCount: getDailySendCount().count,
       scrapingEnabled: getScrapingEnabled(),
+      autoFollowUpEnabled: getAutoFollowUpEnabled(),
       // UX-11 : intervalle de polling IMAP.
       imapPollIntervalMinutes: getImapPollInterval(),
       // INT-3 : modèle IA configuré.
@@ -157,6 +156,11 @@ export function registerSettingsHandlers(): void {
     await setScrapingEnabled(enabled);
   });
 
+  // AUTO-RELANCE : active/désactive la relance automatique quotidienne.
+  handle('settings:setAutoFollowUp', async ({ enabled }) => {
+    await setAutoFollowUpEnabled(enabled);
+  });
+
   // UX-11 : intervalle de polling IMAP configurable.
   // UX-2v2 : hot-reload — redémarre le timer avec le nouvel intervalle.
   // FM2 : valider l'intervalle avant de le stocker.
@@ -218,17 +222,6 @@ export function registerSettingsHandlers(): void {
     await clearGroqKey();
   });
 
-  // Hunter.io : clé API pour l'enrichissement email du scraper.
-  handle('settings:setHunterKey', async ({ key }) => {
-    const trimmed = (key as string).trim();
-    if (!trimmed) throw new Error('Clé Hunter.io vide.');
-    await setHunterKey(trimmed);
-  });
-
-  handle('settings:clearHunterKey', async () => {
-    await clearHunterKey();
-  });
-
   // MOD-05 : configuration DKIM.
   handle('settings:setDkim', async (input) => {
     const data = validate(DkimConfigSchema, input);
@@ -265,26 +258,6 @@ export function registerSettingsHandlers(): void {
 
   handle('settings:verifyLockPin', ({ pin }) => {
     return { ok: verifyLockPin(pin) };
-  });
-
-  // FM-02 : modifier la limite quotidienne d'envois.
-  handle('settings:setDailySendLimit', async ({ limit }) => {
-    const n = Number(limit);
-    if (!Number.isInteger(n) || n < 1 || n > 500) {
-      throw new Error('Limite invalide — doit être un entier entre 1 et 500.');
-    }
-    await setDailySendLimit(n);
-  });
-
-  // UX-S7 : annulation de tâches par type.
-  handle('taskRunner:cancelType', ({ type }) => {
-    return { cancelled: taskRunner.cancelType(type) };
-  });
-
-  // UX-S7 : longueur de la file par type.
-  handle('taskRunner:getQueueLength', (payload) => {
-    const type = (payload as { type?: string } | void)?.type;
-    return taskRunner.getQueueLength(type);
   });
 
   // Relève IMAP immédiate (en plus du polling automatique).

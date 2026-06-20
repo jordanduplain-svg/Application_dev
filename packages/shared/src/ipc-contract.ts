@@ -506,6 +506,7 @@ export interface SettingsStatus {
   smtpConfigured: boolean;
   imapConfigured: boolean;
   scrapingEnabled: boolean;
+  autoFollowUpEnabled: boolean;   // relance automatique quotidienne (scheduler)
   // UX-11 : intervalle de polling IMAP en minutes.
   imapPollIntervalMinutes: number;
   // INT-3 : modèle IA configuré.
@@ -607,10 +608,6 @@ export interface IpcRequests {
   'scraping:getConfig': { req: void; res: ScrapingConfig };
   // SCRAPE-01 : sauvegarde la configuration.
   'scraping:saveConfig': { req: ScrapingConfig; res: void };
-  // SCRAPE-01 : importe le dernier CSV généré dans une campagne.
-  'scraping:importCsv': { req: { csvPath: string; campaignId: string }; res: { added: number; skipped: number } };
-  // SCRAPE-02 : liste les domaines déjà connus (toutes campagnes) pour le dedup inter-campagnes.
-  'scraping:getKnownDomains': { req: void; res: string[] };
   // SCRAPE-06 : re-enrichissement d'un CSV existant.
   'scraping:enrichCsv': { req: { csvPath: string; config: ScrapingConfig }; res: void };
   // Import LinkedIn Sales Navigator (CSV externe). Saute la collecte, charge le CSV,
@@ -657,17 +654,11 @@ export interface IpcRequests {
   };
   // Change le modèle des descriptions dans la config scraping (sans passer par la page Scraping).
   'scraping:setDescribeModel': { req: { model: string }; res: { ok: boolean } };
-  // Change le fournisseur IA des fiches : 'ollama' (local) ou 'openai' (cloud, clé des Réglages).
-  'scraping:setDescribeProvider': { req: { provider: string }; res: { ok: boolean } };
   // Indique si un enrichissement de fiches tourne (pour reconnecter l'UI Leads au retour).
   'scraping:enrichStatus': { req: void; res: { running: boolean } };
   // GPU-SETUP : installe + démarre Ollama IPEX-LLM sur le GPU Intel Arc (télécharge le
   // build, active l'iGPU, réutilise les modèles, lance le serveur). Progression via 'scraping:progress'.
   'ollama:setupIntelGpu': { req: void; res: { ok: boolean; message: string } };
-  // Ollama : liste les modèles installés localement (/api/tags). [] si Ollama down.
-  'ollama:listModels': { req: void; res: string[] };
-  // Ollama : télécharge (pull) un modèle ; progression poussée via 'scraping:progress'.
-  'ollama:pullModel': { req: string; res: { ok: boolean; error?: string } };
   // Utilitaire : ouvrir un fichier/URL avec l'app par défaut du système.
   'shell:open': { req: string; res: void };
 
@@ -690,8 +681,6 @@ export interface IpcRequests {
   'application:sendAll': { req: { campaignId: string }; res: void };
   // UX-10 : enregistre une note de suivi sur une candidature.
   'application:addFollowUpNote': { req: { id: string; note: string }; res: void };
-  // UX-12 : envoi d'une relance automatique.
-  'application:sendFollowUp': { req: { id: string }; res: void };
   // FOLLOWUP-BATCH : relance en lot des candidatures éligibles (bornée au quota du jour).
   'application:followUpAllEligible': {
     req: void;
@@ -729,15 +718,14 @@ export interface IpcRequests {
   // UX-4 : test de connexion IMAP.
   'settings:testImap': { req: ImapInput; res: { ok: boolean; error?: string } };
   'settings:setScrapingEnabled': { req: { enabled: boolean }; res: void };
+  // AUTO-RELANCE : active/désactive la relance automatique quotidienne (scheduler).
+  'settings:setAutoFollowUp': { req: { enabled: boolean }; res: void };
   // UX-11 : intervalle de polling IMAP configurable.
   'settings:setImapPollInterval': { req: { minutes: number }; res: void };
   // INT-3 : modèle IA configurable.
   'settings:setAiModel': { req: { model: string }; res: void };
   // SEC-N1 : effacer la clé OpenAI.
   'settings:clearOpenaiKey': { req: void; res: void };
-  // Hunter.io : clé API pour l'enrichissement email.
-  'settings:setHunterKey': { req: { key: string }; res: void };
-  'settings:clearHunterKey': { req: void; res: void };
   // MOD-05 : DKIM signing.
   'settings:setDkim': { req: DkimInput; res: void };
   'settings:clearDkim': { req: void; res: void };
@@ -746,8 +734,6 @@ export interface IpcRequests {
   'settings:clearLockPin': { req: void; res: void };
   'settings:setLockTimeout': { req: { minutes: number }; res: void };
   'settings:verifyLockPin': { req: { pin: string }; res: { ok: boolean } };
-  // FM-02 : limite quotidienne d'envois.
-  'settings:setDailySendLimit': { req: { limit: number }; res: void };
   // OLLAMA-1 : configuration du provider IA local.
   'settings:setAiProvider': { req: { provider: string }; res: void };
   'settings:setOllamaModel': { req: { model: string }; res: void };
@@ -757,14 +743,6 @@ export interface IpcRequests {
   'settings:getHardwareInfo': { req: void; res: HardwareInfo };
   // Déclenche un relevé immédiat des réponses par IMAP.
   'replies:pollNow': { req: void; res: void };
-  // ANA-S3 : données heatmap par heure d'envoi.
-  'stats:getHeatmap': { req: void; res: { hour: number; day: number; replyRate: number; count: number }[] };
-  // ANA-S4 : export CSV des statistiques.
-  'stats:exportCsv': { req: void; res: { path: string } | null };
-  // UX-S7 : annulation de tâches par type.
-  'taskRunner:cancelType': { req: { type: string }; res: { cancelled: number } };
-  // UX-S7 : longueur de la file par type.
-  'taskRunner:getQueueLength': { req: { type?: string }; res: { queued: number; active: number } };
   // UX-S10 : recherche globale.
   'search:global': { req: { query: string }; res: SearchResult[] };
   // ADM-S13 : maintenance et nettoyage des données orphelines.
@@ -799,9 +777,6 @@ export interface IpcRequests {
   'stats:getActivityByDay': { req: { days?: number }; res: { date: string; sent: number; replied: number }[] };
   // ANA-4v3 : tableau comparatif des campagnes.
   'stats:getCampaignComparison': { req: void; res: { id: string; name: string; sent: number; replied: number; replyRate: number; avgDays: number | null }[] };
-
-  // INT-2v3 : planification de l'envoi d'une campagne.
-  'campaign:schedule': { req: { id: string; scheduledAt: string | null }; res: Campaign };
 
   // RGPD : liste « ne pas contacter » (opt-out / droit d'opposition).
   'optout:list': { req: void; res: OptOutEntry[] };

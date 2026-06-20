@@ -5,7 +5,7 @@ import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
 import { getApplication } from '../modules/application/application.service';
 import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
-import { tryIncrementDailySend, getDailySendLimit } from '../lib/secrets';
+import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
 import { isOptedOut } from '../modules/optout/optout.service';
 import type { CvParsed } from '@candio/shared';
 
@@ -171,7 +171,8 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
         await refreshCampaignStatus(app.campaignId);
       } catch (err) {
         if (!smtpSent) {
-          // Rollback sûr : l'email n'a pas été envoyé, on peut remettre SENT.
+          // Rollback sûr : l'email n'a pas été envoyé → on rend le crédit de quota + remet SENT.
+          await refundDailySend();
           await prisma.application.update({
             where: { id: applicationId },
             data: {

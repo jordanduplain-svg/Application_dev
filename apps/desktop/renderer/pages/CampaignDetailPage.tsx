@@ -105,6 +105,13 @@ export default function CampaignDetailPage({
 
   // FM-07 : prévisualisation HTML d'un email.
   const [previewAppId, setPreviewAppId] = useState<string | null>(null);
+
+  // UX-S8 : prévisualisation éditable d'une relance avant envoi.
+  const [followUpPreview, setFollowUpPreview] = useState<{ id: string; companyName: string; subject: string; body: string } | null>(null);
+  const [loadingFollowUpId, setLoadingFollowUpId] = useState<string | null>(null);
+  const [sendingFollowUp, setSendingFollowUp] = useState(false);
+  // L'erreur d'envoi de relance s'affiche DANS le modal (sinon masquée derrière l'overlay).
+  const [followUpError, setFollowUpError] = useState<string | null>(null);
   const previousSentRef = useRef<number>(0);
   const previousFailedRef = useRef<number>(0);
   const pendingSendTotalRef = useRef(0);
@@ -575,6 +582,39 @@ export default function CampaignDetailPage({
     setSendingTestId(appId);
     await safe(() => api.invoke('application:sendTest', { id: appId }));
     if (isMounted.current) setSendingTestId(null);
+  };
+
+  // UX-S8 : génère l'aperçu de la relance (sans envoyer) et ouvre le modal éditable.
+  const openFollowUpPreview = async (a: Application) => {
+    setLoadingFollowUpId(a.id);
+    setFollowUpError(null);
+    try {
+      const { subject, body } = await api.invoke('application:previewFollowUp', { id: a.id });
+      if (isMounted.current) setFollowUpPreview({ id: a.id, companyName: a.companyName, subject, body });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de la génération de la relance');
+    } finally {
+      if (isMounted.current) setLoadingFollowUpId(null);
+    }
+  };
+
+  // UX-S8 : envoie la relance avec le corps (éventuellement édité) affiché dans le modal.
+  const confirmFollowUp = async () => {
+    if (!followUpPreview) return;
+    setSendingFollowUp(true);
+    setFollowUpError(null);
+    try {
+      await api.invoke('application:sendFollowUpWithBody', {
+        id: followUpPreview.id, subject: followUpPreview.subject, body: followUpPreview.body,
+      });
+      if (isMounted.current) setFollowUpPreview(null);
+      await load();
+    } catch (e) {
+      // Affiché dans le modal (l'overlay masque le bandeau d'erreur de la page).
+      if (isMounted.current) setFollowUpError(e instanceof Error ? e.message : 'Erreur lors de l\'envoi de la relance');
+    } finally {
+      if (isMounted.current) setSendingFollowUp(false);
+    }
   };
 
   // TEST-CAMPAGNE : s'envoie en test tous les brouillons/échecs de la campagne.
@@ -1218,7 +1258,9 @@ export default function CampaignDetailPage({
                     <button onClick={() => regenerateOne(a.id)} disabled={regeneratingId === a.id} style={{ fontSize: '12px' }}>{regeneratingId === a.id ? 'Régénération…' : '⟳ Regénérer'}</button>
                   )}
                   {isFollowUpEligible(a) && (
-                    <button onClick={() => safe(() => api.invoke('application:sendFollowUp', { id: a.id }))} style={{ fontSize: '12px', background: '#ff9f0a', color: '#fff' }}>Relancer</button>
+                    <button onClick={() => openFollowUpPreview(a)} disabled={loadingFollowUpId === a.id} style={{ fontSize: '12px', background: '#ff9f0a', color: '#fff' }}>
+                      {loadingFollowUpId === a.id ? 'Aperçu…' : 'Relancer'}
+                    </button>
                   )}
                   {a.emailBounced && (() => {
                     const company = companies.find((c) => c.id === a.companyId);
@@ -1262,6 +1304,43 @@ export default function CampaignDetailPage({
         if (!previewApp) return null;
         return <EmailPreviewModal app={previewApp} onClose={() => setPreviewAppId(null)} />;
       })()}
+
+      {/* UX-S8 : modal d'aperçu éditable de la relance avant envoi. */}
+      {followUpPreview && (
+        <div
+          onClick={() => !sendingFollowUp && setFollowUpPreview(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '20px', width: '100%', maxWidth: '640px', maxHeight: '85vh', overflow: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>Relancer {followUpPreview.companyName}</h3>
+            <p style={{ fontSize: '13px', color: '#666', marginTop: 0 }}>
+              Aperçu généré — tu peux l'éditer avant l'envoi. La relance part dans le fil de la candidature initiale.
+            </p>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#333' }}>Objet</label>
+            <input
+              value={followUpPreview.subject}
+              onChange={(e) => setFollowUpPreview({ ...followUpPreview, subject: e.target.value })}
+              style={{ width: '100%', marginBottom: '10px' }}
+            />
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#333' }}>Message</label>
+            <textarea
+              value={followUpPreview.body}
+              onChange={(e) => setFollowUpPreview({ ...followUpPreview, body: e.target.value })}
+              rows={12}
+              style={{ width: '100%', fontFamily: 'inherit', fontSize: '13px', lineHeight: 1.5 }}
+            />
+            {followUpError && (
+              <p className="error" style={{ marginTop: '10px', marginBottom: 0 }}>{followUpError}</p>
+            )}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px' }}>
+              <button onClick={() => { setFollowUpPreview(null); setFollowUpError(null); }} disabled={sendingFollowUp} className="btn-secondary">Annuler</button>
+              <button onClick={confirmFollowUp} disabled={sendingFollowUp || !followUpPreview.body.trim()} style={{ background: '#ff9f0a', color: '#fff' }}>
+                {sendingFollowUp ? 'Envoi…' : 'Envoyer la relance'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <>

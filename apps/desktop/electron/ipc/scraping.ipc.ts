@@ -627,19 +627,6 @@ export function registerScrapingHandlers(): void {
     writeConfig(config);
   });
 
-  // Import du CSV généré dans une campagne Carreer-ops
-  handle('scraping:importCsv', async ({ csvPath, campaignId }) => {
-    const { readFile: rf } = await import('fs/promises');
-    const content = await rf(csvPath, 'utf8');
-    return companyService.importCsvContent(campaignId, content);
-  });
-
-  // SCRAPE-02 : renvoie tous les domaines déjà présents en base (toutes campagnes)
-  // pour le dedup inter-campagnes du script Python (--exclude-file).
-  handle('scraping:getKnownDomains', async () => {
-    return companyService.listAllDomains();
-  });
-
   // SCRAPE-06 : re-enrichissement d'un CSV existant (entreprises sans email).
   handle('scraping:enrichCsv', async ({ csvPath, config: cfg }: { csvPath: string; config: ScrapingConfig }) => {
     await launchScript({ ...cfg, sources: [] }, { enrich_only: true, enrich_csv: csvPath });
@@ -944,15 +931,6 @@ export function registerScrapingHandlers(): void {
     return { ok: true };
   });
 
-  // Fiches : bascule local (Ollama) ↔ cloud (OpenAI / Claude). La clé des Réglages est réutilisée.
-  handle('scraping:setDescribeProvider', ({ provider }: { provider: string }) => {
-    const cfg = readConfig();
-    cfg.describeProvider = provider === 'openai' ? 'openai'
-      : provider === 'claude' ? 'claude' : 'ollama';
-    writeConfig(cfg);
-    return { ok: true };
-  });
-
   // SCRAPE-06 : vérifie si un checkpoint de reprise existe pour la config du jour.
   handle('scraping:checkpointExists', ({ sector, city }: { sector: string; city: string }) => {
     return existsSync(checkpointFilePath(sector, city));
@@ -1007,79 +985,6 @@ export function registerScrapingHandlers(): void {
       resolve({ cleared: 0 });
     });
   }));
-
-  // ── Ollama : liste des modèles installés (/api/tags) ────────────────────────
-  handle('ollama:listModels', async () => {
-    const cfg = readConfig();
-    const base = (cfg.ollamaUrl || 'http://localhost:11434').replace(/\/$/, '');
-    try {
-      const r = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(3000) });
-      if (!r.ok) return [];
-      const data = await r.json() as { models?: Array<{ name?: string }> };
-      // Filtre les modèles d'embedding (mxbai-embed, nomic-embed, all-minilm…) :
-      // ils vectorisent du texte mais ne génèrent pas — inutilisables pour l'extraction LLM.
-      const EMBED_RE = /embed|minilm|bge-|e5-|gte-/i;
-      return (data.models ?? [])
-        .map((m) => m.name)
-        .filter((n): n is string => !!n && !EMBED_RE.test(n))
-        .sort();
-    } catch {
-      return [];   // Ollama non lancé / injoignable
-    }
-  });
-
-  // ── Ollama : télécharge (pull) un modèle ; progression via 'scraping:progress' ──
-  handle('ollama:pullModel', async (name: string) => {
-    const model = (name || '').trim();
-    if (!model) return { ok: false, error: 'nom de modèle vide' };
-    const cfg = readConfig();
-    const base = (cfg.ollamaUrl || 'http://localhost:11434').replace(/\/$/, '');
-    pushProgress(`⟳  Téléchargement du modèle Ollama : ${model}…`);
-    try {
-      const r = await fetch(`${base}/api/pull`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: model, stream: true }),
-      });
-      if (!r.ok || !r.body) {
-        pushProgress(`❌  Échec téléchargement (HTTP ${r.status}). Ollama est-il lancé ?`);
-        return { ok: false, error: `HTTP ${r.status}` };
-      }
-      const reader = r.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      let lastPct = -1;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const j = JSON.parse(line) as { error?: string; status?: string; total?: number; completed?: number };
-            if (j.error) { pushProgress(`❌  ${j.error}`); return { ok: false, error: j.error }; }
-            if (j.total && j.completed) {
-              const pct = Math.floor((j.completed / j.total) * 100);
-              if (pct !== lastPct && pct % 5 === 0) {
-                pushProgress(`   ⏬  ${model} : ${pct}%`);
-                lastPct = pct;
-              }
-            } else if (j.status) {
-              pushProgress(`   ${j.status}`);
-            }
-          } catch { /* ligne NDJSON partielle/non-JSON → ignorée */ }
-        }
-      }
-      pushProgress(`✅  Modèle ${model} téléchargé.`);
-      return { ok: true };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      pushProgress(`❌  Erreur téléchargement : ${msg}`);
-      return { ok: false, error: msg };
-    }
-  });
 
   // ── GPU-SETUP : installe + démarre Ollama IPEX-LLM sur le GPU Intel Arc ──────
   // Télécharge le build Intel (Vulkan), écrit un launcher avec OLLAMA_IGPU_ENABLE=1

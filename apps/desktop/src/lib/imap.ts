@@ -2,6 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import type { ImapInput } from '@candio/shared';
 import { getImap } from './secrets';
+import { isAutoReply } from '../tasks/reply-matching';
 
 /**
  * Lecture de la boîte de réception par IMAP, pour détecter les réponses.
@@ -18,6 +19,9 @@ export interface InboxMessage {
   isBounce: boolean;
   // BOUNCE-01 : Message-ID de l'email original extrait du corps du NDR.
   bouncedMessageId: string | null;
+  // AUTO-REPLY : true si réponse automatique (absence du bureau) — à ne pas
+  // marquer comme une vraie réponse à qualifier.
+  isAutoReply: boolean;
 }
 
 // ── Détection de bounces (NDR) ────────────────────────────────────────────────
@@ -165,6 +169,11 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
               const subject = parsed.subject ?? '';
               const text    = parsed.text ?? '';
               const { isBounce, bouncedMessageId } = classifyBounce(from, subject, text);
+              // AUTO-REPLY : en-têtes RFC 3834 (simpleParser met les clés en minuscules).
+              const headerStr = (name: string): string | null => {
+                const v = parsed.headers.get(name);
+                return typeof v === 'string' ? v : null;
+              };
               messages.push({
                 from,
                 subject,
@@ -173,6 +182,11 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
                 text,
                 isBounce,
                 bouncedMessageId,
+                isAutoReply: isAutoReply({
+                  autoSubmitted: headerStr('auto-submitted'),
+                  xAutoreply: headerStr('x-autoreply'),
+                  subject,
+                }),
               });
             }
           }

@@ -236,23 +236,6 @@ export async function listSentForReplyMatching(): Promise<AppWithCompany[]> {
 }
 
 /**
- * Candidatures envoyées et munies d'un Message-ID — base du matching IMAP.
- * H4 (revue 7) : paramètre `since` optionnel pour limiter le scan aux envois
- * récents et éviter de charger toute la table en mémoire sur le long terme.
- */
-export async function listSentWithMessageId(since?: Date): Promise<AppWithCompany[]> {
-  // B2 : inclure FOLLOWED_UP — leurs réponses peuvent arriver sur le messageId original ou followUpMessageId.
-  return prisma.application.findMany({
-    where: {
-      status: { in: ['SENT', 'FOLLOWED_UP'] },
-      messageId: { not: null },
-      ...(since && { sentAt: { gte: since } }),
-    },
-    include: includeCompany,
-  });
-}
-
-/**
  * FM-08 : enregistre les informations de suivi d'entretien.
  */
 export async function setInterview(

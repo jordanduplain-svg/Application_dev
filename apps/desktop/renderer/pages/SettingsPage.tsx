@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Cpu, Send, Inbox, Gauge, Save, Radar, ScrollText, Lock, Wrench, AlertTriangle,
+  Cpu, Send, Inbox, Gauge, Save, Radar, ScrollText, Lock, Wrench, AlertTriangle, ListChecks,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { SettingsStatus, SmtpInput, ImapInput, DkimInput, HardwareInfo } from '@candio/shared';
@@ -85,6 +85,7 @@ export default function SettingsPage() {
   const [savingImap, setSavingImap] = useState(false);
   const [testingImap, setTestingImap] = useState(false);
   const [togglingScrap, setTogglingScrap] = useState(false);
+  const [togglingAutoFollowUp, setTogglingAutoFollowUp] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -359,6 +360,18 @@ export default function SettingsPage() {
     } catch (e) {
       setEncStatus(`✗ ${e instanceof Error ? e.message : 'Erreur'}`);
     } finally { setIsEncRestoring(false); }
+  };
+
+  const toggleAutoFollowUp = async () => {
+    if (!status || togglingAutoFollowUp) return;
+    setTogglingAutoFollowUp(true);
+    setError(null);
+    try {
+      await api.invoke('settings:setAutoFollowUp', { enabled: !status.autoFollowUpEnabled });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    } finally { setTogglingAutoFollowUp(false); }
   };
 
   const toggleScraping = async () => {
@@ -1367,6 +1380,24 @@ export default function SettingsPage() {
       {/* RGPD : liste « ne pas contacter » + droit à l'effacement. */}
       <OptOutManager />
 
+      {/* AUTO-RELANCE : scheduler quotidien (node-cron). */}
+      <div className="card" style={cardAccent('#BA7517')}>
+        <h3 style={shStyle}><ListChecks size={17} color="#BA7517" />Relance automatique</h3>
+        <label>
+          <input type="checkbox"
+                 checked={status?.autoFollowUpEnabled ?? false}
+                 onChange={toggleAutoFollowUp}
+                 disabled={togglingAutoFollowUp} />
+          {' '}{togglingAutoFollowUp ? 'Mise à jour…' : 'Relancer automatiquement les candidatures sans réponse (> 7 jours)'}
+        </label>
+        <small style={{ display: 'block', marginTop: '8px', color: '#888', lineHeight: 1.5 }}>
+          Chaque jour (et au démarrage), l'app envoie une relance aux candidatures éligibles,
+          dans la <strong>limite de ton quota d'envoi du jour</strong> et avec les mêmes garde-fous que
+          la relance manuelle (liste « ne pas contacter », anti-doublon). ⚠️ <strong>L'app doit rester
+          ouverte</strong> pour que la planification se déclenche.
+        </small>
+      </div>
+
       <div className="card" style={cardAccent('#D85A30')}>
         <h3 style={shStyle}><Radar size={17} color="#D85A30" />Recherche automatique d'entreprises</h3>
         <label>
@@ -1382,6 +1413,7 @@ export default function SettingsPage() {
           Carreer-ops, rien ne se lance. Pour scraper, le plus fiable reste de lancer manuellement
           depuis la page <strong>Scraping</strong>.
         </small>
+
       </div>
 
       {/* ADM-2 : visionneuse de logs. */}

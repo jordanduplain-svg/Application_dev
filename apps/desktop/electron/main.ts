@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import log from 'electron-log';
 import { runMigrations } from '../src/lib/migrate';
 import { resumePendingWork, startReplyPolling, stopReplyPolling } from '../src/tasks';
+import { startScheduler, stopScheduler } from '../src/tasks/scheduler';
 import { taskRunner } from '../src/lib/task-runner';
 import { registerIpcHandlers } from './ipc/registry';
 import { logger } from '../src/lib/logger';
@@ -257,6 +258,8 @@ app.whenReady().then(async () => {
   // UX-11v3 : créer l'icône système après la fenêtre.
   createTray();
   startReplyPolling();
+  // AUTO-RELANCE : planification quotidienne (no-op si l'option est désactivée).
+  startScheduler();
 
   // ADM-1v3 : sauvegarde automatique silencieuse avec rotation si dernière > 24h.
   void performAutoBackup();
@@ -279,6 +282,7 @@ app.whenReady().then(async () => {
 // App mono-utilisateur Windows : on quitte dès que la fenêtre est fermée.
 app.on('window-all-closed', () => {
   stopReplyPolling();
+  stopScheduler();
   const DISCONNECT_TIMEOUT_MS = 3_000;
   void Promise.race([
     prisma.$disconnect().catch(() => {}),

@@ -11,7 +11,7 @@ import {
   markFailed,
 } from '../modules/application/application.service';
 import { prisma } from '../lib/prisma';
-import { tryIncrementDailySend, getDailySendLimit } from '../lib/secrets';
+import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
 import { isOptedOut } from '../modules/optout/optout.service';
 
 /**
@@ -132,6 +132,7 @@ export async function enqueueSend(applicationId: string): Promise<void> {
       const cvPath = campaignCv?.cv?.filePath ?? undefined;
 
       await throttleSend();
+      let smtpSent = false;
       try {
         // Le Message-ID renvoyé est stocké : il sert au matching IMAP des réponses.
         const messageId = await sendApplicationEmail({
@@ -142,11 +143,23 @@ export async function enqueueSend(applicationId: string): Promise<void> {
           body: app.body,
           cvPath, // Joindre le CV de la campagne si disponible.
         });
+        smtpSent = true;
         await markSent(applicationId, messageId);
       } catch (err) {
-        // Échec SMTP : marqué FAILED tout de suite — l'utilisateur peut
-        // relancer l'envoi manuellement depuis l'UI.
-        await markFailed(applicationId, err instanceof Error ? err.message : "Échec de l'envoi");
+        if (smtpSent) {
+          // BUG double-envoi : l'email EST parti mais l'enregistrement (markSent) a
+          // échoué. On ne marque SURTOUT PAS FAILED (sinon un renvoi manuel = double
+          // email). On force SENT sans messageId : le matching IMAP par adresse/domaine
+          // reste possible, et la candidature n'est plus « à renvoyer ».
+          await prisma.application
+            .update({ where: { id: applicationId }, data: { status: 'SENT', sentAt: new Date() } })
+            .catch(() => { /* best-effort : l'email reste parti, on ne re-tente pas */ });
+        } else {
+          // L'email n'est pas parti : on rend le crédit de quota + marque FAILED
+          // (l'utilisateur peut relancer l'envoi manuellement depuis l'UI).
+          await refundDailySend();
+          await markFailed(applicationId, err instanceof Error ? err.message : "Échec de l'envoi");
+        }
       }
       await refreshCampaignStatus(app.campaignId);
     },

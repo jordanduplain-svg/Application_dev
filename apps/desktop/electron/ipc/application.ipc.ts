@@ -11,7 +11,7 @@ import {
 import * as appService from '../../src/modules/application/application.service';
 import { enqueueGeneration } from '../../src/tasks/generate-email.task';
 import { enqueueSend } from '../../src/tasks/send-email.task';
-import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider, getDailySendLimit, getDailySendCount, tryIncrementDailySend } from '../../src/lib/secrets';
+import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiProvider, getDailySendLimit, getDailySendCount, tryIncrementDailySend, refundDailySend } from '../../src/lib/secrets';
 import { getProfile } from '../../src/modules/profile/profile.service';
 import { isOptedOut } from '../../src/modules/optout/optout.service';
 import { getCv } from '../../src/modules/cv/cv.service';
@@ -128,12 +128,6 @@ export function registerApplicationHandlers(): void {
   handle('application:addFollowUpNote', async (payload) => {
     const data = validate(FollowUpNoteSchema, payload);
     await appService.addFollowUpNote(data.id, data.note);
-  });
-
-  handle('application:sendFollowUp', async (payload) => {
-    validate(IdSchema, payload);
-    const { enqueueFollowUp } = await import('../../src/tasks/send-followup.task');
-    await enqueueFollowUp(payload.id);
   });
 
   // FOLLOWUP-BATCH : relance en lot toutes les candidatures éligibles (SENT > 7j,
@@ -277,6 +271,12 @@ export function registerApplicationHandlers(): void {
   // UX-S8 : prévisualisation de la relance avant envoi.
   handle('application:previewFollowUp', async (payload) => {
     validate(IdSchema, payload);
+    // RGPD : ne pas gaspiller un appel IA pour un contact désinscrit — on bloque
+    // dès l'aperçu (l'envoi est déjà protégé, mais autant éviter le coût).
+    const app = await appService.getApplication(payload.id);
+    if (app && (await isOptedOut(app.contactEmail))) {
+      throw new Error('Ce contact figure dans la liste « ne pas contacter » (RGPD) — relance impossible.');
+    }
     const { generateFollowUpContent } = await import('../../src/tasks/send-followup.task');
     return generateFollowUpContent(payload.id);
   });
@@ -324,21 +324,44 @@ export function registerApplicationHandlers(): void {
     // BUG-H4 fix : appliquer le même throttle 8 s que le task-runner pour
     // éviter de contourner le délai anti-spam en passant par ce handler direct.
     await throttleSend();
-    // BUG-04 fix : threading — la relance s'accroche au fil de l'email initial.
-    const messageId = await sendApplicationEmail({
-      fromName: `${profile.firstName} ${profile.lastName}`,
-      fromEmail: profile.emailSender,
-      to: app.contactEmail,
-      subject,
-      body,
-      inReplyTo: app.messageId ?? undefined,
-      references: app.messageId ?? undefined,
-    });
 
-    await prisma.application.update({
-      where: { id },
-      data: { followUpMessageId: messageId },
-    });
+    // BUG-H2 (parité avec enqueueFollowUp) : si l'envoi SMTP échoue, on annule le
+    // claim pour que la candidature redevienne relançable. On distingue les deux
+    // phases avec smtpSent : une fois l'email parti, rollback INTERDIT (sinon double
+    // envoi au prochain essai) — seul le stockage du messageId peut alors échouer.
+    let smtpSent = false;
+    try {
+      // BUG-04 fix : threading — la relance s'accroche au fil de l'email initial.
+      const messageId = await sendApplicationEmail({
+        fromName: `${profile.firstName} ${profile.lastName}`,
+        fromEmail: profile.emailSender,
+        to: app.contactEmail,
+        subject,
+        body,
+        inReplyTo: app.messageId ?? undefined,
+        references: app.messageId ?? undefined,
+      });
+      smtpSent = true;
+
+      await prisma.application.update({
+        where: { id },
+        data: { followUpMessageId: messageId },
+      });
+    } catch (err) {
+      if (!smtpSent) {
+        // L'email n'est pas parti : on rend le crédit de quota consommé + rollback du claim.
+        await refundDailySend();
+        await prisma.application.update({
+          where: { id },
+          data: {
+            status: 'SENT',
+            followUpSentAt: null,
+            errorMessage: err instanceof Error ? err.message : 'Échec de la relance',
+          },
+        });
+      }
+      throw err;
+    }
   });
 
   // UX-S9 : répondre à un recruteur depuis la page Réponses.

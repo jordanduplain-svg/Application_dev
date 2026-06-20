@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { matchReply, inboxKey } from '../reply-matching';
+import { matchReply, inboxKey, detectOptOutRequest, isAutoReply } from '../reply-matching';
 
 // Pas de dépendances Electron/Prisma — fonctions pures, aucun mock nécessaire.
 
@@ -41,6 +41,61 @@ describe('matchReply', () => {
     const inboxMsg = msg('noreply@bigcorp.fr', null);
     expect(matchReply(inboxMsg, app1, allApps)).toBe(false);
     expect(matchReply(inboxMsg, app2, allApps)).toBe(false);
+  });
+});
+
+describe('detectOptOutRequest (RGPD option A)', () => {
+  test.each([
+    'Merci de me désinscrire de votre liste.',
+    'Je ne souhaite plus être contacté.',
+    'Merci de ne plus me contacter à cette adresse.',
+    'Pouvez-vous me retirer de votre fichier ?',
+    'Please unsubscribe me.',
+    'Remove me from your mailing list.',
+    'STOP',
+    'stop.',
+    'Please stop emailing me.',
+  ])('détecte la désinscription : %s', (txt) => {
+    expect(detectOptOutRequest(txt)).toBe(true);
+  });
+
+  test.each([
+    'Bonjour, merci pour votre candidature, nous ne donnons pas suite.',          // refus ≠ désinscription
+    'Votre profil ne correspond pas à nos besoins actuels.',
+    'Nous serions ravis de vous rencontrer pour un entretien.',
+    'Malheureusement, pas de poste ouvert pour le moment.',
+    '',
+  ])('ne confond PAS un refus/intérêt avec une désinscription : %s', (txt) => {
+    expect(detectOptOutRequest(txt)).toBe(false);
+  });
+
+  test('borne aux 4000 premiers caractères', () => {
+    const long = 'a'.repeat(5000) + ' désinscription';
+    expect(detectOptOutRequest(long)).toBe(false); // au-delà de la borne → ignoré
+  });
+});
+
+describe('isAutoReply (filtre absence du bureau)', () => {
+  test('Auto-Submitted ≠ no ⇒ automatique', () => {
+    expect(isAutoReply({ autoSubmitted: 'auto-replied' })).toBe(true);
+    expect(isAutoReply({ autoSubmitted: 'auto-generated' })).toBe(true);
+  });
+  test('Auto-Submitted: no ⇒ humain', () => {
+    expect(isAutoReply({ autoSubmitted: 'no' })).toBe(false);
+  });
+  test('X-Autoreply présent ⇒ automatique', () => {
+    expect(isAutoReply({ xAutoreply: 'yes' })).toBe(true);
+  });
+  test.each([
+    'Réponse automatique : absent du bureau',
+    'Out of Office: back on Monday',
+    'Automatic reply',
+    'Je suis actuellement en congés',
+  ])('sujet d\'absence ⇒ automatique : %s', (subject) => {
+    expect(isAutoReply({ subject })).toBe(true);
+  });
+  test('vraie réponse RH ⇒ pas auto', () => {
+    expect(isAutoReply({ subject: 'Re: Candidature — entretien possible ?', autoSubmitted: 'no' })).toBe(false);
   });
 });
 

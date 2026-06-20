@@ -23,6 +23,7 @@ interface SecretsFile {
   imap?: string;      // ImapInput sérialisé en JSON puis chiffré
   dkim?: string;      // MOD-05 : DkimInput sérialisé en JSON puis chiffré
   scrapingEnabled?: boolean;
+  autoFollowUpEnabled?: boolean;   // relance automatique quotidienne (scheduler)
   lastImapPollAt?: string; // ISO
   // UX-11 : intervalle de polling IMAP en minutes (défaut 10).
   imapPollIntervalMinutes?: number;
@@ -212,14 +213,6 @@ export function getHunterKey(): string | null {
   return enc ? safeDecrypt(enc) : null;
 }
 
-export function setHunterKey(key: string): Promise<void> {
-  return enqueueWrite(() => writeFile({ ...readFile(), hunterKey: encrypt(key) }));
-}
-
-export function clearHunterKey(): Promise<void> {
-  return enqueueWrite(() => writeFile({ ...readFile(), hunterKey: undefined }));
-}
-
 // --- Config SMTP (envoi des candidatures) -----------------------------------
 
 export function getSmtp(): SmtpInput | null {
@@ -271,6 +264,16 @@ export function getScrapingEnabled(): boolean {
 
 export function setScrapingEnabled(enabled: boolean): Promise<void> {
   return enqueueWrite(() => writeFile({ ...readFile(), scrapingEnabled: enabled }));
+}
+
+// --- Relance automatique quotidienne (scheduler node-cron) ------------------
+
+export function getAutoFollowUpEnabled(): boolean {
+  return readFile().autoFollowUpEnabled ?? false;
+}
+
+export function setAutoFollowUpEnabled(enabled: boolean): Promise<void> {
+  return enqueueWrite(() => writeFile({ ...readFile(), autoFollowUpEnabled: enabled }));
 }
 
 // --- Horodatage du dernier relevé IMAP --------------------------------------
@@ -442,11 +445,6 @@ export function getDailySendLimit(): number {
   return ramp;
 }
 
-/** Modifie la limite d'envois quotidiens (override du ramp-up). */
-export function setDailySendLimit(limit: number): Promise<void> {
-  return enqueueWrite(() => writeFile({ ...readFile(), dailySendLimit: limit }));
-}
-
 /**
  * Retourne { count, date } du compteur journalier.
  * Si la date stockée n'est pas aujourd'hui, le compteur est considéré à 0.
@@ -491,4 +489,20 @@ export async function tryIncrementDailySend(): Promise<boolean> {
     await writeFile({ ...f, dailySendCount: count + 1, dailySendDate: today, firstSendDate });
   });
   return allowed;
+}
+
+/**
+ * Rembourse un crédit consommé par tryIncrementDailySend quand l'envoi SMTP a
+ * finalement échoué (l'email n'est jamais parti). Évite de sur-compter le quota
+ * et donc d'envoyer moins que le plafond réel. Borné à 0 et au jour courant.
+ */
+export async function refundDailySend(): Promise<void> {
+  await enqueueWrite(async () => {
+    const f = readFile();
+    const today = todayString();
+    if (f.dailySendDate !== today) return; // jour différent → rien à rembourser
+    const count = f.dailySendCount ?? 0;
+    if (count <= 0) return;
+    await writeFile({ ...f, dailySendCount: count - 1 });
+  });
 }
