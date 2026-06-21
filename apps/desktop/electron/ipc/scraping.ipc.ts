@@ -22,6 +22,8 @@ import { handle } from './registry';
 import { logger } from '../../src/lib/logger';
 import { getHunterKey, getImap, getOpenaiKey, getAnthropicKey } from '../../src/lib/secrets';
 import * as companyService from '../../src/modules/company/company.service';
+import { getExcludedDomains, addExcludedDomains } from '../lib/scrape-exclude';
+import { levenshteinSimilarity } from '../../src/lib/levenshtein';
 
 // ── Persistance de la config ──────────────────────────────────────────────────
 
@@ -473,12 +475,15 @@ async function launchScript(
   // SCRAPE-02 : dedup inter-campagnes — écrit la liste des domaines connus dans un
   // fichier temporaire et passe son chemin en --exclude-file au script Python.
   try {
+    // Domaines déjà en base (dédup) + dictionnaire d'exclusion manuel (leads junk).
     const knownDomains = await companyService.listAllDomains();
-    if (knownDomains.length > 0) {
+    const excluded = getExcludedDomains();
+    const allExcluded = [...new Set([...knownDomains, ...excluded])];
+    if (allExcluded.length > 0) {
       const excludeFile = join(tmpdir(), `carreer-ops-known-${Date.now()}.json`);
-      writeFileSync(excludeFile, JSON.stringify(knownDomains), 'utf8');
+      writeFileSync(excludeFile, JSON.stringify(allExcluded), 'utf8');
       args.push('--exclude-file', excludeFile);
-      logger.info(`[SCRAPING] ${knownDomains.length} domaines exclus (--exclude-file).`);
+      logger.info(`[SCRAPING] ${allExcluded.length} domaines exclus (${excluded.length} manuels) (--exclude-file).`);
     }
   } catch (err) {
     logger.warn('[SCRAPING] Impossible de générer le fichier d\'exclusion.', err);
@@ -635,9 +640,11 @@ export function registerScrapingHandlers(): void {
 
   // Import LinkedIn Sales Navigator (CSV externe → enrichissement direct).
   // Saute la collecte multi-sources : les leads viennent du CSV, pas de WTTJ/SIRENE/etc.
-  handle('scraping:linkedinImport', async ({ csvPath, config: cfg }: { csvPath: string; config: ScrapingConfig }) => {
+  handle('scraping:linkedinImport', async ({ csvPath }: { csvPath: string }) => {
+    // Config lue côté main → l'import est utilisable depuis n'importe quelle page
+    // (Leads) sans avoir à transporter la config du scraping.
+    const cfg = readConfig();
     await launchScript({ ...cfg, sources: [] }, { linkedin_csv: csvPath });
-    writeConfig(cfg);
   });
 
   // SCRAPE-06 : reprendre le dernier scraping interrompu.
@@ -719,6 +726,53 @@ export function registerScrapingHandlers(): void {
     });
     writeFileSync(path, [header, ...kept].map(toCsvLine).join('\n'), 'utf8');
     return { remaining: kept.length };
+  });
+
+  // Exclut des leads du futur scraping : ajoute leur domaine au dictionnaire
+  // d'exclusion persistant ET les retire du master. Avec `withDerivatives`, étend
+  // aux leads du même domaine ou au nom très proche (Levenshtein > 0.85).
+  handle('scraping:excludeLeads', ({ keys, withDerivatives }) => {
+    const path = masterCsvPath();
+    if (!path) return { excludedDomains: 0, removedLeads: 0 };
+    const rows = parseCsvFile(readFileSync(path, 'utf8'));
+    if (rows.length < 2) return { excludedDomains: 0, removedLeads: 0 };
+    const header = rows[0];
+    const iName = header.indexOf('name'), iEmail = header.indexOf('contactEmail'), iWeb = header.indexOf('website');
+    const at = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
+    const leadDomain = (website: string, email: string): string => {
+      let host = website.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+      if (!host && email.includes('@')) host = email.toLowerCase().split('@')[1] ?? '';
+      return host.replace(/^www\./, '');
+    };
+    const all = rows.slice(1).filter((r) => at(r, iName)).map((r) => ({
+      key: `${at(r, iName)}|${at(r, iEmail)}|${at(r, iWeb)}`.toLowerCase(),
+      name: at(r, iName), domain: leadDomain(at(r, iWeb), at(r, iEmail)),
+    }));
+    const wanted = new Set(keys);
+    const selected = all.filter((l) => wanted.has(l.key));
+
+    const domains = new Set<string>();
+    const removeKeys = new Set<string>();
+    for (const l of selected) { if (l.domain) domains.add(l.domain); removeKeys.add(l.key); }
+
+    if (withDerivatives) {
+      for (const l of all) {
+        if (removeKeys.has(l.key)) continue;
+        const sameDomain = l.domain && domains.has(l.domain);
+        const closeName = selected.some((s) => s.name && l.name && levenshteinSimilarity(s.name, l.name) > 0.85);
+        if (sameDomain || closeName) { if (l.domain) domains.add(l.domain); removeKeys.add(l.key); }
+      }
+    }
+
+    addExcludedDomains([...domains]);
+    // Réécrit le master sans les leads exclus.
+    const kept = rows.slice(1).filter((r) => {
+      const k = `${at(r, iName)}|${at(r, iEmail)}|${at(r, iWeb)}`.toLowerCase();
+      return !removeKeys.has(k);
+    });
+    writeFileSync(path, [header, ...kept].map(toCsvLine).join('\n'), 'utf8');
+    logger.info(`[SCRAPING] Exclusion : ${domains.size} domaine(s) ajouté(s), ${removeKeys.size} lead(s) retiré(s).`);
+    return { excludedDomains: domains.size, removedLeads: removeKeys.size };
   });
 
   // SECTOR-AUTO : pré-remplit une campagne avec les leads du master filtrés par

@@ -96,6 +96,9 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
   // Dropdown secteurs d'activité — ouverture/fermeture.
   const [sectorOpen, setSectorOpen] = useState(false);
   const sectorRef = useRef<HTMLDivElement | null>(null);
+  // Détecté dans le log : le modèle Ollama de crawl est trop lourd → proposer un switch.
+  const [crawlModelHeavy, setCrawlModelHeavy] = useState(false);
+  const [switchingModel, setSwitchingModel] = useState(false);
 
   // ── Chargement initial ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -108,7 +111,14 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
       ]);
       if (!isMounted.current) return;
       setMasterPaths(master);
-      setConfig(cfg);
+      // Source LinkedIn+SMTP retirée : on la purge des configs déjà enregistrées
+      // (sinon elle resterait active côté scraper pour qui l'avait cochée).
+      const hadLinkedin = (cfg.emailSources ?? []).includes('linkedin');
+      const cleaned = hadLinkedin
+        ? { ...cfg, emailSources: (cfg.emailSources ?? []).filter((s) => s !== 'linkedin') }
+        : cfg;
+      setConfig(cleaned);
+      if (hadLinkedin) void api.invoke('scraping:saveConfig', cleaned).catch(() => {});
       if (status.status === 'running') {
         setRunning(true);
       }
@@ -131,6 +141,10 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
   useEffect(() => {
     return api.on('scraping:progress', (data) => {
       setLog((prev) => [...prev, data.line]);
+      // Modèle de crawl trop lourd/lent → on propose un modèle plus léger.
+      if (data.line && /trop lourd|LLM (?:de crawl )?désactivé/i.test(data.line)) {
+        setCrawlModelHeavy(true);
+      }
       if (data.done) {
         setRunning(false);
         if (data.csvPath) {
@@ -177,9 +191,25 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  // Bascule le modèle de crawl vers un modèle plus léger (Ollama trop lent).
+  const switchToLighterCrawlModel = useCallback(async () => {
+    if (!config) return;
+    const next = { ...config, ollamaModel: 'qwen2.5:3b' };
+    setSwitchingModel(true);
+    try {
+      setConfig(next);
+      await api.invoke('scraping:saveConfig', next);
+      setCrawlModelHeavy(false);
+      setLog((prev) => [...prev, 'ℹ️  Modèle de crawl basculé sur qwen2.5:3b (plus léger). Relance le scraping pour réessayer.']);
+    } finally {
+      if (isMounted.current) setSwitchingModel(false);
+    }
+  }, [config]);
+
   const launch = useCallback(async () => {
     if (!config) return;
     setLog([]);
+    setCrawlModelHeavy(false);
     setCsvPath(null);
     setLinesCount(0);
     setRunning(true);
@@ -213,26 +243,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
     await api.invoke('scraping:cancel').catch(() => {});
     setRunning(false);
   }, []);
-
-  // Import CSV LinkedIn Sales Navigator (ou Evaboot, PhantomBuster, Apollo, Wiza…).
-  // Ouvre un dialog natif → si l'utilisateur sélectionne un fichier, lance le pipeline
-  // d'enrichissement directement sur les leads du CSV (saute la collecte multi-sources).
-  const linkedinImport = useCallback(async () => {
-    if (!config) return;
-    const csvPath = await api.invoke('dialog:openCsv', { title: 'Sélectionner un CSV LinkedIn' });
-    if (!csvPath) return;   // utilisateur a annulé
-    setLog([]);
-    setCsvPath(null);
-    setLinesCount(0);
-    setRunning(true);
-    try {
-      await api.invoke('scraping:linkedinImport', { csvPath, config });
-      await api.invoke('scraping:saveConfig', config);
-    } catch (e) {
-      setLog((prev) => [...prev, `❌ Erreur : ${e instanceof Error ? e.message : String(e)}`]);
-      setRunning(false);
-    }
-  }, [config]);
 
   // Mise à jour du master CSV : re-enrichit le candio_leads.csv existant pour combler
   // les emails manquants + backfill localisation/secteur. À lancer régulièrement.
@@ -905,28 +915,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               );
             })}
 
-            <div style={subGroupStyle}>🔗 Tier 2 — LinkedIn + vérification SMTP (gratuit, sans clé)</div>
-            {(() => {
-              const on = (config.emailSources ?? []).includes('linkedin');
-              return (
-                <label style={emailMethodStyle(on)}>
-                  <input type="checkbox" checked={on}
-                    onChange={(e) => {
-                      const cur = config.emailSources ?? [];
-                      setConfig({ ...config, emailSources: e.target.checked ? [...cur, 'linkedin'] : cur.filter((s) => s !== 'linkedin') });
-                    }}
-                    style={{ marginTop: '2px' }}
-                  />
-                  <span>
-                    <strong style={{ color: '#0077b5' }}>🔗 LinkedIn+SMTP</strong>
-                    <span style={{ fontSize: '11px', color: '#666', display: 'block', marginTop: '2px' }}>
-                      DuckDuckGo → snippets LinkedIn → format Hunter → SMTP RCPT TO
-                    </span>
-                  </span>
-                </label>
-              );
-            })()}
-
             <div style={subGroupStyle}>⚠️ Tier 3 — Dernier recours</div>
             {(() => {
               const on = (config.emailSources ?? []).includes('pattern');
@@ -1286,21 +1274,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
         {/* (Le bouton « Lancer » principal est remonté juste après ③ Emails.) */}
 
-        {/* Import CSV LinkedIn Sales Navigator — saute la collecte multi-sources */}
-        {!running && (
-          <button
-            onClick={linkedinImport}
-            title="Importer un CSV LinkedIn Sales Navigator (ou Evaboot, PhantomBuster, Apollo, Wiza…). L'app enrichit ensuite les leads avec Hunter + web crawl."
-            style={{
-              padding: '10px 18px', fontSize: '14px', fontWeight: 600,
-              background: '#0077b5', color: '#fff', border: 'none',  // bleu LinkedIn
-              borderRadius: '8px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px',
-            }}
-          >
-            📥 Importer CSV LinkedIn
-          </button>
-        )}
+        {/* (Import CSV Entreprise déplacé dans la page Leads.) */}
 
         {/* Mise à jour du master CSV — re-enrichit pour combler les emails manquants */}
         {!running && masterPaths?.csvPath && (
@@ -1412,6 +1386,31 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         )}
       </div>
 
+      {/* Modèle de crawl trop lourd → suggestion d'un modèle plus léger. */}
+      {crawlModelHeavy && (
+        <div style={{
+          marginBottom: '16px', padding: '12px 16px', borderRadius: '10px',
+          background: '#fff7e6', border: '1px solid #ffd591', color: '#7a4f00', fontSize: '13px', lineHeight: 1.5,
+        }}>
+          ⚠️ <strong>Le modèle IA de crawl ({config?.ollamaModel || 'Ollama'}) est trop lourd/lent pour ce PC</strong> —
+          la détection des recruteurs (Phase 4c) a été désactivée pour ce run. Le scraping a continué sans (regex/NER).
+          {config?.ollamaModel !== 'qwen2.5:3b' ? (
+            <div style={{ marginTop: '8px' }}>
+              <button onClick={() => void switchToLighterCrawlModel()} disabled={switchingModel}
+                style={{ fontSize: '12px', background: '#fa8c16', color: '#fff', border: 'none',
+                  borderRadius: '6px', padding: '6px 12px', cursor: switchingModel ? 'default' : 'pointer' }}>
+                {switchingModel ? 'Bascule…' : '→ Passer à qwen2.5:3b (plus léger)'}
+              </button>
+            </div>
+          ) : (
+            <div style={{ marginTop: '6px' }}>
+              Tu utilises déjà un modèle léger. Garde Ollama lancé avant le scraping (évite le démarrage à froid),
+              ou désactive le LLM de crawl dans les réglages IA.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Log live ── */}
       {log.length > 0 && (
         <section style={{ marginBottom: '24px' }}>
@@ -1436,56 +1435,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         </section>
       )}
 
-      {/* ── Derniers résultats (persistants entre sessions) ── */}
-      {masterPaths && (masterPaths.csvPath || masterPaths.htmlPath) && (
-        <section style={{
-          marginBottom: '28px', padding: '16px',
-          background: '#f0f4ff', borderRadius: '10px', border: '1px solid #007aff44',
-        }}>
-          <h3 style={{ margin: '0 0 10px', color: '#007aff' }}>📊 Derniers résultats</h3>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {masterPaths.htmlPath && (
-              <button
-                onClick={() => api.invoke('shell:open', masterPaths.htmlPath!).catch(() => {})}
-                style={{
-                  padding: '8px 16px', fontSize: '13px',
-                  background: '#eef4ff', color: '#007aff',
-                  border: '1px solid #007aff44', borderRadius: '8px', cursor: 'pointer',
-                }}
-              >
-                🔍 Aperçu HTML
-              </button>
-            )}
-            {masterPaths.csvPath && (
-              <button
-                onClick={() => api.invoke('shell:open', masterPaths.csvPath!).catch(() => {})}
-                style={{
-                  padding: '8px 16px', fontSize: '13px',
-                  background: '#f5fff5', color: '#34c759',
-                  border: '1px solid #34c75944', borderRadius: '8px', cursor: 'pointer',
-                }}
-              >
-                📄 Ouvrir CSV
-              </button>
-            )}
-            {masterPaths.csvPath && (
-              <button
-                onClick={() => {
-                  const folder = masterPaths.csvPath!.replace(/[/\\][^/\\]+$/, '');
-                  api.invoke('shell:open', folder).catch(() => {});
-                }}
-                style={{
-                  padding: '8px 16px', fontSize: '13px',
-                  background: '#f5f5f7', color: '#555',
-                  border: '1px solid #ccc', borderRadius: '8px', cursor: 'pointer',
-                }}
-              >
-                📁 Ouvrir le dossier
-              </button>
-            )}
-          </div>
-        </section>
-      )}
+      {/* (Bloc « Derniers résultats » retiré : les leads se consultent dans la page Leads.) */}
 
       {/* ── Info Python ── */}
       <section style={{ marginTop: '20px', padding: '12px 16px',
@@ -1500,7 +1450,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
           <code style={{ fontSize: '11px' }}>pip install python-wappalyzer</code>
         </span>
         <span style={{ fontSize: '12px', marginTop: '4px', display: 'block' }}>
-          <strong>Pipeline email :</strong> crawl web → WHOIS → Hunter.io → LinkedIn+SMTP → GitHub → SMTP batch → pattern fallback
+          <strong>Pipeline email :</strong> crawl web → WHOIS → Hunter.io → GitHub → SMTP batch → pattern fallback
         </span>
       </section>
     </div>

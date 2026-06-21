@@ -9,7 +9,7 @@ import {
   markBounced,
 } from '../modules/application/application.service';
 import { logger } from '../lib/logger';
-import { matchReply, inboxKey, detectOptOutRequest } from './reply-matching';
+import { matchReply, inboxKey, detectOptOutRequest, pollSinceDate } from './reply-matching';
 import { addOptOut } from '../modules/optout/optout.service';
 
 export function enqueuePollReplies(): void {
@@ -26,14 +26,12 @@ export function enqueuePollReplies(): void {
       const profile = await getProfile();
       const lastPoll = getLastImapPollAt();
 
-      // BUG-H1 fix : accumulateur = Epoch (pas new Date()) pour trouver le vrai
-      // minimum. Avec new Date(), si aucun sentAt n'est antérieur à "maintenant",
-      // since = now et on rate toutes les réponses déjà reçues au 1er relevé.
-      const earliestSent = sent.reduce<Date>(
-        (min, a) => (a.sentAt && a.sentAt < min ? a.sentAt : min),
-        new Date(0)
-      );
-      const since = lastPoll ?? earliestSent;
+      // Depuis quand relever : dernier relevé, sinon le plus ancien envoi borné à
+      // 60 j (jamais 1970 → sinon scan complet de la boîte → timeout mailbox).
+      const sentMs = sent
+        .map((a) => a.sentAt?.getTime())
+        .filter((t): t is number => typeof t === 'number');
+      const since = pollSinceDate(sentMs, lastPoll ? lastPoll.getTime() : null, Date.now());
 
       const inbox = await fetchInboxSince(since);
 

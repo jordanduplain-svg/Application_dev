@@ -8,11 +8,21 @@ import { upsertDraft } from '../modules/application/application.service';
 import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
 import { pickCampaignPrompt } from '../lib/campaign-prompt';
 
+// Statuts protégés : une candidature déjà envoyée (ou en cours) n'est JAMAIS régénérée.
+const PROTECTED_GEN_STATUSES = new Set(['SENDING', 'SENT', 'REPLIED', 'FOLLOWED_UP']);
+
 /**
- * Enfile la génération des emails de candidature d'une campagne : une tâche
- * par entreprise cible n'ayant pas encore de candidature.
+ * Enfile la génération des emails de candidature d'une campagne.
+ *
+ * - mode 'missing' (défaut) : une tâche par entreprise SANS candidature.
+ * - mode 'regenerate' : régénère AUSSI les brouillons/échecs existants (écrase),
+ *   pour réappliquer le prompt courant. Ne touche jamais aux candidatures déjà
+ *   envoyées (SENT/REPLIED/FOLLOWED_UP/SENDING).
  */
-export async function enqueueGeneration(campaignId: string): Promise<{ enqueued: number }> {
+export async function enqueueGeneration(
+  campaignId: string,
+  mode: 'missing' | 'regenerate' = 'missing',
+): Promise<{ enqueued: number }> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: { companies: { include: { application: true } } },
@@ -20,9 +30,14 @@ export async function enqueueGeneration(campaignId: string): Promise<{ enqueued:
   if (!campaign) return { enqueued: 0 };
 
   // FM-06 : exclure les entreprises blacklistées de la génération.
-  const targets = campaign.companies.filter(
-    (c) => !c.application && !(c as typeof c & { blacklisted?: boolean }).blacklisted
-  );
+  const targets = campaign.companies.filter((c) => {
+    if ((c as typeof c & { blacklisted?: boolean }).blacklisted) return false;
+    if (mode === 'regenerate') {
+      // Tout sauf les candidatures déjà envoyées/en cours (brouillons + échecs + sans lettre).
+      return !c.application || !PROTECTED_GEN_STATUSES.has(c.application.status);
+    }
+    return !c.application;
+  });
   if (targets.length === 0) return { enqueued: 0 };
 
   const initialProfile = await getProfile();

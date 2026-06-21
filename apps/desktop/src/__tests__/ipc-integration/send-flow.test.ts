@@ -59,8 +59,10 @@ beforeAll(async () => {
   vi.stubGlobal('setTimeout', (fn: () => void) => { fn(); return 0 as unknown as NodeJS.Timeout; });
   // Profil expéditeur + campagne partagés.
   await prisma.profile.create({ data: { firstName: 'Jean', lastName: 'Dupont', emailSender: 'jean@test.io' } });
+  // CV attaché à la campagne (le mailer est mocké → le filePath n'est jamais lu).
+  const cv = await prisma.cv.create({ data: { name: 'CV test', filePath: '/tmp/cv-test.pdf' } });
   const campaign = await prisma.campaign.create({
-    data: { name: 'Flux', prompt: 'Dev', jobTitle: 'Dev', location: 'Remote', contractTypes: 'CDI' },
+    data: { name: 'Flux', prompt: 'Dev', jobTitle: 'Dev', location: 'Remote', contractTypes: 'CDI', cvId: cv.id },
   });
   campaignId = campaign.id;
 });
@@ -128,6 +130,23 @@ describe('Flux d\'envoi (intégration, SMTP mocké)', () => {
 
     const app = await prisma.application.findUnique({ where: { id } });
     expect(app?.status).toBe('FAILED');
+    expect(sendApplicationEmail).not.toHaveBeenCalled();
+  });
+
+  test('aucun CV attaché → bloqué, aucun envoi (candidature sans CV interdite)', async () => {
+    // Campagne SANS cvId (cas : CV supprimé → onDelete:SetNull).
+    const noCv = await prisma.campaign.create({
+      data: { name: 'SansCV', prompt: 'Dev', jobTitle: 'Dev', location: 'Remote', contractTypes: 'CDI' },
+    });
+    const company = await prisma.company.create({ data: { campaignId: noCv.id, name: 'NoCv', contactEmail: 'nocv@acme.com' } });
+    const app = await prisma.application.create({
+      data: { campaignId: noCv.id, companyId: company.id, subject: 'O', body: 'B', status: 'DRAFT' },
+    });
+    await runSend(app.id);
+
+    const found = await prisma.application.findUnique({ where: { id: app.id } });
+    expect(found?.status).toBe('FAILED');
+    expect(found?.errorMessage).toMatch(/CV/i);
     expect(sendApplicationEmail).not.toHaveBeenCalled();
   });
 

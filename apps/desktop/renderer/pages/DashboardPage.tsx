@@ -32,6 +32,22 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
   // ANA-2v3 : sélecteur de plage temporelle (7 / 30 / 90 / 0=tout).
   const [activityDays, setActivityDays] = useState(30);
 
+  // Justificatif France Travail (PDF du relevé des candidatures envoyées).
+  const [genFt, setGenFt] = useState(false);
+  const [ftMsg, setFtMsg] = useState('');
+  const generateFtJustificatif = async () => {
+    setGenFt(true);
+    setFtMsg('');
+    try {
+      const r = await api.invoke('report:franceTravailPdf');
+      setFtMsg(r ? `✅ PDF généré (${r.count} candidature(s)) : ${r.path}` : '');
+    } catch (e) {
+      setFtMsg(`✗ ${e instanceof Error ? e.message : 'Erreur lors de la génération'}`);
+    } finally {
+      setGenFt(false);
+    }
+  };
+
   // MOD-01 : migration vers useQuery (remplace les api.invoke() + cache.ts manuels).
   const { data: stats, error: statsError } = useQuery({
     queryKey: QUERY_KEYS.global,
@@ -82,9 +98,19 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
 
   return (
     <section>
-      <div className="page-head">
-        <h2>Tableau de bord</h2>
-        <div className="page-sub">Vue d'ensemble de vos campagnes et de leurs performances.</div>
+      <div className="page-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h2>Tableau de bord</h2>
+          <div className="page-sub">Vue d'ensemble de vos campagnes et de leurs performances.</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <button onClick={generateFtJustificatif} disabled={genFt}
+            title="Génère un PDF du relevé de tes candidatures envoyées, à présenter à France Travail comme justificatif de recherche d'emploi."
+            className="btn-secondary" style={{ fontSize: '12px' }}>
+            {genFt ? 'Génération…' : '📄 Justificatif France Travail'}
+          </button>
+          {ftMsg && <div style={{ fontSize: '11.5px', color: 'var(--text-sub)', marginTop: '4px', maxWidth: '260px' }}>{ftMsg}</div>}
+        </div>
       </div>
 
       <div className="metric-grid">

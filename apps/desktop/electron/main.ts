@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, dialog, Tray, Menu, nativeImage, screen } from 'electron';
+import { fitToWorkArea } from './lib/window-bounds';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import log from 'electron-log';
@@ -43,7 +44,12 @@ let tray: Tray | null = null;
 const WIN_STATE_FILE = 'window-state.json';
 interface WindowState { x?: number; y?: number; width: number; height: number; maximized?: boolean }
 
-function loadWindowState(): WindowState {
+// Taille mini : en-dessous l'app passe en rail d'icônes / échelle réduite (cf. CSS).
+const MIN_WIN_WIDTH = 940;
+const MIN_WIN_HEIGHT = 600;
+
+/** État sauvegardé, ou null si aucun (1er lancement). */
+function loadWindowState(): WindowState | null {
   try {
     const p = join(app.getPath('userData'), WIN_STATE_FILE);
     if (existsSync(p)) {
@@ -51,7 +57,56 @@ function loadWindowState(): WindowState {
       return JSON.parse(raw) as WindowState;
     }
   } catch { /* non bloquant */ }
-  return { width: 1100, height: 760 };
+  return null;
+}
+
+/**
+ * Calcule des bornes de fenêtre TOUJOURS valides pour l'écran réellement présent.
+ *
+ * - 1er lancement (aucun état) : on s'ajuste à l'écran — fenêtre maximisée, avec
+ *   une taille de repli ~90 % de la zone de travail pour l'état « restauré ».
+ * - État sauvegardé : on borne la taille à la zone de travail de l'écran qui
+ *   correspond le mieux à la position mémorisée, et on recentre si la fenêtre
+ *   tomberait hors écran (moniteur débranché, changement de DPI/résolution…).
+ *
+ * Corrige le souci Windows « la fenêtre s'ouvre hors écran / trop grande ».
+ */
+function computeWindowBounds(): { x?: number; y?: number; width: number; height: number; maximized: boolean } {
+  const saved = loadWindowState();
+
+  if (!saved) {
+    const wa = screen.getPrimaryDisplay().workArea;
+    const width = Math.max(MIN_WIN_WIDTH, Math.min(1400, Math.round(wa.width * 0.9)));
+    const height = Math.max(MIN_WIN_HEIGHT, Math.min(900, Math.round(wa.height * 0.9)));
+    // 1er lancement : taille de repli centrée + maximisé pour remplir l'écran.
+    return { ...fitToWorkArea(width, height), maximized: true };
+  }
+
+  // Zone de travail de l'écran le plus proche de la position sauvegardée.
+  const wa = screen.getDisplayMatching({
+    x: saved.x ?? 0, y: saved.y ?? 0, width: saved.width, height: saved.height,
+  }).workArea;
+
+  const width = Math.max(MIN_WIN_WIDTH, Math.min(saved.width, wa.width));
+  const height = Math.max(MIN_WIN_HEIGHT, Math.min(saved.height, wa.height));
+
+  let x = saved.x;
+  let y = saved.y;
+  const offScreen =
+    x === undefined || y === undefined ||
+    x + width <= wa.x || x >= wa.x + wa.width ||
+    y + height <= wa.y || y >= wa.y + wa.height;
+  if (offScreen) {
+    // Hors écran → recentrer sur cet écran.
+    x = Math.round(wa.x + (wa.width - width) / 2);
+    y = Math.round(wa.y + (wa.height - height) / 2);
+  } else {
+    // Visible mais on garantit qu'elle reste entièrement dans la zone de travail.
+    x = Math.max(wa.x, Math.min(x as number, wa.x + wa.width - width));
+    y = Math.max(wa.y, Math.min(y as number, wa.y + wa.height - height));
+  }
+
+  return { x, y, width, height, maximized: saved.maximized ?? false };
 }
 
 function saveWindowState(win: BrowserWindow): void {
@@ -139,14 +194,16 @@ process.on('unhandledRejection', (reason) => {
 
 
 function createWindow(): void {
-  // UX-10v3 : restaurer la taille et position depuis la sauvegarde.
-  const winState = loadWindowState();
+  // UX-10v3 : taille/position restaurées, toujours bornées à l'écran présent.
+  const winState = computeWindowBounds();
 
   mainWindow = new BrowserWindow({
     x: winState.x,
     y: winState.y,
     width: winState.width,
     height: winState.height,
+    minWidth: MIN_WIN_WIDTH,
+    minHeight: MIN_WIN_HEIGHT,
     title: 'Candidatures',
     show: false,
     webPreferences: {
@@ -157,7 +214,7 @@ function createWindow(): void {
     },
   });
 
-  // UX-10v3 : restaurer l'état maximisé.
+  // UX-10v3 : restaurer l'état maximisé (ou maximiser au 1er lancement).
   if (winState.maximized) mainWindow.maximize();
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());

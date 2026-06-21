@@ -604,6 +604,28 @@ export async function listUsedLeadKeys(): Promise<string[]> {
 }
 
 /**
+ * Réinitialise le statut « utilisée » de leads : supprime de leurs campagnes les
+ * entreprises correspondantes (→ le lead redevient libre et réimportable). Ne
+ * touche JAMAIS une candidature déjà envoyée/en cours (protégée). Renvoie le
+ * nombre libéré et le nombre ignoré car protégé.
+ */
+export async function resetUsedLeads(keys: string[]): Promise<{ reset: number; skipped: number }> {
+  const wanted = new Set(keys);
+  const companies = await prisma.company.findMany({
+    select: { id: true, name: true, contactEmail: true, website: true, application: { select: { status: true } } },
+  });
+  const toDelete: string[] = [];
+  let skipped = 0;
+  for (const c of companies) {
+    if (!wanted.has(leadKey(c.name, c.contactEmail, c.website))) continue;
+    if (c.application && PROTECTED_APP_STATUSES.has(c.application.status)) { skipped++; continue; }
+    toDelete.push(c.id);
+  }
+  if (toDelete.length > 0) await prisma.company.deleteMany({ where: { id: { in: toDelete } } });
+  return { reset: toDelete.length, skipped };
+}
+
+/**
  * SECTOR-AUTO : pré-remplit une campagne depuis le master de leads.
  * - Filtre par lieu (ville / département / région) si renseigné — repli sur tous
  *   les leads si aucun ne correspond au lieu (pour ne pas créer une campagne vide).

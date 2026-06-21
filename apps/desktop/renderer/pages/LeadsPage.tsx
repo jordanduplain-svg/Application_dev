@@ -64,6 +64,9 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
   const [deleting, setDeleting] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState('');
+  // Import d'un CSV d'entreprises (export Sales Nav / Apollo / Wiza / CSV maison).
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
   // SCRAPE-DESC : fiche IA affichée dans une modale (lecture par lead).
   const [viewLead, setViewLead] = useState<LeadRow | null>(null);
   // Confirmation inline avant de régénérer (écrase) toutes les fiches.
@@ -76,6 +79,28 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
   const isMounted = useRef(true);
 
   useEffect(() => { isMounted.current = true; return () => { isMounted.current = false; }; }, []);
+
+  // Import CSV d'entreprises : ouvre un sélecteur, lance l'enrichissement, puis
+  // recharge la liste quand le scraper signale la fin (événement scraping:progress).
+  const importCsv = async () => {
+    if (importing) return;
+    const csvPath = await api.invoke('dialog:openCsv', { title: 'Sélectionner un CSV d\'entreprises' });
+    if (!csvPath) return;
+    setImporting(true);
+    setImportMsg('Import en cours… (lecture du CSV + enrichissement des emails)');
+    const off = api.on('scraping:progress', (data) => {
+      if (data.done) {
+        off();
+        if (isMounted.current) { setImporting(false); setImportMsg('✅ Import terminé.'); void load(); }
+      }
+    });
+    try {
+      await api.invoke('scraping:linkedinImport', { csvPath });
+    } catch (e) {
+      off();
+      if (isMounted.current) { setImporting(false); setImportMsg(`❌ ${e instanceof Error ? e.message : 'Erreur lors de l\'import'}`); }
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -287,6 +312,53 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
     }
   };
 
+  // Exclut les leads sélectionnés du futur scraping (+ dérivés) et les retire du master.
+  const [excluding, setExcluding] = useState(false);
+  const excludeSelected = async () => {
+    if (selected.size === 0) return;
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Exclure du scraping',
+      message: `Ajouter ${selected.size} lead(s) au dictionnaire d'exclusion (ils ne seront plus jamais re-scrapés) et les retirer de la liste ? Les entreprises du même domaine ou au nom très proche (dérivés) seront aussi exclues.`,
+    });
+    if (!ok) return;
+    setExcluding(true);
+    setError(null);
+    try {
+      const r = await api.invoke('scraping:excludeLeads', { keys: [...selected], withDerivatives: true });
+      await load();
+      setEnrichMsg(`✅ ${r.removedLeads} lead(s) exclu(s) (${r.excludedDomains} domaine(s) ajoutés au dictionnaire).`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de l\'exclusion');
+    } finally {
+      if (isMounted.current) setExcluding(false);
+    }
+  };
+
+  // Réinitialise le statut « utilisée » de TOUTES les entreprises utilisées (bouton
+  // visible, sans sélection). Les retire de leurs campagnes → réimportables.
+  // Avertissement + protection des candidatures déjà envoyées.
+  const [resetting, setResetting] = useState(false);
+  const resetAllUsed = async () => {
+    const usedAll = leads.filter((l) => usedKeys.has(l.key)).map((l) => l.key);
+    if (usedAll.length === 0) { setError('Aucune entreprise « utilisée » à réinitialiser.'); return; }
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Réinitialiser les entreprises utilisées',
+      message: `Libérer ${usedAll.length} entreprise(s) « utilisée(s) » : elles seront RETIRÉES de leurs campagnes (brouillons supprimés) et redeviendront réimportables. Les candidatures déjà ENVOYÉES sont conservées. Continuer ?`,
+    });
+    if (!ok) return;
+    setResetting(true);
+    setError(null);
+    try {
+      const r = await api.invoke('company:resetUsedLeads', { keys: usedAll });
+      await load();
+      setEnrichMsg(`✅ ${r.reset} entreprise(s) libérée(s)${r.skipped > 0 ? ` · ${r.skipped} conservée(s) (déjà envoyées)` : ''}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors de la réinitialisation');
+    } finally {
+      if (isMounted.current) setResetting(false);
+    }
+  };
+
   // Efface les FICHES (descriptions) des leads actuellement affichés (filtrés), sans
   // supprimer les leads. Respecte les filtres : seuls les leads visibles sont vidés.
   const clearShownDescriptions = async () => {
@@ -319,6 +391,12 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <button onClick={() => void load()} className="btn-secondary" style={{ fontSize: '12px' }} disabled={enriching}>↻ Recharger</button>
+        <button onClick={() => void importCsv()} disabled={importing}
+          title="Importer un CSV d'entreprises (export LinkedIn Sales Navigator, Apollo, Wiza, ou ton propre fichier). L'app enrichit ensuite les emails (Hunter + crawl)."
+          style={{ fontSize: '12px', background: '#378ADD', color: '#fff', border: 'none',
+            borderRadius: '6px', padding: '6px 12px', cursor: importing ? 'default' : 'pointer' }}>
+          {importing ? 'Import…' : '📥 Import CSV Entreprise'}
+        </button>
         <button onClick={() => void enrichDescriptions({})} disabled={enriching || leads.length === 0}
           title="Rédige une fiche IA pour TOUTES les entreprises sans fiche (tout le master)"
           style={{ fontSize: '12px', background: '#0a84ff', color: '#fff', border: 'none',
@@ -337,22 +415,8 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             </button>
           );
         })()}
-        {staleCount > 0 && (
-          <button onClick={() => void enrichDescriptions({ maxAgeDays: STALE_DAYS })} disabled={enriching}
-            title={`Régénère les fiches de plus de ${STALE_DAYS} jours (et les vides), sans toucher les récentes`}
-            style={{ fontSize: '12px', background: '#fff', color: '#b35900', border: '1px solid #ffb84d',
-              borderRadius: '6px', padding: '6px 12px', cursor: enriching ? 'default' : 'pointer' }}>
-            🕒 Mettre à jour les fiches &gt; {STALE_DAYS}j ({staleCount})
-          </button>
-        )}
-        {staleNewsCount > 0 && (
-          <button onClick={() => void enrichDescriptions({ newsOnly: true, maxAgeDays: STALE_DAYS })} disabled={enriching}
-            title={`Régénère UNIQUEMENT les actualités de plus de ${STALE_DAYS} jours (garde la fiche entreprise)`}
-            style={{ fontSize: '12px', background: '#fff', color: '#b35900', border: '1px solid #b35900',
-              borderRadius: '6px', padding: '6px 12px', cursor: enriching ? 'default' : 'pointer' }}>
-            📰 Actus &gt; {STALE_DAYS}j ({staleNewsCount})
-          </button>
-        )}
+        {/* Boutons « Mettre à jour les fiches > 7j » et « Actus > 7j » retirés :
+            « Régénérer tout » couvre le besoin et allège la barre d'actions. */}
         {withDesc > 0 && !confirmRegen && (
           <button onClick={() => setConfirmRegen(true)} disabled={enriching}
             title="Refait TOUTES les fiches existantes avec le prompt actuel (écrase les anciennes notes)"
@@ -375,6 +439,14 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             </button>
           </span>
         )}
+        {usedCount > 0 && (
+          <button onClick={() => void resetAllUsed()} disabled={resetting}
+            title="Libère TOUTES les entreprises « utilisée » (les retire de leurs campagnes, brouillons) → réimportables. Ne touche pas aux candidatures déjà envoyées."
+            style={{ fontSize: '12px', background: '#fff', color: '#1D9E75', border: '1px solid #1D9E75',
+              borderRadius: '6px', padding: '6px 12px', cursor: resetting ? 'default' : 'pointer' }}>
+            {resetting ? 'Réinitialisation…' : `♻ Réinitialiser les utilisées (${usedCount})`}
+          </button>
+        )}
         {onGoToScraping && (
           <button onClick={onGoToScraping} style={{ fontSize: '12px', marginLeft: 'auto' }}>
             ← Retour au scraping
@@ -388,6 +460,9 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
       )}
       {!enriching && enrichMsg && (
         <p style={{ color: '#555', fontSize: '12.5px', margin: '4px 0 0' }}>{enrichMsg}</p>
+      )}
+      {importMsg && (
+        <p style={{ color: importing ? '#378ADD' : '#555', fontSize: '12.5px', margin: '4px 0 0' }}>{importMsg}</p>
       )}
       {modelSuggestion && (
         <div style={{ marginTop: '8px', padding: '10px 12px', borderRadius: '8px',
@@ -468,6 +543,14 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             style={{ background: '#ff453a', color: '#fff', border: 'none', borderRadius: '6px',
               padding: '6px 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
             {deleting ? 'Suppression…' : `🗑 Supprimer ${selected.size}`}
+          </button>
+        )}
+        {selected.size > 0 && (
+          <button onClick={() => void excludeSelected()} disabled={excluding}
+            title="Ajoute ces leads (et leurs dérivés : même domaine, nom très proche) au dictionnaire d'exclusion → plus jamais re-scrapés. Les retire aussi de la liste."
+            style={{ background: '#fff', color: '#b35900', border: '1px solid #ffb84d', borderRadius: '6px',
+              padding: '6px 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+            {excluding ? 'Exclusion…' : '🚫 Exclure du scraping'}
           </button>
         )}
         {/* Effacer les fiches des leads AFFICHÉS (respecte les filtres en cours). */}

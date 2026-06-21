@@ -4,6 +4,7 @@ import { copyFile, open as openFile, stat, unlink } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { handle } from './registry';
+import { fitToWorkArea } from '../lib/window-bounds';
 import { getCvDir } from '../../src/lib/paths';
 import * as cvService from '../../src/modules/cv/cv.service';
 import { enqueueCvParse } from '../../src/tasks/cv-parse.task';
@@ -56,8 +57,10 @@ export function registerCvHandlers(): void {
   handle('cv:openFile', async ({ id }) => {
     const cv = await cvService.getCv(id);
     if (!cv?.filePath) throw new Error('Aucun PDF importé pour ce CV.');
+    // Ajuste à l'écran (sur le moniteur de la fenêtre active) : 800×1000 dépasserait
+    // sinon la hauteur d'écran sur beaucoup de portables → fenêtre hors champ.
     const win = new BrowserWindow({
-      width: 800, height: 1000,
+      ...fitToWorkArea(800, 1000, BrowserWindow.getFocusedWindow()?.getBounds()),
       title: cv.name,
       webPreferences: { sandbox: true },
     });

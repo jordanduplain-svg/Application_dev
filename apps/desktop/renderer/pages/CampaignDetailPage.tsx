@@ -68,6 +68,9 @@ export default function CampaignDetailPage({
   // UX-3v3 : pagination de la liste des entreprises.
   const [companiesPage, setCompaniesPage] = useState(0);
   const [companiesPageSize, setCompaniesPageSize] = useState(10);
+  // Limiter la liste aux N meilleures entreprises (garde les mieux scorées).
+  const [limitN, setLimitN] = useState(10);
+  const [limiting, setLimiting] = useState(false);
   // Section « Entreprises cibles » repliable, repliée par défaut → priorité à la génération des mails.
   const [showCompanies, setShowCompanies] = useState(false);
   // UX-1v3 : regénération d'un email individuel.
@@ -459,6 +462,40 @@ export default function CampaignDetailPage({
     }
   };
 
+  // Limite la liste aux N meilleures entreprises (par score pertinence + fraîcheur).
+  // Supprime les entreprises en trop SAUF celles déjà contactées (protégées côté service).
+  const PROTECTED_STATUSES = new Set(['SENDING', 'SENT', 'REPLIED', 'FOLLOWED_UP']);
+  const limitCompanies = async () => {
+    const n = Math.max(1, Math.floor(limitN));
+    if (companies.length <= n) {
+      setError(`Cette campagne a déjà ${companies.length} entreprise(s) — rien à supprimer.`);
+      return;
+    }
+    const protectedIds = new Set(apps.filter((a) => PROTECTED_STATUSES.has(a.status)).map((a) => a.companyId));
+    const score = (c: Company) => (c.relevanceScore ?? 0) + (c.freshnessScore ?? 0);
+    const keep = new Set([...companies].sort((a, b) => score(b) - score(a)).slice(0, n).map((c) => c.id));
+    const toDelete = companies.filter((c) => !keep.has(c.id) && !protectedIds.has(c.id)).map((c) => c.id);
+    if (toDelete.length === 0) {
+      setError('Rien à supprimer : les entreprises en trop sont déjà contactées (conservées).');
+      return;
+    }
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Limiter la liste d\'entreprises',
+      message: `Garder les ${n} meilleures entreprises (par pertinence) et supprimer ${toDelete.length} autre(s) ? Les entreprises déjà contactées sont conservées. Action irréversible.`,
+    });
+    if (!ok) return;
+    setLimiting(true);
+    try {
+      await api.invoke('company:bulkDelete', { ids: toDelete });
+      setSelectedCompanyIds(new Set());
+      await load();
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Erreur lors de la limitation'));
+    } finally {
+      setLimiting(false);
+    }
+  };
+
   // UX-6 : archivage d'une campagne.
   const archiveCampaign = async () => {
     const confirmed = await api.invoke('dialog:confirm', {
@@ -515,6 +552,26 @@ export default function CampaignDetailPage({
     setIsGenerating(true);
     await safe(() => api.invoke('application:generate', { campaignId: id }));
     if (isMounted.current) setIsGenerating(false);
+  };
+
+  // Régénère TOUTES les lettres (brouillons + échecs + sans lettre) — écrase pour
+  // réappliquer le prompt courant. Ne touche jamais aux candidatures envoyées.
+  const regenerateAll = async () => {
+    const drafts = apps.filter((a) => a.status === 'DRAFT' || a.status === 'FAILED');
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Régénérer toutes les lettres',
+      message: `Régénérer (écraser) ${drafts.length} brouillon(s)/échec(s) + générer les manquantes avec le prompt actuel ? Les candidatures déjà envoyées ne sont pas touchées.`,
+    });
+    if (!ok) return;
+    setIsGenerating(true);
+    try {
+      const r = await api.invoke('application:regenerateAll', { campaignId: id });
+      if (r.enqueued === 0) setError('Aucune lettre à régénérer (toutes déjà envoyées ?).');
+    } catch (e) {
+      setError(friendlyError(e instanceof Error ? e.message : 'Erreur lors de la régénération'));
+    } finally {
+      if (isMounted.current) setIsGenerating(false);
+    }
   };
 
   // UX-2v3 / FM11 : aperçu avant "Tout envoyer".
@@ -936,6 +993,21 @@ export default function CampaignDetailPage({
 
       {showCompanies && (
       <>
+      {/* Limiter la liste : garde les N meilleures entreprises, supprime le reste. */}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '13px', color: 'var(--text-sub)' }}>Limiter à</span>
+        <input
+          type="number" min={1} value={limitN}
+          onChange={(e) => setLimitN(Number(e.target.value))}
+          style={{ width: '64px' }}
+        />
+        <span style={{ fontSize: '13px', color: 'var(--text-sub)' }}>entreprises à contacter</span>
+        <button onClick={limitCompanies} disabled={limiting} className="btn-secondary" style={{ fontSize: '12px' }}
+          title="Garde les N entreprises les mieux scorées (pertinence + fraîcheur) et supprime les autres. Les entreprises déjà contactées sont conservées.">
+          {limiting ? 'Application…' : 'Garder les meilleures'}
+        </button>
+      </div>
+
       {/* UX-8v2 : barre d'actions groupées (visible si au moins une sélection). */}
       {selectedCompanyIds.size > 0 && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
@@ -1115,6 +1187,11 @@ export default function CampaignDetailPage({
         <button onClick={generate} disabled={isGenerating}>
           <Sparkles size={15} />
           {isGenerating ? 'Génération…' : 'Générer les emails manquants'}
+        </button>
+        <button onClick={regenerateAll} disabled={isGenerating} className="btn-secondary"
+          title="Régénère (écrase) tous les brouillons + génère les manquants avec le prompt actuel. N'affecte pas les candidatures déjà envoyées.">
+          <Sparkles size={15} />
+          {isGenerating ? 'Génération…' : 'Régénérer toutes les lettres'}
         </button>
         <button onClick={sendAll} disabled={isSendingAll} className="btn-success">
           <Send size={15} />

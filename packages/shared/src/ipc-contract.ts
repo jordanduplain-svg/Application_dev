@@ -591,6 +591,9 @@ export interface IpcRequests {
   'company:downloadCsvTemplate': { req: void; res: void };
   // UX-8v2 : suppression en masse des entreprises sélectionnées.
   'company:bulkDelete': { req: { ids: string[] }; res: { deleted: number } };
+  // Réinitialise le statut « utilisée » de leads (les retire de leurs campagnes,
+  // sauf candidatures déjà envoyées) → réimportables.
+  'company:resetUsedLeads': { req: { keys: string[] }; res: { reset: number; skipped: number } };
   // FM-04 : détection de doublons par similarité de nom.
   'company:findSimilar': { req: { campaignId: string; name: string }; res: Company[] };
   // FM-06 : blacklist d'entreprise.
@@ -612,7 +615,9 @@ export interface IpcRequests {
   'scraping:enrichCsv': { req: { csvPath: string; config: ScrapingConfig }; res: void };
   // Import LinkedIn Sales Navigator (CSV externe). Saute la collecte, charge le CSV,
   // enrichit via le pipeline standard (MX, crawl, Hunter, pattern, scoring).
-  'scraping:linkedinImport': { req: { csvPath: string; config: ScrapingConfig }; res: void };
+  // Import d'un CSV d'entreprises (export Sales Nav / Apollo / Wiza / CSV maison) →
+  // enrichissement direct dans le master leads. La config est lue côté main.
+  'scraping:linkedinImport': { req: { csvPath: string }; res: void };
   // Ouvre un dialog de sélection de fichier (CSV LinkedIn) — retourne le chemin choisi ou null.
   'dialog:openCsv': { req: { title?: string }; res: string | null };
   // SCRAPE-06 : reprendre le dernier scraping interrompu.
@@ -674,6 +679,8 @@ export interface IpcRequests {
   'application:replyToRecruiter': { req: { id: string; body: string }; res: void };
   // Enfile la génération IA des emails pour les entreprises sans candidature.
   'application:generate': { req: { campaignId: string }; res: void };
+  // Régénère toutes les lettres régénérables (brouillons/échecs/sans lettre) — écrase.
+  'application:regenerateAll': { req: { campaignId: string }; res: { enqueued: number } };
   // Modifie l'objet/le corps d'un brouillon avant envoi.
   'application:updateDraft': { req: { id: string; subject: string; body: string }; res: Application };
   // Enfile l'envoi SMTP d'une candidature (ou de toutes les DRAFT).
@@ -777,6 +784,12 @@ export interface IpcRequests {
   'stats:getActivityByDay': { req: { days?: number }; res: { date: string; sent: number; replied: number }[] };
   // ANA-4v3 : tableau comparatif des campagnes.
   'stats:getCampaignComparison': { req: void; res: { id: string; name: string; sent: number; replied: number; replyRate: number; avgDays: number | null }[] };
+
+  // Justificatif France Travail : PDF du relevé des candidatures envoyées.
+  'report:franceTravailPdf': { req: void; res: { path: string; count: number } | null };
+
+  // Exclut des leads du futur scraping (domaine + dérivés) et les retire du master.
+  'scraping:excludeLeads': { req: { keys: string[]; withDerivatives: boolean }; res: { excludedDomains: number; removedLeads: number } };
 
   // RGPD : liste « ne pas contacter » (opt-out / droit d'opposition).
   'optout:list': { req: void; res: OptOutEntry[] };

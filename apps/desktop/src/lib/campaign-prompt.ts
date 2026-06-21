@@ -162,20 +162,40 @@ STRUCTURE — 3 paragraphes, vouvoiement. Logique VOUS → MOI → NOUS. LONGUEU
    (« dynamique », « motivé », « rigoureux »). N'empile pas les missions : mieux vaut UNE preuve forte et
    un peu développée que trois survolées. INTERDIT ABSOLU : fusionner deux missions en une phrase (ne mêle
    jamais leurs chiffres/livrables/architectures), et ne dépasse JAMAIS 2 missions au total.
+   PERTINENCE > RÉCITATION : ne récite pas mécaniquement toujours les mêmes réalisations. CHOISIS dans le
+   CV LA réalisation la plus parlante pour CETTE entreprise (selon sa fiche, son secteur, le poste) et
+   développe-la ; n'ajoute une 2e que si elle apporte un angle VRAIMENT complémentaire pour cette cible.
+   Adapte l'angle au contexte (test/conformité → rigueur et fiabilité ; gros volume/contenus → structuration
+   de flux ; produit → impact métier…). Deux entreprises différentes ne doivent pas recevoir le même §2.
+   ATTAQUE VARIÉE : n'ouvre pas systématiquement le paragraphe par « Depuis [date], en alternance chez
+   [employeur], j'ai… ». Alterne d'une lettre à l'autre — attaque parfois par le RÉSULTAT (« Un bilan annuel
+   figé remplacé par un suivi temps réel : … »), parfois par le besoin comblé, parfois par la techno clé.
 §3 PROJECTION + CLÔTURE (Nous, 2-3 phrases) : UNE phrase de projection OBLIGATOIRE, du type « je pourrais
    aider ${i.safeCompany} à [2-3 actions concrètes et utiles, tirées de la fiche et alignées au poste
    visé] » (SANS l'amorce « concrètement »). C'est cette phrase qui déclenche les réponses : ne l'omets
    jamais, ancre-la dans l'activité réelle de l'entreprise (aucune invention). Puis : disponibilité
-   (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint. TERMINE par une CLÔTURE
+   (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint. NE MENTIONNE PAS de niveau
+   de langue ni de certification façon CV (« anglais C1 », « (immersion d'un an au Canada) », « B2 »…) :
+   ça reste sur le CV. N'évoque une langue QUE si le poste/l'entreprise est manifestement international,
+   et alors en langage naturel intégré à une phrase (« je travaille sans difficulté en anglais »), JAMAIS
+   sous forme de niveau (C1/B2) ni de parenthèse explicative. TERMINE par une CLÔTURE
    FORMELLE et SOBRE en DEUX temps : (a) une phrase MESURÉE proposant un entretien — registre professionnel
    posé, AUCUN marqueur d'enthousiasme (PROSCRITS : « ravi », « heureux », « enchanté », « avec plaisir »,
    « hâte ») ; tournure factuelle du type « Je me tiens à votre disposition pour un entretien afin d'en
    discuter plus en détail. ». Tu PEUX l'orienter discrètement vers une contribution concrète, mais sans
-   emphase ni cliché (BANNIS « la façon dont mon profil pourrait s'intégrer », « mettre mes compétences au
-   service »), et JAMAIS de nom de métier/jargon en dur — déduis le domaine du poste/CV ; (b) une salutation
+   emphase ni cliché. PARLE DE TOI À LA PREMIÈRE PERSONNE : proscris ABSOLUMENT de te désigner à la 3e
+   personne — « ce profil », « ce parcours », « comment ce profil pourrait s'intégrer/répondre/s'articuler »,
+   « la façon dont mon profil pourrait s'intégrer », « mettre mes compétences au service » (ça sonne détaché,
+   comme si tu parlais d'un dossier). Dis « je » / « ce que je pourrais vous apporter » / « comment je
+   pourrais contribuer ». JAMAIS de nom de métier/jargon en dur — déduis le domaine du poste/CV ; (b) une salutation
    sur sa propre ligne (« Cordialement, » ou « Bien cordialement, »), avant la signature. JAMAIS de question
    décontractée (« Un échange pour en discuter ? ») ni de fin abrupte. Varie la formulation d'un email à
-   l'autre — ne recopie pas l'exemple mot pour mot.
+   l'autre — ne recopie pas l'exemple mot pour mot. NE CONVERGE PAS sur une clôture-type : évite de
+   reprendre les mêmes moules d'une lettre à l'autre — p. ex. « …si vous souhaitez voir comment je pourrais
+   m'intégrer à vos projets/équipes », « …approfondir ce que je pourrais vous apporter », « …contribuer
+   concrètement à vos projets data », et l'accroche « si vous souhaitez voir comment… ». Change la STRUCTURE
+   ET les mots à chaque fois ; alterne entre une fin brève et factuelle (« Je reste à votre disposition pour
+   en échanger. ») et une fin un peu plus orientée, sans jamais réutiliser la même tournure deux fois.
 
 RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
 - Français NATIF, fluide, grammaticalement irréprochable. Aucune tournure bancale ni calque.
@@ -189,6 +209,19 @@ RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
   mon expertise pourrait contribuer », « je serais honoré/ravi de mettre mes compétences au service de »,
   « apporter une contribution précieuse », « embrasser cette nouvelle voie », « dynamique et motivé »,
   « n'hésitez pas à me contacter ».
+- PONTS/MÉTAPHORES RÉPÉTÉS (sonnent « gabarit » à force) — proscris ces formules toutes faites et reformule
+  l'idée avec tes mots : « ce projet illustre (assez bien) ce qui me différencie d'un profil purement/
+  simplement académique » (et toute variante « profil académique ») ; « ce projet dit (assez bien) comment
+  je travaille / ce que je cherche à faire », « ce projet dit quelque chose de ma façon de travailler »
+  (et toute variante « ce projet dit… ») — n'introduis JAMAIS une réalisation par une méta-phrase de ce
+  genre, montre-la directement. Métaphore « terrain » : « lire les données depuis/avec le terrain », « là
+  où elles naissent », « à la source », « avec les yeux d'un opérationnel », « lecture terrain », « ça change
+  la lecture qu'on a d'une donnée » → AU PLUS UNE fois sur tout le mail, et formulée DIFFÉREMMENT à chaque
+  email. L'idée (expérience industrielle concrète) est bonne ; c'est la phrase toute faite qu'il faut éviter.
+  Opposition « livrable utile vs rapport inutile » — proscris les variantes toutes faites : « ce n'est pas
+  un rapport (technique) de plus », « pas un rapport que personne ne lit/n'ouvre », « un livrable que
+  personne n'ouvre ». Si tu veux dire qu'un outil est réellement utilisé, montre-le par un fait (qui s'en
+  sert, à quelle fréquence), pas par cette antithèse devenue cliché.
 - BUZZWORDS : au plus UN, rattaché à un fait concret (pas d'empilement RSE / impact / durable / licorne).
 - CONTRAT : annonce uniquement le(s) type(s) fourni(s). N'invente ni dispositif de financement ni
   « expérience » liée à un organisme (ex. pas de fausse « expérience OPCO »).

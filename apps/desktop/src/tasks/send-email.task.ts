@@ -100,6 +100,24 @@ export async function enqueueSend(applicationId: string): Promise<void> {
         return;
       }
 
+      // CV-MULTI : le CV de la campagne est joint à l'email. On le résout AVANT de
+      // claim/consommer le quota et on BLOQUE si aucun CV n'est attaché — envoyer une
+      // candidature spontanée sans CV est pire que ne rien envoyer (cas typique :
+      // le CV a été supprimé/remplacé → cvId remis à null par onDelete:SetNull).
+      const campaignCv = await prisma.campaign.findUnique({
+        where: { id: app.campaignId },
+        select: { cv: { select: { filePath: true } } },
+      });
+      const cvPath = campaignCv?.cv?.filePath ?? undefined;
+      if (!cvPath) {
+        await markFailed(
+          applicationId,
+          "Aucun CV attaché à cette campagne — sélectionne un CV dans la campagne avant d'envoyer.",
+        );
+        await refreshCampaignStatus(app.campaignId);
+        return;
+      }
+
       // H1 : slot atomique — si une autre tâche a déjà pris cette candidature
       // (double-clic "Envoyer" ou sendAll + send simultanés), on s'arrête proprement.
       const claimed = await markSending(applicationId);
@@ -123,13 +141,6 @@ export async function enqueueSend(applicationId: string): Promise<void> {
         await refreshCampaignStatus(app.campaignId);
         return;
       }
-
-      // CV-MULTI : joindre le PDF du CV choisi pour la campagne (et non plus le profil).
-      const campaignCv = await prisma.campaign.findUnique({
-        where: { id: app.campaignId },
-        select: { cv: { select: { filePath: true } } },
-      });
-      const cvPath = campaignCv?.cv?.filePath ?? undefined;
 
       await throttleSend();
       let smtpSent = false;

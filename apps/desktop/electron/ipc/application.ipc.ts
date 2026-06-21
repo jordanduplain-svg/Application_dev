@@ -98,6 +98,16 @@ export function registerApplicationHandlers(): void {
     }
   });
 
+  // Régénère TOUTES les lettres régénérables de la campagne (brouillons + échecs +
+  // entreprises sans lettre), pour réappliquer le prompt courant. N'écrase jamais
+  // une candidature déjà envoyée. Renvoie le nombre enfilé.
+  handle('application:regenerateAll', async (payload) => {
+    const { campaignId } = validate(CampaignIdSchema, payload);
+    assertAiReady();
+    const { enqueued } = await enqueueGeneration(campaignId, 'regenerate');
+    return { enqueued };
+  });
+
   handle('application:updateDraft', (payload) => {
     const data = validate(ApplicationUpdateDraftSchema, payload);
     return appService.updateDraft(data.id, data.subject, data.body);

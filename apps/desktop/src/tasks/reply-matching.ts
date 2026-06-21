@@ -155,6 +155,76 @@ const _AUTO_REPLY_SUBJECT_RE =
  * automatique). Repli sur l'en-tête `X-Autoreply` et sur le sujet. Pur/testable :
  * imap.ts extrait les en-têtes et passe leurs valeurs ici.
  */
+// Marqueurs de DÉBUT de citation (l'email d'origine recopié sous la réponse).
+const _QUOTE_START: RegExp[] = [
+  /^\s*>/,                                  // ligne citée « > … »
+  /^\s*On\b.*\bwrote\s*:?\s*$/i,            // Gmail EN : « On … wrote: »
+  /^\s*Le\b.*\ba\s+écrit\s*:?\s*$/i,        // Gmail FR : « Le … a écrit : »
+  /^\s*-{2,}\s*Original Message\s*-{2,}/i,  // Outlook
+  /^\s*_{5,}\s*$/,                          // séparateur Outlook
+  /^\s*De\s*:\s.+/i,                        // en-tête Outlook FR (De : …)
+  /^\s*From:\s.+/i,                         // en-tête transféré EN
+  /^\s*Begin forwarded message/i,
+];
+
+/**
+ * Garde uniquement le VRAI message du correspondant : coupe la citation de l'email
+ * d'origine recopiée dessous (lignes « > », « On … wrote: », en-têtes Outlook…).
+ * Pur/testable. Si tout le contenu est de la citation, renvoie l'original (sécurité).
+ */
+export function stripQuotedReply(text: string | null | undefined): string {
+  if (!text) return '';
+  let cut = text.length;
+
+  // 1) Attribution INLINE (Gmail « déplie » souvent la réponse sur une seule ligne :
+  //    « … wrote: > Bonjour … »). On coupe dès « On … wrote: » / « Le … a écrit : ».
+  for (const re of [
+    /\bOn\b[^\n]{0,300}?\bwrote\s*:/i,        // Gmail EN
+    /\bLe\b[^\n]{0,300}?\ba\s+écrit\s*:/i,    // Gmail FR
+    /-{2,}\s*Original Message\s*-{2,}/i,       // Outlook
+    /\bBegin forwarded message\b/i,
+  ]) {
+    const m = text.match(re);
+    if (m && m.index !== undefined && m.index < cut) cut = m.index;
+  }
+
+  // 2) Marqueurs par LIGNE (texte multi-lignes : « > … », en-têtes Outlook…).
+  const lines = text.split(/\r?\n/);
+  let offset = 0;
+  for (const line of lines) {
+    if (_QUOTE_START.some((re) => re.test(line))) { if (offset < cut) cut = offset; break; }
+    offset += line.length + 1; // +1 pour le « \n »
+  }
+
+  const head = text.slice(0, cut).trim();
+  return head || text.trim();
+}
+
+/**
+ * Date de début du relevé IMAP.
+ *
+ * - Si un dernier relevé existe → on repart de là.
+ * - Sinon → du plus ancien envoi (pour rattraper les réponses déjà reçues),
+ *   MAIS borné à `floorDays` jours en arrière pour ne JAMAIS scanner toute la
+ *   boîte (sinon fetch de milliers de messages → timeout mailbox).
+ * - Aucun envoi → maintenant.
+ *
+ * BUG-H1 (vrai correctif) : l'ancien `reduce(..., new Date(0))` cherchait un
+ * minimum en partant de 1970 → renvoyait TOUJOURS 1970 → scan complet → timeout.
+ */
+export function pollSinceDate(
+  sentAtMs: number[],
+  lastPollMs: number | null,
+  nowMs: number,
+  floorDays = 60,
+): Date {
+  if (lastPollMs !== null) return new Date(lastPollMs);
+  if (sentAtMs.length === 0) return new Date(nowMs);
+  const floor = nowMs - floorDays * 24 * 60 * 60 * 1000;
+  const earliest = Math.min(...sentAtMs);
+  return new Date(Math.max(earliest, floor));
+}
+
 export function isAutoReply(opts: {
   autoSubmitted?: string | null;
   xAutoreply?: string | null;

@@ -36,6 +36,14 @@ export function registerCompanyHandlers(): void {
     return companyService.bulkDeleteCompanies(data.ids);
   });
 
+  handle('company:resetUsedLeads', async (payload) => {
+    const { keys } = payload as { keys: string[] };
+    if (!Array.isArray(keys) || keys.length === 0) return { reset: 0, skipped: 0 };
+    const r = await companyService.resetUsedLeads(keys);
+    logger.warn(`[AUDIT] company:resetUsedLeads : ${r.reset} libéré(s), ${r.skipped} protégé(s) ignoré(s)`);
+    return r;
+  });
+
   handle('company:importCsv', async (payload) => {
     const { campaignId } = validate(CampaignIdSchema, payload);
     const result = await dialog.showOpenDialog({

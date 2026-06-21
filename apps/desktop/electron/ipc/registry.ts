@@ -14,6 +14,7 @@ import { registerSearchHandlers } from './search.ipc';
 import { registerMaintenanceHandlers } from './maintenance.ipc';
 import { registerScrapingHandlers } from './scraping.ipc';
 import { registerOptOutHandlers } from './optout.ipc';
+import { registerReportHandlers } from './report.ipc';
 
 /**
  * Helper de déclaration d'un handler IPC typé. Le type du payload et du
@@ -50,4 +51,6 @@ export function registerIpcHandlers(): void {
   registerScrapingHandlers();
   // RGPD : liste « ne pas contacter » (opt-out / droit à l'effacement).
   registerOptOutHandlers();
+  // Justificatif France Travail (PDF).
+  registerReportHandlers();
 }

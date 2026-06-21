@@ -1224,8 +1224,10 @@ export default function SettingsPage() {
           L'<strong>IMAP</strong> sert à <strong>lire</strong> ta boîte mail pour détecter quand une
           entreprise t'a répondu (et le classer dans l'onglet Réponses). C'est l'inverse du SMTP :
           SMTP envoie, IMAP reçoit.<br />
-          <strong>Gmail :</strong> hôte <code>imap.gmail.com</code>, port <code>993</code>, même adresse
-          et même mot de passe d'application que pour le SMTP.
+          <strong>Gmail :</strong> hôte <code>imap.gmail.com</code>, port <code>993</code>, la <strong>même adresse</strong> que le SMTP.
+          Le mot de passe peut être <strong>différent</strong> : génère un{' '}
+          <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: '#007aff' }}>mot de passe d'application</a>{' '}
+          dédié (16 lettres, sans les espaces) — tout mot de passe d'application fonctionne aussi bien pour l'IMAP que pour le SMTP.
         </p>
         {status?.imapConfigured && (
           <div style={configuredBanner}>

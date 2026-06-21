@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { matchReply, inboxKey, detectOptOutRequest, isAutoReply } from '../reply-matching';
+import { matchReply, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply } from '../reply-matching';
 
 // Pas de dépendances Electron/Prisma — fonctions pures, aucun mock nécessaire.
 
@@ -96,6 +96,66 @@ describe('isAutoReply (filtre absence du bureau)', () => {
   });
   test('vraie réponse RH ⇒ pas auto', () => {
     expect(isAutoReply({ subject: 'Re: Candidature — entretien possible ?', autoSubmitted: 'no' })).toBe(false);
+  });
+});
+
+describe('pollSinceDate (anti scan-complet / timeout)', () => {
+  const NOW = new Date('2026-06-21T10:00:00Z').getTime();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  test('un dernier relevé existe → on repart de là', () => {
+    const last = NOW - 2 * DAY;
+    expect(pollSinceDate([NOW - 5 * DAY], last, NOW).getTime()).toBe(last);
+  });
+
+  test('pas de relevé → plus ancien envoi récent', () => {
+    const earliest = NOW - 3 * DAY;
+    expect(pollSinceDate([earliest, NOW - DAY], null, NOW).getTime()).toBe(earliest);
+  });
+
+  test('pas de relevé + envoi très ancien → borné au plancher (60 j)', () => {
+    const veryOld = NOW - 400 * DAY;
+    expect(pollSinceDate([veryOld], null, NOW).getTime()).toBe(NOW - 60 * DAY);
+  });
+
+  test('aucun envoi → maintenant', () => {
+    expect(pollSinceDate([], null, NOW).getTime()).toBe(NOW);
+  });
+
+  test('RÉGRESSION : ne renvoie JAMAIS 1970 (le bug d\'origine)', () => {
+    const since = pollSinceDate([NOW - DAY], null, NOW);
+    expect(since.getFullYear()).toBeGreaterThan(2020);
+  });
+});
+
+describe('stripQuotedReply (n\'afficher que le vrai message)', () => {
+  test('coupe la citation Gmail EN « On … wrote: »', () => {
+    const raw = 'Merci pour votre message, intéressé.\nOn Sun, Jun 21, 2026 at 7:25 AM Jordan wrote:\n> Bonjour,\n> ma candidature…';
+    expect(stripQuotedReply(raw)).toBe('Merci pour votre message, intéressé.');
+  });
+  test('coupe la citation FR « Le … a écrit : »', () => {
+    const raw = 'Bonjour, on peut se rencontrer ?\nLe 21 juin 2026 à 07:25, Jordan a écrit :\n> Bonjour…';
+    expect(stripQuotedReply(raw)).toBe('Bonjour, on peut se rencontrer ?');
+  });
+  test('coupe dès la première ligne citée « > »', () => {
+    expect(stripQuotedReply('Top, je vous rappelle.\n> texte d\'origine')).toBe('Top, je vous rappelle.');
+  });
+  test('coupe l\'en-tête Outlook « De : »', () => {
+    expect(stripQuotedReply('Reçu, merci.\nDe : Jordan\nEnvoyé : …')).toBe('Reçu, merci.');
+  });
+  test('cas INLINE (tout sur une ligne, Gmail déplié) → coupe à l\'attribution', () => {
+    const raw = 'Test 3-4 On Sun, Jun 21, 2026 at 7:15 AM Jordan Duplain wrote: > Bonjour, > Sopra Steria…';
+    expect(stripQuotedReply(raw)).toBe('Test 3-4');
+  });
+  test('réponse sans citation → inchangée', () => {
+    expect(stripQuotedReply('Bonjour, votre profil nous intéresse.')).toBe('Bonjour, votre profil nous intéresse.');
+  });
+  test('tout est de la citation → on garde l\'original (sécurité)', () => {
+    const raw = '> Bonjour,\n> ma candidature…';
+    expect(stripQuotedReply(raw)).toBe(raw.trim());
+  });
+  test('vide → chaîne vide', () => {
+    expect(stripQuotedReply('')).toBe('');
   });
 });
 

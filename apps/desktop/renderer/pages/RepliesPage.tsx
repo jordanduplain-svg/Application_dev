@@ -3,6 +3,14 @@ import { RefreshCw, Search, Reply, MessageSquare } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import type { Application } from '@candio/shared';
 import { api } from '../lib/api';
+import { stripQuotedReply, classifyReplySentiment } from '../../src/tasks/reply-matching';
+
+// Pastille de sentiment de la réponse (heuristique, sans IA).
+const SENTIMENT = {
+  positive:  { color: '#1D9E75', bg: '#e8f8ee', label: 'Intérêt' },
+  rejection: { color: '#c4271c', bg: '#ffe5e3', label: 'Refus' },
+  neutral:   { color: '#8a8a8e', bg: '#f0f0f2', label: 'Neutre' },
+} as const;
 
 // PERF-1 : pagination côté client.
 const PAGE_SIZE = 20;
@@ -15,6 +23,8 @@ export default function RepliesPage() {
   // UX-10 : notes de suivi par candidature (id → texte saisi en cours).
   const [noteInputs, setNoteInputs] = useState<Record<string, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
+  // Réponses dont on affiche la citation complète (par défaut on masque l'email cité).
+  const [showQuoted, setShowQuoted] = useState<Set<string>>(new Set());
   // FM6 : filtre texte et sélecteur de tri.
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'company' | 'status'>('date_desc');
@@ -122,10 +132,26 @@ export default function RepliesPage() {
   const TRUNCATION_THRESHOLD = 49_990;
 
   // UX-10 : détecter si le contenu contient du HTML pour l'afficher correctement.
-  function renderContent(content: string | null) {
+  function renderContent(content: string | null, id: string) {
     if (!content) return null;
     const isTruncated = content.length >= TRUNCATION_THRESHOLD;
-    const hasHtml = /<[a-z][\s\S]*>/i.test(content);
+    // Détecter de VRAIES balises HTML (et pas « <https://… > » des URLs en texte brut,
+    // qui faisait basculer la réponse en mode HTML → 1 seule ligne illisible + citation
+    // non coupée).
+    const hasHtml = /<\/?(?:p|div|br|span|a|table|tr|td|th|tbody|thead|ul|ol|li|h[1-6]|b|i|u|strong|em|img|blockquote|hr|pre|font|body|html|head|style)\b[^>]*>/i.test(content);
+
+    // Texte brut : on n'affiche que le vrai message (citation de l'email d'origine
+    // masquée), avec un bouton pour la révéler. Le HTML est laissé tel quel (sanitisé).
+    const quotedShown = showQuoted.has(id);
+    const stripped = hasHtml ? content : stripQuotedReply(content);
+    const hasQuote = !hasHtml && stripped !== content.trim();
+    const shown = hasHtml || quotedShown ? content : stripped;
+    const toggle = () => setShowQuoted((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
     return (
       <>
         {/* B7 : avertissement si le message dépasse la limite de stockage. */}
@@ -142,9 +168,19 @@ export default function RepliesPage() {
             style={{ maxHeight: '200px', overflow: 'auto', wordBreak: 'break-word' }}
           />
         ) : (
-          <pre style={{ maxHeight: '200px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {content}
-          </pre>
+          <div style={{
+            maxHeight: '260px', overflow: 'auto',
+            whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            background: '#f6f7f9', border: '1px solid #ececf0', borderRadius: '10px',
+            padding: '12px 14px', fontSize: '13.5px', lineHeight: 1.55, color: '#1d1d1f',
+          }}>
+            {shown}
+          </div>
+        )}
+        {hasQuote && (
+          <button onClick={toggle} className="btn-secondary" style={{ fontSize: '11px', marginTop: '6px', padding: '3px 8px' }}>
+            {quotedShown ? '▲ Masquer la citation' : '▾ Afficher le message complet (avec citation)'}
+          </button>
         )}
       </>
     );
@@ -206,20 +242,24 @@ export default function RepliesPage() {
         <p>{replies.length === 0 ? 'Aucune réponse pour le moment.' : 'Aucune réponse ne correspond à la recherche.'}</p>
       )}
       <ul>
-        {paginatedReplies.map((a) => (
-          <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: '4px solid #5856d6' }}>
+        {paginatedReplies.map((a) => {
+          const sent = SENTIMENT[classifyReplySentiment(stripQuotedReply(a.replyContent))];
+          return (
+          <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: `4px solid ${sent.color}`, gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <MessageSquare size={15} color="#5856d6" />
-              <strong>{a.companyName}</strong>
-              <span style={{ color: 'var(--text-sub)', fontSize: '13px' }}>— {a.subject}</span>
-              <span className="status status-replied" style={{ marginLeft: 'auto' }}>Réponse reçue</span>
+              <MessageSquare size={16} color={sent.color} />
+              <strong style={{ fontSize: '15px' }}>{a.companyName}</strong>
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: sent.bg, color: sent.color }}>
+                {sent.label}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-sub)' }}>
+                {a.repliedAt ? new Date(a.repliedAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+              </span>
             </div>
-            <small>
-              Reçu le {a.repliedAt ? new Date(a.repliedAt).toLocaleString('fr-FR') : ''}
-            </small>
+            <div style={{ fontSize: '12.5px', color: 'var(--text-sub)', marginTop: '-2px' }}>{a.subject}</div>
 
             {/* UX-10 : rendu intelligent du contenu (HTML ou texte brut). */}
-            {renderContent(a.replyContent)}
+            {renderContent(a.replyContent, a.id)}
 
             {/* UX-10 : note de suivi. */}
             <div style={{ marginTop: '8px' }}>
@@ -318,7 +358,8 @@ export default function RepliesPage() {
               </button>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {/* PERF-1 : pagination des réponses. */}

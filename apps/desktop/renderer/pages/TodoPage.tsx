@@ -30,7 +30,13 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
   const [followUpMsg, setFollowUpMsg] = useState<string | null>(null);
 
   const isMounted = useRef(true);
-  useEffect(() => () => { isMounted.current = false; }, []);
+  // BUG : remettre isMounted=true au (re)montage — sinon le double mount/unmount
+  // de React 18 StrictMode (dev) le fige à false → setLoading(false) ignoré →
+  // « Chargement… » éternel. (Même pattern que les autres pages.)
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   // loadRef : closure stable pour le listener task:progress.
   const loadRef = useRef<() => Promise<void>>(async () => {});

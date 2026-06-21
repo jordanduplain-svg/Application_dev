@@ -193,8 +193,11 @@ class LLMClient:
             self._fails += 1
             if self._fails >= self._MAX_CONSECUTIVE_FAILS:
                 self._active = False
-                print(f"   ⛔  LLM désactivé pour ce run après {self._fails} échecs "
-                      f"(trop lent / injoignable) — on continue sans LLM.", flush=True)
+                model = self._config.ollama_model if self._config.provider == "ollama" else self._config.provider
+                # « trop lourd » est le marqueur détecté par l'app pour proposer un switch.
+                print(f"   ⛔  Modèle IA « {model} » trop lourd/lent pour ce PC — LLM de crawl "
+                      f"désactivé pour ce run (on continue sans). Choisis un modèle plus léger "
+                      f"(ex. qwen2.5:3b) dans Réglages → Moteur IA.", flush=True)
             else:
                 print(f"   ⚠  LLM erreur : {e}", flush=True)
             return None

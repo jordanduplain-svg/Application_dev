@@ -21,6 +21,9 @@ playwright-report/
 .vite/
 coverage/
 
+# Outils IA / worktrees Claude — interne, ne pas versionner
+.claude/
+
 # Bases de données locales — NE JAMAIS versionner (contiennent tes candidatures/emails)
 *.db
 *.db-journal

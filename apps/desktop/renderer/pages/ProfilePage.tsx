@@ -18,7 +18,11 @@ export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const isMounted = useRef(true);
-  useEffect(() => () => { isMounted.current = false; }, []);
+  // Remettre à true au (re)montage (StrictMode dev fige sinon à false → états bloqués).
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const load = async () => {
     try {

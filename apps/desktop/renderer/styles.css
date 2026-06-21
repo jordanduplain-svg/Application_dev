@@ -724,16 +724,20 @@ pre {
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 
-/* Pastille « à configurer » in-situ (sur la section que l'on peut modifier). */
+/* Pastille « à configurer » in-situ (sur la section que l'on peut modifier).
+   Couleurs pleines + nowrap + flex-shrink:0 : bien voyante et JAMAIS reléguée sur
+   une 2e ligne, même dans un titre flex étroit. */
 .cfg-todo {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 10.5px; font-weight: 700; line-height: 1;
-  padding: 3px 9px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  font-size: 11.5px; font-weight: 800; line-height: 1; letter-spacing: 0.2px;
+  text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  white-space: nowrap; flex-shrink: 0; box-shadow: var(--shadow-sm);
 }
-.cfg-todo.red   { background: #ffe5e3; color: #c4271c; }
-.cfg-todo.amber { background: #fff1d6; color: #9a6300; }
+.cfg-todo.red   { background: #ff3b30; color: #fff; }
+.cfg-todo.amber { background: #ff9f0a; color: #fff; }
 .cfg-todo::before {
-  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
   background: currentColor; animation: alert-pulse 1.6s ease-in-out infinite;
 }
 
