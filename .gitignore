@@ -1,55 +1,9 @@
 # Dépendances
 node_modules/
 
-# Variables d'environnement / secrets — NE JAMAIS versionner
-.env
-.env.*
-!.env.example
-
-# Builds / artefacts
-dist/
-build/
-out/
-.next/
-.expo/
-.turbo/
-
-# Playwright (tests e2e)
-test-results/
-playwright-report/
-.playwright/
-.vite/
-coverage/
-
-# Outils IA / worktrees Claude — interne, ne pas versionner
+# Outils IA / worktrees Claude
 .claude/
 
-# Bases de données locales — NE JAMAIS versionner (contiennent tes candidatures/emails)
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite3
-
-# Données scrapées — contacts d'entreprises réels (PII) — NE JAMAIS versionner
-scripts/data/
-
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# Uploads locaux (mock de stockage)
-apps/api/uploads/
-
-# Logs et fichiers temporaires
-*.log
-logcat.txt
-out.txt
-t.txt
-vitest_err*.txt
-
-# IDE / OS
+# OS
 .DS_Store
 Thumbs.db

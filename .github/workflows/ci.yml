@@ -9,6 +9,11 @@ on:
   # donc pas exécuté sur chaque push).
   workflow_dispatch:
 
+# Le projet vit dans Candio/ (repo multi-apps) → toutes les commandes s'y exécutent.
+defaults:
+  run:
+    working-directory: Candio
+
 jobs:
   desktop:
     name: Desktop — typecheck + tests
@@ -26,6 +31,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: Candio/pnpm-lock.yaml
 
       # postinstall lance `prisma generate` (nécessaire au typecheck/tests).
       - name: Install
@@ -53,6 +59,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: Candio/pnpm-lock.yaml
       - name: Install
         run: pnpm install --frozen-lockfile
       # Build de l'app : les tests e2e lancent out/main/index.js.
