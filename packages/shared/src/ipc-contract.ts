@@ -786,7 +786,7 @@ export interface IpcRequests {
   'stats:getCampaignComparison': { req: void; res: { id: string; name: string; sent: number; replied: number; replyRate: number; avgDays: number | null }[] };
 
   // Justificatif France Travail : PDF du relevé des candidatures envoyées.
-  'report:franceTravailPdf': { req: void; res: { path: string; count: number } | null };
+  'report:franceTravailPdf': { req: { from?: string; to?: string; detailCap?: number }; res: { path: string; count: number } | null };
 
   // Exclut des leads du futur scraping (domaine + dérivés) et les retire du master.
   'scraping:excludeLeads': { req: { keys: string[]; withDerivatives: boolean }; res: { excludedDomains: number; removedLeads: number } };

@@ -32,14 +32,18 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
   // ANA-2v3 : sélecteur de plage temporelle (7 / 30 / 90 / 0=tout).
   const [activityDays, setActivityDays] = useState(30);
 
-  // Justificatif France Travail (PDF du relevé des candidatures envoyées).
+  // Justificatif France Travail (PDF du relevé des candidatures envoyées sur une période).
+  const [ftOpen, setFtOpen] = useState(false);
+  const [ftFrom, setFtFrom] = useState('');
+  const [ftTo, setFtTo] = useState('');
+  const [ftCap, setFtCap] = useState(80); // 0 = toutes les lettres
   const [genFt, setGenFt] = useState(false);
   const [ftMsg, setFtMsg] = useState('');
   const generateFtJustificatif = async () => {
     setGenFt(true);
     setFtMsg('');
     try {
-      const r = await api.invoke('report:franceTravailPdf');
+      const r = await api.invoke('report:franceTravailPdf', { from: ftFrom || undefined, to: ftTo || undefined, detailCap: ftCap });
       setFtMsg(r ? `✅ PDF généré (${r.count} candidature(s)) : ${r.path}` : '');
     } catch (e) {
       setFtMsg(`✗ ${e instanceof Error ? e.message : 'Erreur lors de la génération'}`);
@@ -104,12 +108,35 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
           <div className="page-sub">Vue d'ensemble de vos campagnes et de leurs performances.</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <button onClick={generateFtJustificatif} disabled={genFt}
+          <button onClick={() => setFtOpen((o) => !o)}
             title="Génère un PDF du relevé de tes candidatures envoyées, à présenter à France Travail comme justificatif de recherche d'emploi."
             className="btn-secondary" style={{ fontSize: '12px' }}>
-            {genFt ? 'Génération…' : '📄 Justificatif France Travail'}
+            📄 Justificatif France Travail
           </button>
-          {ftMsg && <div style={{ fontSize: '11.5px', color: 'var(--text-sub)', marginTop: '4px', maxWidth: '260px' }}>{ftMsg}</div>}
+          {ftOpen && (
+            <div style={{ marginTop: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'left', maxWidth: '280px' }}>
+              <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-sub)', marginBottom: '6px' }}>
+                Du <input type="date" value={ftFrom} max={ftTo || undefined} onChange={(e) => setFtFrom(e.target.value)} style={{ marginLeft: '6px' }} />
+              </label>
+              <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-sub)', marginBottom: '8px' }}>
+                Au <input type="date" value={ftTo} min={ftFrom || undefined} onChange={(e) => setFtTo(e.target.value)} style={{ marginLeft: '6px' }} />
+              </label>
+              <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--text-sub)', marginBottom: '8px' }}>
+                Lettres détaillées
+                <select value={ftCap} onChange={(e) => setFtCap(Number(e.target.value))} style={{ marginLeft: '6px' }}>
+                  <option value={20}>20 max</option>
+                  <option value={50}>50 max</option>
+                  <option value={80}>80 max</option>
+                  <option value={0}>Toutes</option>
+                </select>
+              </label>
+              <div style={{ fontSize: '10.5px', color: 'var(--text-sub)', marginBottom: '8px' }}>Dates vides = toutes les candidatures. Les réponses reçues sont toujours incluses.</div>
+              <button onClick={generateFtJustificatif} disabled={genFt} className="btn-secondary" style={{ fontSize: '12px' }}>
+                {genFt ? 'Génération…' : 'Générer le PDF'}
+              </button>
+            </div>
+          )}
+          {ftMsg && <div style={{ fontSize: '11.5px', color: 'var(--text-sub)', marginTop: '4px', maxWidth: '280px' }}>{ftMsg}</div>}
         </div>
       </div>
 
