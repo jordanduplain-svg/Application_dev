@@ -296,40 +296,61 @@ export function registerApplicationHandlers(): void {
     validate(IdSchema, payload);
     const { id, subject, body } = payload as { id: string; subject: string; body: string };
 
-    const claimed = await prisma.application.updateMany({
-      where: { id, status: 'SENT', followUpSentAt: null },
-      data: { status: 'FOLLOWED_UP', followUpSentAt: new Date() },
+    // FOLLOWUP-N : parité avec enqueueFollowUp — capturer l'état avant le claim,
+    // accepter 1ʳᵉ relance (SENT) ET suivantes (FOLLOWED_UP > 7 j), et SURTOUT
+    // incrémenter followUpCount (sinon le plafond MAX_FOLLOWUPS est contourné et la
+    // candidature reçoit des relances auto supplémentaires).
+    const before = await prisma.application.findUnique({
+      where: { id },
+      select: { status: true, followUpSentAt: true, followUpCount: true },
     });
-    if (claimed.count === 0) throw new Error('Candidature non éligible à une relance.');
+    if (!before) throw new Error('Candidature introuvable.');
+    const restore = { status: before.status, followUpSentAt: before.followUpSentAt, followUpCount: before.followUpCount };
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 864e5);
+    const claimed = await prisma.application.updateMany({
+      where: {
+        id,
+        repliedAt: null,
+        followUpCount: { lt: appService.MAX_FOLLOWUPS },
+        OR: [
+          { status: 'SENT', followUpSentAt: null },
+          { status: 'FOLLOWED_UP', followUpSentAt: { lt: sevenDaysAgo } },
+        ],
+      },
+      data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },
+    });
+    if (claimed.count === 0) throw new Error('Candidature non éligible à une relance (déjà relancée récemment ou plafond atteint).');
 
     const app = await appService.getApplication(id);
     if (!app) throw new Error('Candidature introuvable.');
 
     // RGPD : ne pas relancer un contact désinscrit. On annule le claim.
     if (await isOptedOut(app.contactEmail)) {
-      await prisma.application.update({
-        where: { id },
-        data: { status: 'SENT', followUpSentAt: null },
-      });
+      await prisma.application.update({ where: { id }, data: restore });
       throw new Error('Relance bloquée — ce contact figure dans la liste « ne pas contacter » (RGPD).');
     }
 
     const profile = await getProfile();
     if (!profile?.emailSender) {
       // Annule le claim : la candidature reste relançable une fois le profil configuré.
-      await prisma.application.update({ where: { id }, data: { status: 'SENT', followUpSentAt: null } });
+      await prisma.application.update({ where: { id }, data: restore });
       throw new Error('Email de profil non configuré.');
     }
 
     // BUG-A : la relance compte dans le plafond quotidien. Annule le claim si atteint.
     const allowed = await tryIncrementDailySend();
     if (!allowed) {
-      await prisma.application.update({
-        where: { id },
-        data: { status: 'SENT', followUpSentAt: null },
-      });
+      await prisma.application.update({ where: { id }, data: restore });
       throw new Error(`Plafond d'envois du jour atteint (${getDailySendLimit()}/jour) — réessaie demain.`);
     }
+
+    // BUG 2 : joindre le CV de la campagne, comme la relance automatique (cohérence).
+    const campaignCv = await prisma.campaign.findUnique({
+      where: { id: app.campaignId },
+      select: { cv: { select: { filePath: true } } },
+    });
+    const cvPath = campaignCv?.cv?.filePath ?? undefined;
 
     // BUG-H4 fix : appliquer le même throttle 8 s que le task-runner pour
     // éviter de contourner le délai anti-spam en passant par ce handler direct.
@@ -348,6 +369,7 @@ export function registerApplicationHandlers(): void {
         to: app.contactEmail,
         subject,
         body,
+        cvPath, // BUG 2 : CV de la campagne joint (parité avec la relance auto).
         inReplyTo: app.messageId ?? undefined,
         references: app.messageId ?? undefined,
       });
@@ -359,15 +381,12 @@ export function registerApplicationHandlers(): void {
       });
     } catch (err) {
       if (!smtpSent) {
-        // L'email n'est pas parti : on rend le crédit de quota consommé + rollback du claim.
+        // L'email n'est pas parti : on rend le crédit de quota consommé + rollback du claim
+        // (restaure status/followUpSentAt/followUpCount à leur valeur d'avant).
         await refundDailySend();
         await prisma.application.update({
           where: { id },
-          data: {
-            status: 'SENT',
-            followUpSentAt: null,
-            errorMessage: err instanceof Error ? err.message : 'Échec de la relance',
-          },
+          data: { ...restore, errorMessage: err instanceof Error ? err.message : 'Échec de la relance' },
         });
       }
       throw err;

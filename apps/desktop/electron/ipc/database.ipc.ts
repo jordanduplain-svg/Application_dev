@@ -13,16 +13,28 @@ import { runMigrations } from '../../src/lib/migrate';
 import { assertValidSqliteFile } from '../../src/lib/sqlite-verify';
 
 /**
- * MOD-06 : exécute un WAL checkpoint via better-sqlite3.
- * Plus fiable que prisma.$executeRawUnsafe() pour les checkpoints
- * car contourne la gestion de connexion de Prisma.
+ * N2 : sauvegarde COHÉRENTE via l'API backup en ligne de better-sqlite3.
+ * Produit un fichier `.db` autonome quel que soit l'état du WAL (un simple
+ * `copyFile` du `.db` pouvait omettre les transactions encore dans le `-wal`,
+ * surtout si le checkpoint échouait silencieusement à cause de la connexion
+ * Prisma ouverte). `db.backup()` gère le WAL et la cohérence transactionnelle.
  */
-function walCheckpointTruncate(): void {
+async function consistentBackup(dst: string): Promise<void> {
+  // Connexion read-write (pas readonly) : en mode WAL, un open readonly peut échouer
+  // à verrouiller le -shm. L'API backup ne modifie pas la source.
   const db = new Database(getDbPath());
   try {
-    db.pragma('wal_checkpoint(TRUNCATE)');
+    await db.backup(dst);
   } finally {
     db.close();
+  }
+}
+
+/** N1 : supprime les journaux WAL/SHM résiduels d'une base (avant de l'écraser/restaurer). */
+async function removeWalShm(dbPath: string): Promise<void> {
+  for (const suffix of ['-wal', '-shm']) {
+    const p = dbPath + suffix;
+    if (existsSync(p)) await unlink(p).catch(() => {});
   }
 }
 
@@ -55,14 +67,8 @@ export function registerDatabaseHandlers(): void {
       throw new Error('La destination doit être différente du fichier source de la base.');
     }
 
-    // MOD-06 : Checkpoint WAL via better-sqlite3 (plus fiable que prisma.$executeRaw).
-    try {
-      walCheckpointTruncate();
-    } catch {
-      // Non bloquant : même sans checkpoint, la copie reste utilisable.
-    }
-
-    await copyFile(srcPath, dstPath);
+    // N2 : snapshot cohérent (gère le WAL) au lieu d'un copyFile du seul `.db`.
+    await consistentBackup(dstPath);
     logger.info(`[backup] Base de données sauvegardée : ${result.filePath}`);
     return { path: result.filePath };
   });
@@ -82,11 +88,16 @@ export function registerDatabaseHandlers(): void {
     });
     if (result.canceled || !result.filePath) return null;
 
-    // Checkpoint WAL pour une copie cohérente, puis chiffrement en mémoire.
-    try { walCheckpointTruncate(); } catch { /* non bloquant */ }
-    const plain = await readFile(resolve(getDbPath()));
-    const encrypted = encryptBuffer(plain, passphrase);
-    await writeFile(resolve(result.filePath), encrypted);
+    // N2 : snapshot cohérent dans un temp → chiffrement en mémoire → écriture .cjenc.
+    const tmpSnap = resolve(getDbPath()) + '.enc.tmp';
+    await consistentBackup(tmpSnap);
+    try {
+      const plain = await readFile(tmpSnap);
+      const encrypted = encryptBuffer(plain, passphrase);
+      await writeFile(resolve(result.filePath), encrypted);
+    } finally {
+      await unlink(tmpSnap).catch(() => {});
+    }
     logger.info(`[backup] Sauvegarde chiffrée créée : ${result.filePath}`);
     return { path: result.filePath };
   });
@@ -118,6 +129,9 @@ export function registerDatabaseHandlers(): void {
         prisma.$disconnect(),
         new Promise<void>((resolve) => setTimeout(resolve, 3_000)),
       ]);
+      // N1 : purger les journaux WAL/SHM de l'ANCIENNE base avant de la remplacer —
+      // sinon SQLite réapplique l'ancien WAL par-dessus la base restaurée (corruption).
+      await removeWalShm(dbPath);
       await copyFile(tmpPath, dbPath);
       await unlink(tmpPath).catch(() => {});
       await prisma.$connect();
@@ -171,6 +185,8 @@ export function registerDatabaseHandlers(): void {
         new Promise<void>((resolve) => setTimeout(resolve, 3_000)),
       ]);
 
+      // N1 : purger les journaux WAL/SHM de l'ANCIENNE base avant de la remplacer.
+      await removeWalShm(dbPath);
       await copyFile(srcBackup, dbPath);
       await prisma.$connect();
 
@@ -251,11 +267,15 @@ export function registerDatabaseHandlers(): void {
     });
     if (result.canceled || !result.filePath) return null;
 
-    // Charger toutes les données en parallèle (campagnes archivées incluses).
-    const [campaigns, companies, applications] = await Promise.all([
+    // N5 : export RÉELLEMENT complet — inclut Profil, CV et liste opt-out (RGPD),
+    // pas seulement campagnes/entreprises/candidatures.
+    const [campaigns, companies, applications, profile, cvs, optOuts] = await Promise.all([
       prisma.campaign.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.company.findMany({ orderBy: { createdAt: 'asc' } }),
       prisma.application.findMany({ orderBy: { createdAt: 'asc' } }),
+      prisma.profile.findMany(),
+      prisma.cv.findMany({ orderBy: { createdAt: 'asc' } }),
+      prisma.optOut.findMany({ orderBy: { createdAt: 'asc' } }),
     ]);
 
     const exportData = {
@@ -263,6 +283,9 @@ export function registerDatabaseHandlers(): void {
       campaigns,
       companies,
       applications,
+      profile,
+      cvs,
+      optOuts,
     };
 
     await writeFile(result.filePath, JSON.stringify(exportData, null, 2), 'utf8');
@@ -280,12 +303,9 @@ export async function performRotatedBackup(backupDir: string, dbPath: string): P
   const stamp = now.toISOString().replace(/:/g, '-').replace('T', '_').slice(0, 19);
   const backupPath = join(backupDir, `backup-${stamp}.db`);
 
-  // MOD-06 : Checkpoint WAL via better-sqlite3 avant copie.
-  try {
-    walCheckpointTruncate();
-  } catch { /* non bloquant */ }
-
-  await copyFile(dbPath, backupPath);
+  // N2 : snapshot cohérent (gère le WAL) au lieu d'un copyFile du seul `.db`.
+  void dbPath; // (le chemin source est résolu par consistentBackup via getDbPath())
+  await consistentBackup(backupPath);
 
   // Lister toutes les sauvegardes backup-*.db et supprimer les plus anciennes.
   try {

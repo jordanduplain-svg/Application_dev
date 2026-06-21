@@ -86,6 +86,9 @@ export default function SettingsPage() {
   const [testingImap, setTestingImap] = useState(false);
   const [togglingScrap, setTogglingScrap] = useState(false);
   const [togglingAutoFollowUp, setTogglingAutoFollowUp] = useState(false);
+  // Lancement au démarrage de session (natif Electron) — état chargé à part du status.
+  const [launchAtLogon, setLaunchAtLogon] = useState(false);
+  const [togglingLogon, setTogglingLogon] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -372,6 +375,24 @@ export default function SettingsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur');
     } finally { setTogglingAutoFollowUp(false); }
+  };
+
+  // Charge l'état « lancement au démarrage » une fois au montage.
+  useEffect(() => {
+    void api.invoke('settings:getLaunchAtLogon').then((r) => setLaunchAtLogon(r.enabled)).catch(() => {});
+  }, []);
+
+  const toggleLaunchAtLogon = async () => {
+    if (togglingLogon) return;
+    setTogglingLogon(true);
+    setError(null);
+    try {
+      const next = !launchAtLogon;
+      await api.invoke('settings:setLaunchAtLogon', { enabled: next });
+      setLaunchAtLogon(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur');
+    } finally { setTogglingLogon(false); }
   };
 
   const toggleScraping = async () => {
@@ -1395,8 +1416,20 @@ export default function SettingsPage() {
         <small style={{ display: 'block', marginTop: '8px', color: '#888', lineHeight: 1.5 }}>
           Chaque jour (et au démarrage), l'app envoie une relance aux candidatures éligibles,
           dans la <strong>limite de ton quota d'envoi du jour</strong> et avec les mêmes garde-fous que
-          la relance manuelle (liste « ne pas contacter », anti-doublon). ⚠️ <strong>L'app doit rester
-          ouverte</strong> pour que la planification se déclenche.
+          la relance manuelle (liste « ne pas contacter », anti-doublon). Jusqu'à <strong>2 relances</strong>
+          espacées de 7 jours par candidature. ⚠️ <strong>L'app doit rester ouverte</strong> pour que la
+          planification se déclenche.
+        </small>
+        <label style={{ display: 'block', marginTop: '12px' }}>
+          <input type="checkbox"
+                 checked={launchAtLogon}
+                 onChange={toggleLaunchAtLogon}
+                 disabled={togglingLogon} />
+          {' '}{togglingLogon ? 'Mise à jour…' : 'Lancer l\'app au démarrage de ma session Windows'}
+        </label>
+        <small style={{ display: 'block', marginTop: '6px', color: '#888', lineHeight: 1.5 }}>
+          Recommandé avec la relance automatique : l'app s'ouvre à l'ouverture de session et la passe de
+          rattrapage du matin s'exécute sans que tu aies à y penser.
         </small>
       </div>
 

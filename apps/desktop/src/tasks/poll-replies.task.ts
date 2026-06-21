@@ -9,7 +9,7 @@ import {
   markBounced,
 } from '../modules/application/application.service';
 import { logger } from '../lib/logger';
-import { matchReply, inboxKey, detectOptOutRequest, pollSinceDate } from './reply-matching';
+import { matchReply, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
 import { addOptOut } from '../modules/optout/optout.service';
 
 export function enqueuePollReplies(): void {
@@ -66,7 +66,10 @@ export function enqueuePollReplies(): void {
             // RGPD (option A) : si la réponse demande explicitement une
             // désinscription, on ajoute le contact à la liste « ne pas contacter »
             // pour qu'il ne reçoive plus aucune relance ni futur envoi.
-            if (detectOptOutRequest(reply.text)) {
+            // B2 : on détecte sur le VRAI message (sans le thread cité ni nos propres
+            // emails recopiés dessous) — sinon un footer marketing standard
+            // (« pour vous désinscrire… ») d'un recruteur intéressé le blackliste à tort.
+            if (detectOptOutRequest(stripQuotedReply(reply.text))) {
               try {
                 await addOptOut(
                   app.company.contactEmail,

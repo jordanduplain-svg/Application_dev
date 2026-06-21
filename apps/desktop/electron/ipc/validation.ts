@@ -125,6 +125,15 @@ export const CvParsedSchema = z.object({
   }),
 });
 
+// B3 : justificatif France Travail — bornes de période (format date natif) + plafond.
+export const ReportRangeSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date de début invalide').optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date de fin invalide').optional(),
+  detailCap: z.number().int().min(0).max(100000).optional(),
+}).refine((v) => !v.from || !v.to || v.from <= v.to, {
+  message: 'La date de début doit précéder la date de fin',
+});
+
 export const ApplicationListSchema = z.object({
   campaignId: z.string().min(1),
   page: z.number().int().min(0).optional(),

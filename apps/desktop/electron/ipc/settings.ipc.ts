@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import { handle } from './registry';
 import { execSync } from 'child_process';
 import * as os from 'os';
@@ -159,6 +160,16 @@ export function registerSettingsHandlers(): void {
   // AUTO-RELANCE : active/désactive la relance automatique quotidienne.
   handle('settings:setAutoFollowUp', async ({ enabled }) => {
     await setAutoFollowUpEnabled(enabled);
+  });
+
+  // Lancement au démarrage de session (natif Electron). Permet aux relances « de
+  // fond » de tourner : l'app s'ouvre au login → la passe de rattrapage du scheduler
+  // s'exécute. Pas de service système à maintenir.
+  handle('settings:getLaunchAtLogon', () => ({
+    enabled: app.getLoginItemSettings().openAtLogin,
+  }));
+  handle('settings:setLaunchAtLogon', ({ enabled }) => {
+    app.setLoginItemSettings({ openAtLogin: enabled });
   });
 
   // UX-11 : intervalle de polling IMAP configurable.

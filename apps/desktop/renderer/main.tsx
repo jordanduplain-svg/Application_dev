@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { queryClient } from './lib/query-client';
 import './styles.css';
 
@@ -21,9 +22,12 @@ window.addEventListener('unhandledrejection', (e) => {
 // Bootstrap React. StrictMode aide à détecter les effets non idempotents.
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {/* MOD-01 : QueryClientProvider pour react-query (migration incrémentale). */}
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    {/* N3 : garde de rendu globale (anti écran blanc). */}
+    <ErrorBoundary>
+      {/* MOD-01 : QueryClientProvider pour react-query (migration incrémentale). */}
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

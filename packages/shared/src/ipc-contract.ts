@@ -727,6 +727,10 @@ export interface IpcRequests {
   'settings:setScrapingEnabled': { req: { enabled: boolean }; res: void };
   // AUTO-RELANCE : active/désactive la relance automatique quotidienne (scheduler).
   'settings:setAutoFollowUp': { req: { enabled: boolean }; res: void };
+  // Lancement au démarrage de session (relances « de fond » : l'app s'ouvre au login
+  // et la passe de rattrapage du scheduler s'exécute). Natif Electron (setLoginItemSettings).
+  'settings:getLaunchAtLogon': { req: void; res: { enabled: boolean } };
+  'settings:setLaunchAtLogon': { req: { enabled: boolean }; res: void };
   // UX-11 : intervalle de polling IMAP configurable.
   'settings:setImapPollInterval': { req: { minutes: number }; res: void };
   // INT-3 : modèle IA configurable.
@@ -787,6 +791,17 @@ export interface IpcRequests {
 
   // Justificatif France Travail : PDF du relevé des candidatures envoyées.
   'report:franceTravailPdf': { req: { from?: string; to?: string; detailCap?: number }; res: { path: string; count: number } | null };
+  // Export CSV de toutes les candidatures (suivi perso / tableur).
+  'report:applicationsCsv': { req: void; res: { path: string; count: number } | null };
+  // Génère un .ics pour un entretien et l'ouvre dans l'app calendrier par défaut.
+  'report:interviewIcs': { req: { id: string }; res: { ok: boolean } };
+  // Agenda : prochaines relances dues (dueDate) + entretiens à venir.
+  'report:agenda': { req: void; res: {
+    followUps: { id: string; companyName: string; jobTitle: string; dueDate: string }[];
+    interviews: { id: string; companyName: string; date: string; location: string | null }[];
+  } };
+  // Analytics : taux de réponse par secteur d'activité (données scraper).
+  'stats:getBySector': { req: void; res: { sector: string; sent: number; replied: number; replyRate: number }[] };
 
   // Exclut des leads du futur scraping (domaine + dérivés) et les retire du master.
   'scraping:excludeLeads': { req: { keys: string[]; withDerivatives: boolean }; res: { excludedDomains: number; removedLeads: number } };

@@ -159,7 +159,6 @@ ${pdfText}
   // INT-3 : utilise le modèle configuré dans les Réglages.
   // B9 : typage explicite pour éviter l'accès à undefined après le try/catch.
   let completion: Awaited<ReturnType<ReturnType<typeof getClient>['chat']['completions']['create']>> | null = null;
-  const isOllama = getAiProvider() === 'ollama';
   try {
     completion = await getClient().chat.completions.create({
       model: getActiveModel(),
@@ -201,7 +200,6 @@ export async function generateCampaignPrompts(
   const cvBlock = cvParsed ? JSON.stringify(cvParsed) : '(non fourni)';
   const prompt = buildCampaignPromptsMessage(material, cvBlock);
 
-  const isOllama = getAiProvider() === 'ollama';
   let completion: Awaited<ReturnType<ReturnType<typeof getClient>['chat']['completions']['create']>> | null = null;
   try {
     completion = await getClient().chat.completions.create({
@@ -250,7 +248,6 @@ Donne 2 à 4 recommandations courtes, actionnables, en français.
 
 CV (JSON) : ${JSON.stringify(cvParsed)}`;
 
-  const isOllama = getAiProvider() === 'ollama';
   let completion: Awaited<ReturnType<ReturnType<typeof getClient>['chat']['completions']['create']>> | null = null;
   try {
     completion = await getClient().chat.completions.create({

@@ -4,6 +4,29 @@ import { prisma } from '../../src/lib/prisma';
 const SENT_STATUSES = ['SENT', 'REPLIED', 'FOLLOWED_UP'] as const;
 
 export function registerStatsHandlers(): void {
+  // F3 : taux de réponse par secteur d'activité (donnée d'enrichissement scraper).
+  // Permet de voir quels secteurs répondent le mieux → réorienter le ciblage.
+  handle('stats:getBySector', async () => {
+    const apps = await prisma.application.findMany({
+      where: { sentAt: { not: null } },
+      select: { repliedAt: true, company: { select: { sector: true } } },
+    });
+    const acc = new Map<string, { sent: number; replied: number }>();
+    for (const a of apps) {
+      const sector = a.company.sector?.trim() || 'Non renseigné';
+      const e = acc.get(sector) ?? { sent: 0, replied: 0 };
+      e.sent += 1;
+      if (a.repliedAt) e.replied += 1;
+      acc.set(sector, e);
+    }
+    return [...acc.entries()]
+      .map(([sector, { sent, replied }]) => ({
+        sector, sent, replied,
+        replyRate: sent > 0 ? Math.round((replied / sent) * 1000) / 10 : 0,
+      }))
+      .sort((x, y) => y.sent - x.sent);
+  });
+
   handle('stats:getGlobal', async () => {
     // PERF-S2 : toutes les requêtes indépendantes en parallèle.
     const [totalCampaigns, totalCompanies, statusGroups, avgRaw, campaignGroups, manualGroups, totalDrafted] =

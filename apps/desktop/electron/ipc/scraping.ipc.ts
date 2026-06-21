@@ -255,6 +255,17 @@ function getWindow(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null;
 }
 
+// Module « leads » (version paresseuse de CSV→SQLite) : le master CSV est réécrit
+// intégralement par plusieurs handlers ET par le scraper Python (enrich). Sans garde,
+// une suppression/exclusion lancée pendant un scraping écrase la sortie du Python (ou
+// l'inverse) → perte de leads. On refuse toute mutation du master tant qu'un process
+// scraper tourne. ponytail: garde à 3 lignes ; la vraie migration SQLite reste un chantier dédié.
+function assertNoScraperRunning(): void {
+  if (activeProcess) {
+    throw new Error('Un scraping/enrichissement est en cours — réessaie une fois terminé (évite d\'écraser le fichier de leads).');
+  }
+}
+
 function pushProgress(line: string, done = false, csvPath: string | null = null): void {
   getWindow()?.webContents.send('scraping:progress', { line, done, csvPath });
 }
@@ -713,6 +724,7 @@ export function registerScrapingHandlers(): void {
   });
 
   handle('scraping:deleteLeads', ({ keys }) => {
+    assertNoScraperRunning();
     const path = masterCsvPath();
     if (!path) return { remaining: 0 };
     const rows = parseCsvFile(readFileSync(path, 'utf8'));
@@ -732,6 +744,7 @@ export function registerScrapingHandlers(): void {
   // d'exclusion persistant ET les retire du master. Avec `withDerivatives`, étend
   // aux leads du même domaine ou au nom très proche (Levenshtein > 0.85).
   handle('scraping:excludeLeads', ({ keys, withDerivatives }) => {
+    assertNoScraperRunning();
     const path = masterCsvPath();
     if (!path) return { excludedDomains: 0, removedLeads: 0 };
     const rows = parseCsvFile(readFileSync(path, 'utf8'));
@@ -791,6 +804,7 @@ export function registerScrapingHandlers(): void {
   // SCRAPE-DESC : efface la fiche (companyDescription + descriptionUpdatedAt) des leads
   // donnés, SANS supprimer les leads. Utilisé par « Supprimer les fiches affichées ».
   handle('scraping:clearDescriptions', ({ keys }) => {
+    assertNoScraperRunning();
     const path = masterCsvPath();
     if (!path) return { cleared: 0 };
     const rows = parseCsvFile(readFileSync(path, 'utf8'));
@@ -1106,8 +1120,14 @@ export function registerScrapingHandlers(): void {
     proc.on('error', (err) => resolve({ ok: false, message: `PowerShell introuvable : ${err.message}` }));
   }));
 
-  // Utilitaire : ouvrir un fichier/URL avec l'app par défaut du système.
+  // Utilitaire : ouvrir un artefact de données local avec l'app par défaut du système.
+  // B5 : `shell.openPath` exécuterait un .exe/.bat — on n'ouvre que des fichiers de
+  // données connus (.html/.csv/.pdf) réellement présents (défense en profondeur si le
+  // renderer était compromis ou si un chemin scrapé arrivait jusqu'ici).
   handle('shell:open', async (path: string) => {
+    if (typeof path !== 'string' || !/\.(html?|csv|pdf)$/i.test(path) || !existsSync(path)) {
+      throw new Error('Ouverture refusée : fichier non autorisé.');
+    }
     await shell.openPath(path);
   });
 }

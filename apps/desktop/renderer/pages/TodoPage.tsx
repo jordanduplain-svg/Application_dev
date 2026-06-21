@@ -20,8 +20,12 @@ function actionColor(a: Application): string {
   return '#ff9f0a';
 }
 
+type Agenda = { followUps: { id: string; companyName: string; jobTitle: string; dueDate: string }[];
+                interviews: { id: string; companyName: string; date: string; location: string | null }[] };
+
 export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: string) => void }) {
   const [apps, setApps] = useState<Application[]>([]);
+  const [agenda, setAgenda] = useState<Agenda>({ followUps: [], interviews: [] });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -43,9 +47,13 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
 
   const load = useCallback(async () => {
     try {
-      const result = await api.invoke('application:listActionRequired');
+      const [result, ag] = await Promise.all([
+        api.invoke('application:listActionRequired'),
+        api.invoke('report:agenda'),
+      ]);
       if (!isMounted.current) return;
       setApps(result);
+      setAgenda(ag);
       setError(null);
     } catch (e) {
       if (isMounted.current)
@@ -58,13 +66,11 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
   useEffect(() => { loadRef.current = load; });
   useEffect(() => { void load(); }, [load]);
 
-  // FOLLOWUP-BATCH : nb de candidatures réellement relançables — mêmes critères
-  // que le serveur (SENT depuis + de 7 jours). BUG-C fix : on ne comptait que
-  // le statut SENT, ce qui sur-estimait le nombre annoncé sur le bouton.
-  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-  const followUpEligible = apps.filter(
-    (a) => a.status === 'SENT' && a.sentAt && Date.now() - new Date(a.sentAt).getTime() > SEVEN_DAYS_MS,
-  ).length;
+  // Nb de relances réellement dues MAINTENANT (dueDate passée) — source serveur via
+  // l'agenda : couvre la 1ʳᵉ relance ET les suivantes (FOLLOWUP-N), contrairement à
+  // l'ancien comptage client « SENT > 7 j » qui ignorait les relances de rang 2.
+  const now = Date.now();
+  const followUpEligible = agenda.followUps.filter((f) => Date.parse(f.dueDate) <= now).length;
 
   const followUpAll = async () => {
     setFollowingUp(true);
@@ -129,6 +135,43 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
       {error && <p className="error">{error}</p>}
       {followUpMsg && (
         <p style={{ fontSize: '13px', color: 'var(--text-sub)', background: '#f2f2f7', borderRadius: '9px', padding: '8px 12px', marginBottom: '12px' }}>{followUpMsg}</p>
+      )}
+
+      {/* F2 : agenda — entretiens à venir + prochaines relances dues. */}
+      {(agenda.interviews.length > 0 || agenda.followUps.length > 0) && (
+        <div className="card" style={{ marginBottom: '16px', display: 'grid', gap: '14px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+          <div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '14px' }}>📆 Entretiens à venir</h3>
+            {agenda.interviews.length === 0
+              ? <p style={{ fontSize: '12px', color: 'var(--text-sub)', margin: 0 }}>Aucun entretien programmé.</p>
+              : <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {agenda.interviews.slice(0, 6).map((iv) => (
+                    <li key={iv.id} style={{ fontSize: '12.5px', padding: '4px 0', borderBottom: '1px solid var(--border, #eee)' }}>
+                      <strong>{new Date(iv.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</strong>
+                      {' — '}{iv.companyName}{iv.location ? ` · 📍 ${iv.location}` : ''}
+                    </li>
+                  ))}
+                </ul>}
+          </div>
+          <div>
+            <h3 style={{ margin: '0 0 8px', fontSize: '14px' }}>⏰ Prochaines relances</h3>
+            {agenda.followUps.length === 0
+              ? <p style={{ fontSize: '12px', color: 'var(--text-sub)', margin: 0 }}>Aucune relance planifiée.</p>
+              : <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {agenda.followUps.slice(0, 6).map((f) => {
+                    const due = Date.parse(f.dueDate) <= now;
+                    return (
+                      <li key={f.id} style={{ fontSize: '12.5px', padding: '4px 0', borderBottom: '1px solid var(--border, #eee)' }}>
+                        <span style={{ color: due ? '#ff9f0a' : 'var(--text-sub)', fontWeight: due ? 700 : 400 }}>
+                          {due ? 'à relancer' : new Date(f.dueDate).toLocaleDateString('fr-FR')}
+                        </span>
+                        {' — '}{f.companyName} <span style={{ color: '#888' }}>({f.jobTitle})</span>
+                      </li>
+                    );
+                  })}
+                </ul>}
+          </div>
+        </div>
       )}
 
       {apps.length === 0 ? (

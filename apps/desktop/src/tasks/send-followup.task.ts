@@ -2,7 +2,7 @@ import { taskRunner } from '../lib/task-runner';
 import { sendApplicationEmail } from '../lib/mailer';
 import { getProfile } from '../modules/profile/profile.service';
 import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
-import { getApplication } from '../modules/application/application.service';
+import { getApplication, MAX_FOLLOWUPS } from '../modules/application/application.service';
 import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
 import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
@@ -80,10 +80,29 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
     type: 'send-email',
     label,
     run: async () => {
-      // Claim atomique : une seule relance par candidature (anti double-clic).
+      // FOLLOWUP-N : on capture l'état AVANT le claim pour pouvoir le restaurer
+      // exactement en cas de rollback (1ʳᵉ relance SENT vs Nᵉ relance FOLLOWED_UP).
+      const before = await prisma.application.findUnique({
+        where: { id: applicationId },
+        select: { status: true, followUpSentAt: true, followUpCount: true },
+      });
+      if (!before) return;
+      const restore = before; // alias lisible pour les rollbacks
+
+      // Claim atomique : accepte la 1ʳᵉ relance (SENT) ET les suivantes (FOLLOWED_UP
+      // dont la dernière relance date de + de 7 j), sans réponse et sous le plafond.
+      const sevenDaysAgo = new Date(Date.now() - 7 * 864e5);
       const claimed = await prisma.application.updateMany({
-        where: { id: applicationId, status: 'SENT', followUpSentAt: null },
-        data: { status: 'FOLLOWED_UP', followUpSentAt: new Date() },
+        where: {
+          id: applicationId,
+          repliedAt: null,
+          followUpCount: { lt: MAX_FOLLOWUPS },
+          OR: [
+            { status: 'SENT', followUpSentAt: null },
+            { status: 'FOLLOWED_UP', followUpSentAt: { lt: sevenDaysAgo } },
+          ],
+        },
+        data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },
       });
       if (claimed.count === 0) return;
 
@@ -93,9 +112,10 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       const profile = await getProfile();
       const cv = await loadCampaignCv(app.campaignId);
       if (!profile?.emailSender || !cv) {
+        // Config transitoire manquante → on restaure l'état d'avant pour réessayer plus tard.
         await prisma.application.update({
           where: { id: applicationId },
-          data: { status: 'SENT', followUpSentAt: null },
+          data: { status: restore.status, followUpSentAt: restore.followUpSentAt, followUpCount: restore.followUpCount },
         });
         return;
       }
@@ -104,11 +124,13 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       // On annule le claim et on neutralise la candidature pour qu'elle ne
       // ressorte plus comme « relançable ».
       if (await isOptedOut(app.contactEmail)) {
+        // Neutralisation DÉFINITIVE : on pousse le compteur au plafond → plus jamais éligible.
         await prisma.application.update({
           where: { id: applicationId },
           data: {
-            status: 'SENT',
-            followUpSentAt: new Date(), // marque comme « relance traitée » → plus jamais éligible
+            status: 'FOLLOWED_UP',
+            followUpSentAt: new Date(),
+            followUpCount: MAX_FOLLOWUPS,
             errorMessage: 'Relance bloquée — le contact figure dans la liste « ne pas contacter » (RGPD).',
           },
         });
@@ -120,11 +142,14 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       // annule le claim — la candidature redevient relançable dès demain.
       const allowed = await tryIncrementDailySend();
       if (!allowed) {
+        // Plafond du jour atteint → on restaure l'état d'avant : redevient éligible
+        // (le quota se libère demain ; le claim 7 j reste cohérent).
         await prisma.application.update({
           where: { id: applicationId },
           data: {
-            status: 'SENT',
-            followUpSentAt: null,
+            status: restore.status,
+            followUpSentAt: restore.followUpSentAt,
+            followUpCount: restore.followUpCount,
             errorMessage: `Relance reportée — plafond d'envois du jour atteint (${getDailySendLimit()}/jour).`,
           },
         });
@@ -171,13 +196,15 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
         await refreshCampaignStatus(app.campaignId);
       } catch (err) {
         if (!smtpSent) {
-          // Rollback sûr : l'email n'a pas été envoyé → on rend le crédit de quota + remet SENT.
+          // Rollback sûr : l'email n'a pas été envoyé → on rend le crédit de quota +
+          // on restaure l'état d'avant (relance retentée plus tard).
           await refundDailySend();
           await prisma.application.update({
             where: { id: applicationId },
             data: {
-              status: 'SENT',
-              followUpSentAt: null,
+              status: restore.status,
+              followUpSentAt: restore.followUpSentAt,
+              followUpCount: restore.followUpCount,
               errorMessage: err instanceof Error ? err.message : 'Échec de la relance',
             },
           });

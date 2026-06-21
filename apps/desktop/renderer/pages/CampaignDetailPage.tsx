@@ -708,6 +708,15 @@ export default function CampaignDetailPage({
     setDraftBodyChanged(false);
   };
 
+  // N4 : fermeture de la modale d'édition à Échap (a11y).
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') void closeModal(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, draftBodyChanged]);
+
   // UX-4v3 : mise à jour du statut manuel post-réponse.
   const setManualStatus = async (appId: string, status: string | null) => {
     await safe(() => api.invoke('application:setManualStatus', { id: appId, manualStatus: status || null }));
@@ -1422,7 +1431,8 @@ export default function CampaignDetailPage({
       {editing && (
         <>
           <div className="modal-overlay" onClick={closeModal} />
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label={`Édition de la candidature pour ${editing.companyName}`}
+               onClick={(e) => e.stopPropagation()}>
             <h3>Aperçu — {editing.companyName}</h3>
             {/* FM4 : afficher l'adresse d'envoi pour que l'utilisateur vérifie le bon compte. */}
             {senderEmail && <p style={{ fontSize: '12px', color: '#888' }}>De : {senderEmail}</p>}

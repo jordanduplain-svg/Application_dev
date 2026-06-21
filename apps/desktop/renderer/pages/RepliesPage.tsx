@@ -186,9 +186,11 @@ export default function RepliesPage() {
     );
   }
 
-  // FM6 : filtre et tri côté client.
+  // FM6 + F4 : filtre plein-texte (entreprise, objet ET contenu de la réponse) + tri.
+  const q = search.toLowerCase();
   const filteredReplies = replies
-    .filter((r) => !search || r.companyName.toLowerCase().includes(search.toLowerCase()))
+    .filter((r) => !q || [r.companyName, r.subject, r.replyContent]
+      .some((v) => (v ?? '').toLowerCase().includes(q)))
     .sort((a, b) => {
       if (sortBy === 'date_asc') return new Date(a.repliedAt ?? 0).getTime() - new Date(b.repliedAt ?? 0).getTime();
       if (sortBy === 'date_desc') return new Date(b.repliedAt ?? 0).getTime() - new Date(a.repliedAt ?? 0).getTime();
@@ -220,7 +222,7 @@ export default function RepliesPage() {
         <div style={{ position: 'relative', flex: 1, minWidth: '160px', display: 'flex' }}>
           <Search size={15} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-sub)', pointerEvents: 'none' }} />
           <input
-            placeholder="Rechercher par entreprise…"
+            placeholder="Rechercher (entreprise, objet, contenu des réponses)…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             style={{ flex: 1, paddingLeft: '32px' }}
@@ -294,6 +296,13 @@ export default function RepliesPage() {
                     📅 {new Date(a.interviewDate).toLocaleString('fr-FR')}
                     {a.interviewLocation && ` — 📍 ${a.interviewLocation}`}
                     {a.interviewNotes && <><br />{a.interviewNotes}</>}
+                    <br />
+                    <button
+                      onClick={() => { void api.invoke('report:interviewIcs', { id: a.id }).catch((e) => setError(e instanceof Error ? e.message : 'Erreur .ics')); }}
+                      style={{ marginTop: '6px', fontSize: '12px' }}
+                    >
+                      📆 Ajouter au calendrier
+                    </button>
                   </p>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

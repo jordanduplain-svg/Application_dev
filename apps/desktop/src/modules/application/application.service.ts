@@ -131,22 +131,38 @@ export async function upsertDraft(params: {
   // FM-02 : variante du prompt A/B utilisée pour cette génération.
   promptVariant?: 'A' | 'B';
 }): Promise<void> {
-  await prisma.application.upsert({
-    where: { companyId: params.companyId },
-    create: {
-      campaignId: params.campaignId,
-      companyId: params.companyId,
-      subject: params.subject,
-      body: params.body,
-      status: 'DRAFT',
-      promptVariant: params.promptVariant ?? 'A',
-    },
-    update: {
+  // Ne JAMAIS écraser une candidature déjà envoyée/en cours : entre l'enqueue d'une
+  // génération en masse et son exécution (file de concurrence), le statut a pu passer
+  // à SENT/SENDING/REPLIED/FOLLOWED_UP. On ne met à jour QUE les DRAFT/FAILED — sinon
+  // le corps stocké d'une candidature envoyée divergerait de l'email réellement parti
+  // (et fausserait le justificatif France Travail).
+  const updated = await prisma.application.updateMany({
+    where: { companyId: params.companyId, status: { in: ['DRAFT', 'FAILED'] } },
+    data: {
       subject: params.subject,
       body: params.body,
       ...(params.promptVariant ? { promptVariant: params.promptVariant } : {}),
     },
   });
+  if (updated.count > 0) return;
+
+  // Aucune ligne mise à jour : soit la candidature n'existe pas (→ create), soit elle
+  // existe mais est protégée → le create lèvera P2002 et on la laisse intacte.
+  try {
+    await prisma.application.create({
+      data: {
+        campaignId: params.campaignId,
+        companyId: params.companyId,
+        subject: params.subject,
+        body: params.body,
+        status: 'DRAFT',
+        promptVariant: params.promptVariant ?? 'A',
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return;
+    throw err;
+  }
 }
 
 // --- Transitions de statut (appelées par les tâches de fond) ----------------
@@ -269,6 +285,29 @@ export async function setManualStatus(
 }
 
 /**
+ * FOLLOWUP-N : nombre maximum de relances automatiques par candidature (cadence 7 j).
+ * 1ʳᵉ relance à J+7 de l'envoi, 2ᵉ à J+7 de la 1ʳᵉ, puis on arrête.
+ */
+export const MAX_FOLLOWUPS = 2;
+
+/**
+ * FOLLOWUP-N : condition Prisma « candidature éligible à une (n-ième) relance ».
+ * - 1ʳᵉ relance : SENT, envoyée il y a + de 7 j, jamais relancée.
+ * - relances suivantes : FOLLOWED_UP, dernière relance il y a + de 7 j.
+ * Dans les deux cas : pas de réponse reçue et plafond de relances non atteint.
+ */
+function followUpEligibleWhere(sevenDaysAgo: Date): Prisma.ApplicationWhereInput {
+  return {
+    repliedAt: null,
+    followUpCount: { lt: MAX_FOLLOWUPS },
+    OR: [
+      { status: 'SENT', sentAt: { lt: sevenDaysAgo }, followUpSentAt: null },
+      { status: 'FOLLOWED_UP', followUpSentAt: { lt: sevenDaysAgo } },
+    ],
+  };
+}
+
+/**
  * UX-5v3 : liste les candidatures nécessitant une action (relance, qualification, réessai).
  */
 export async function listActionRequired(): Promise<Application[]> {
@@ -276,8 +315,8 @@ export async function listActionRequired(): Promise<Application[]> {
   const rows = await prisma.application.findMany({
     where: {
       OR: [
-        // Envoyées il y a + de 7 jours sans réponse et sans relance.
-        { status: 'SENT', sentAt: { lt: sevenDaysAgo }, followUpSentAt: null },
+        // Éligibles à une relance (1ʳᵉ ou suivante, cadence 7 j).
+        followUpEligibleWhere(sevenDaysAgo),
         // Réponses reçues sans statut manuel (à qualifier).
         { status: 'REPLIED', manualStatus: null },
         // Échecs à renvoyer.
@@ -291,14 +330,14 @@ export async function listActionRequired(): Promise<Application[]> {
 }
 
 /**
- * FOLLOWUP-BATCH : ids des candidatures éligibles à une relance (SENT depuis + de
- * 7 jours, sans réponse ni relance déjà envoyée), les plus anciennes d'abord.
- * Sert à la relance en lot. `limit` borne le nombre retourné (quota d'envoi).
+ * FOLLOWUP-BATCH : ids des candidatures éligibles à une relance (cadence 7 j,
+ * plafonnée à MAX_FOLLOWUPS), les plus anciennes d'abord. `limit` borne le nombre
+ * retourné (quota d'envoi).
  */
 export async function listFollowUpEligibleIds(limit?: number): Promise<string[]> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 864e5); // il y a 7 jours
   const rows = await prisma.application.findMany({
-    where: { status: 'SENT', sentAt: { lt: sevenDaysAgo }, followUpSentAt: null },
+    where: followUpEligibleWhere(sevenDaysAgo),
     select: { id: true },
     orderBy: { sentAt: 'asc' },
     ...(limit && limit > 0 ? { take: limit } : {}),

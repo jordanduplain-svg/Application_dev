@@ -1,8 +1,12 @@
-import { BrowserWindow, dialog } from 'electron';
+import { BrowserWindow, dialog, shell } from 'electron';
 import { writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { handle } from './registry';
+import { validate, ReportRangeSchema } from './validation';
 import { prisma } from '../../src/lib/prisma';
 import { getProfile } from '../../src/modules/profile/profile.service';
+import { MAX_FOLLOWUPS } from '../../src/modules/application/application.service';
 import { logger } from '../../src/lib/logger';
 
 /**
@@ -100,7 +104,10 @@ function buildHtml(candidate: string, contact: string, period: string, rows: Row
 }
 
 export function registerReportHandlers(): void {
-  handle('report:franceTravailPdf', async ({ from, to, detailCap } = {}) => {
+  handle('report:franceTravailPdf', async (payload) => {
+    // B3 : valide les bornes (format date natif) avant de toucher Prisma —
+    // un `from` malformé donnait sinon `new Date('xT00:00:00')` = Invalid Date.
+    const { from, to, detailCap } = validate(ReportRangeSchema, payload ?? {});
     const profile = await getProfile();
     const candidate = profile ? `${profile.firstName} ${profile.lastName}`.trim() : '';
     const contact = profile ? [profile.emailSender, profile.phone].filter(Boolean).join(' · ') : '';
@@ -168,4 +175,111 @@ export function registerReportHandlers(): void {
     logger.info(`[report] Justificatif France Travail : ${result.filePath} (${rows.length} candidatures)`);
     return { path: result.filePath, count: rows.length };
   });
+
+  // ── Export CSV de toutes les candidatures (suivi perso / tableur) ──────────
+  handle('report:applicationsCsv', async () => {
+    const apps = await prisma.application.findMany({
+      include: { company: { select: { name: true, contactEmail: true } }, campaign: { select: { jobTitle: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (apps.length === 0) throw new Error('Aucune candidature à exporter.');
+
+    const result = await dialog.showSaveDialog({
+      title: 'Exporter les candidatures (CSV)',
+      defaultPath: `candidatures-${new Date().toISOString().slice(0, 10)}.csv`,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    const header = ['Entreprise', 'Poste', 'Email contact', 'Statut', 'État manuel', 'Envoyée le', 'Réponse le', 'Relancée le'];
+    const fmt = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR') : '');
+    const rows = apps.map((a) => [
+      a.company.name, a.campaign.jobTitle, a.company.contactEmail,
+      STATUS_LABEL[a.status] ?? a.status, a.manualStatus ? (STATUS_LABEL[a.manualStatus] ?? a.manualStatus) : '',
+      fmt(a.sentAt), fmt(a.repliedAt), fmt(a.followUpSentAt),
+    ]);
+    // BOM UTF-8 → Excel ouvre les accents correctement.
+    const csv = '﻿' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+    await writeFile(result.filePath, csv, 'utf8');
+    logger.info(`[report] Export CSV : ${result.filePath} (${apps.length} candidatures)`);
+    return { path: result.filePath, count: apps.length };
+  });
+
+  // ── Agenda : prochaines relances dues + entretiens à venir ─────────────────
+  handle('report:agenda', async () => {
+    // Relances à venir : SENT/FOLLOWED_UP sans réponse, sous le plafond. dueDate =
+    // (dernière relance ou envoi initial) + 7 j. Inclut les retards (dueDate passée).
+    const apps = await prisma.application.findMany({
+      where: { repliedAt: null, followUpCount: { lt: MAX_FOLLOWUPS }, status: { in: ['SENT', 'FOLLOWED_UP'] } },
+      include: { company: { select: { name: true } }, campaign: { select: { jobTitle: true } } },
+    });
+    const followUps = apps.flatMap((a) => {
+      const base = a.followUpSentAt ?? a.sentAt;
+      if (!base) return [];
+      const due = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return [{ id: a.id, companyName: a.company.name, jobTitle: a.campaign.jobTitle, dueDate: due.toISOString() }];
+    }).sort((x, y) => x.dueDate.localeCompare(y.dueDate));
+
+    // Entretiens : à partir d'aujourd'hui (minuit local), les plus proches d'abord.
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const iv = await prisma.application.findMany({
+      where: { interviewDate: { gte: startOfToday } },
+      include: { company: { select: { name: true } } },
+      orderBy: { interviewDate: 'asc' },
+    });
+    const interviews = iv.map((a) => ({
+      id: a.id, companyName: a.company.name,
+      date: a.interviewDate!.toISOString(), location: a.interviewLocation,
+    }));
+
+    return { followUps, interviews };
+  });
+
+  // ── .ics d'un entretien → ouvert dans l'app calendrier par défaut ──────────
+  handle('report:interviewIcs', async ({ id }) => {
+    const a = await prisma.application.findUnique({
+      where: { id },
+      include: { company: { select: { name: true } }, campaign: { select: { jobTitle: true } } },
+    });
+    if (!a) throw new Error('Candidature introuvable.');
+    if (!a.interviewDate) throw new Error("Aucune date d'entretien définie pour cette candidature.");
+
+    const start = a.interviewDate;
+    const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 h par défaut
+    const summary = `Entretien — ${a.company.name} (${a.campaign.jobTitle})`;
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Carreer-ops//FR', 'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:entretien-${a.id}@carreer-ops`,
+      `DTSTAMP:${icsDate(new Date())}`,
+      `DTSTART:${icsDate(start)}`,
+      `DTEND:${icsDate(end)}`,
+      `SUMMARY:${icsEsc(summary)}`,
+      ...(a.interviewLocation ? [`LOCATION:${icsEsc(a.interviewLocation)}`] : []),
+      ...(a.interviewNotes ? [`DESCRIPTION:${icsEsc(a.interviewNotes)}`] : []),
+      'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n');
+
+    const file = join(tmpdir(), `entretien-${a.id}.ics`);
+    await writeFile(file, ics, 'utf8');
+    await shell.openPath(file); // l'app calendrier propose « ajouter l'événement »
+    logger.info(`[report] .ics entretien généré : ${file}`);
+    return { ok: true };
+  });
+}
+
+// Échappe un champ CSV (RFC 4180 : guillemets si , " ou saut de ligne).
+function csvCell(v: string): string {
+  const s = v ?? '';
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Date au format iCalendar UTC : YYYYMMDDTHHMMSSZ.
+function icsDate(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
+// Échappe le texte iCalendar (RFC 5545 : \ ; , et sauts de ligne).
+function icsEsc(s: string): string {
+  return (s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }

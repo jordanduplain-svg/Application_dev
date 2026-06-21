@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Tray, Menu, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, dialog, Tray, Menu, nativeImage, screen, Notification } from 'electron';
 import { fitToWorkArea } from './lib/window-bounds';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -39,6 +39,27 @@ try {
 let mainWindow: BrowserWindow | null = null;
 // UX-11v3 : icône dans la barre système.
 let tray: Tray | null = null;
+
+// B1 : verrou d'instance unique. Deux process sur la MÊME base/secrets corrompent
+// le compteur de quota d'envoi (lost-update de secrets.json, sérialisé par process
+// seulement), doublent le polling IMAP et le scheduler. On refuse la 2ᵉ instance et
+// on ramène la fenêtre existante au premier plan.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// B4 : icône de barre système réelle (PNG cercle violet) — `createEmpty()` produisait
+// une icône invisible, rendant le menu tray « Afficher/Masquer » introuvable.
+const TRAY_ICON_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA5ElEQVR4nM2XwQ3EIAwE86AFWkgvNGBRBC3QVGqgBteQLu4UyUgcIRxChOWxnyiwg23AbJZ4Q6pnkLbExhI7S+xFTr7ptwCUmARL/PmjIP+qUQDXZGeDca5TxnYDXOE8OoxzHbXUPJnvlpgHmEexzNkEoAebpxC3SJQARoS9lo4qgHvRPMo9AajOau/ZHaoEMGP1tyikAC2HzCiFHEBPNI/SKYABAJgUYGb+f+ogAngAgF8KAJ4CeBHCtyH8IFriKIZfRvDreImGZImWDN6ULtGW54UJeZjkWxT2NCulZvrj9DV9AfKhogmbJTJgAAAAAElFTkSuQmCC';
 
 // UX-10v3 : persistance de l'état de la fenêtre (sans lib externe).
 const WIN_STATE_FILE = 'window-state.json';
@@ -235,8 +256,7 @@ function createWindow(): void {
 // UX-11v3 : icône dans la barre système.
 function createTray(): void {
   try {
-    // Utiliser une image vide (1×1 px transparent) si pas d'icône fournie.
-    const icon = nativeImage.createEmpty();
+    const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
     tray = new Tray(icon);
     tray.setToolTip('Candidatures');
 
@@ -268,6 +288,18 @@ function createTray(): void {
 
 let unwireTaskProgress: (() => void) | null = null;
 
+// F1 : notification système native (réponse reçue / bounce). N'apparaît que si la
+// fenêtre n'est pas au premier plan — sinon le toast in-app suffit (pas de doublon).
+function notifyOS(title: string, body: string): void {
+  if (!Notification.isSupported()) return;
+  if (mainWindow?.isFocused()) return;
+  try {
+    const n = new Notification({ title, body, icon: nativeImage.createFromDataURL(TRAY_ICON_DATA_URL) });
+    n.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
+    n.show();
+  } catch { /* non bloquant — la notif est un bonus */ }
+}
+
 // Relaie la progression des tâches de fond et les événements vers le renderer.
 function wireTaskProgress(): void {
   unwireTaskProgress?.();
@@ -275,11 +307,16 @@ function wireTaskProgress(): void {
     mainWindow?.webContents.send('task:progress', progress);
   });
   const unReply = taskRunner.on('reply:received', (data) => {
+    // La notif native des réponses est gérée côté renderer (App.tsx, avec navigation
+    // au clic) — on ne la double PAS ici.
     mainWindow?.webContents.send('reply:received', data);
   });
   // BOUNCE-01 : relayer l'événement de bounce vers le renderer.
+  // F1 : le renderer n'affiche qu'un toast pour les bounces → on ajoute la notif
+  // système native ici (rappel hors fenêtre), sans doublon.
   const unBounce = taskRunner.on('bounce:detected', (data) => {
     mainWindow?.webContents.send('bounce:detected', data);
+    notifyOS('Email non délivré', `${data.companyName} : l'adresse a rebondi${data.nextEmailAvailable ? ' — une alternative est disponible.' : '.'}`);
   });
   unwireTaskProgress = () => { unProgress(); unReply(); unBounce(); };
 }

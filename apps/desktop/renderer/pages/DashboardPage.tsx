@@ -24,6 +24,7 @@ const QUERY_KEYS = {
   activity: (days: number) => ['stats:getActivityByDay', days] as const,
   comparison: ['stats:getCampaignComparison'] as const,
   abTest: ['stats:getAbTest'] as const,
+  bySector: ['stats:getBySector'] as const,
 };
 
 // ANA-1 : tableau de bord global avec les KPIs de l'application.
@@ -39,6 +40,7 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
   const [ftCap, setFtCap] = useState(80); // 0 = toutes les lettres
   const [genFt, setGenFt] = useState(false);
   const [ftMsg, setFtMsg] = useState('');
+  const [genCsv, setGenCsv] = useState(false);
   const generateFtJustificatif = async () => {
     setGenFt(true);
     setFtMsg('');
@@ -49,6 +51,18 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
       setFtMsg(`✗ ${e instanceof Error ? e.message : 'Erreur lors de la génération'}`);
     } finally {
       setGenFt(false);
+    }
+  };
+  const exportCsv = async () => {
+    setGenCsv(true);
+    setFtMsg('');
+    try {
+      const r = await api.invoke('report:applicationsCsv');
+      setFtMsg(r ? `✅ Export CSV (${r.count} candidature(s)) : ${r.path}` : '');
+    } catch (e) {
+      setFtMsg(`✗ ${e instanceof Error ? e.message : 'Erreur lors de l\'export'}`);
+    } finally {
+      setGenCsv(false);
     }
   };
 
@@ -71,6 +85,12 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
   const { data: abTest = [] } = useQuery({
     queryKey: QUERY_KEYS.abTest,
     queryFn: () => api.invoke('stats:getAbTest', {}),
+  });
+
+  // F3 : taux de réponse par secteur (donnée scraper).
+  const { data: bySector = [] } = useQuery({
+    queryKey: QUERY_KEYS.bySector,
+    queryFn: () => api.invoke('stats:getBySector'),
   });
 
   // MOD-01 : invalider les queries quand une tâche se termine (équivalent de cacheInvalidate).
@@ -112,6 +132,11 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
             title="Génère un PDF du relevé de tes candidatures envoyées, à présenter à France Travail comme justificatif de recherche d'emploi."
             className="btn-secondary" style={{ fontSize: '12px' }}>
             📄 Justificatif France Travail
+          </button>
+          <button onClick={exportCsv} disabled={genCsv}
+            title="Exporte toutes tes candidatures en CSV (ouvrable dans Excel / tableur)."
+            className="btn-secondary" style={{ fontSize: '12px', marginLeft: '8px' }}>
+            {genCsv ? 'Export…' : '📊 Exporter CSV'}
           </button>
           {ftOpen && (
             <div style={{ marginTop: '8px', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', textAlign: 'left', maxWidth: '280px' }}>
@@ -212,6 +237,30 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
         </div>
         <ActivityChart data={activity} />
       </div>
+
+      {/* F3 : taux de réponse par secteur d'activité. */}
+      {bySector.length > 0 && (
+        <div className="card">
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 size={17} color="var(--accent)" /> Taux de réponse par secteur
+          </h3>
+          <table className="data-table">
+            <thead>
+              <tr><th>Secteur</th><th>Envoyées</th><th>Réponses</th><th>Taux</th></tr>
+            </thead>
+            <tbody>
+              {bySector.slice(0, 12).map((row) => (
+                <tr key={row.sector}>
+                  <td>{row.sector}</td>
+                  <td>{row.sent}</td>
+                  <td>{row.replied}</td>
+                  <td><strong>{row.replyRate}%</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ANA-4v3 : tableau comparatif des campagnes. */}
       {comparison.length > 0 && (
