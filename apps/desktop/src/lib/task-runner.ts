@@ -104,6 +104,13 @@ export class TaskRunner {
     return { queued: this.queue.length, active: this.active };
   }
 
+  /**
+   * pump — ROUAGE du moteur de file. C'est la boucle qui « tire » des tâches de la file
+   * tant qu'il reste un slot libre (active < CONCURRENCY). Appelée à chaque enqueue ET à
+   * chaque fin de tâche (le `.finally` ci-dessous) → l'exécution se relance toute seule en
+   * cascade jusqu'à vider la file ou saturer les slots. Sans ce rappel en cascade, une
+   * tâche enfilée pendant que les slots sont pleins ne démarrerait jamais.
+   */
   private pump(): void {
     while (this.active < CONCURRENCY && this.queue.length > 0) {
       const task = this.queue.shift()!;
@@ -122,11 +129,18 @@ export class TaskRunner {
     }
   }
 
+  /**
+   * execute — ROUAGE de la fiabilité : exécute une tâche avec réessais. La ligne qui
+   * fait le travail réel est `await task.run()` ; tout le reste est de la résilience —
+   * back-off exponentiel (2 s × n° d'essai) entre les tentatives, abandon immédiat sur
+   * erreur PERMANENTE (clé invalide, 400…) pour ne pas gaspiller 3 essais, et libération
+   * du slot PENDANT le back-off pour ne pas geler les autres tâches.
+   */
   private async execute(task: Task): Promise<void> {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         this.emit({ type: task.type, status: 'running', message: task.label });
-        await task.run();
+        await task.run();   // ← le travail réel (envoi, génération IA, polling…)
         this.emit({ type: task.type, status: 'done', message: task.label });
         return;
       } catch (err) {

@@ -16,6 +16,12 @@ const SENTIMENT = {
 const PAGE_SIZE = 20;
 
 // Page Réponses : liste des candidatures dont une réponse a été détectée par IMAP.
+//
+// ROUAGE : `application:listReplied` charge les candidatures REPLIED ; le bouton « Relever »
+// déclenche `application:pollReplies` (force un cycle IMAP) et la page écoute `reply:received`
+// pour se rafraîchir en direct. Sur chaque réponse : qualification (`manualStatus`), réponse
+// au recruteur, suivi d'entretien + export `.ics`. L'affichage dé-cite (stripQuotedReply) et
+// assainit le HTML (DOMPurify) — on montre le vrai message du recruteur, sans risque XSS.
 export default function RepliesPage() {
   const [replies, setReplies] = useState<Application[]>([]);
   const [error, setError] = useState<string | null>(null);

@@ -37,6 +37,8 @@ export async function isOptedOut(email: string): Promise<boolean> {
   const e = normalizeValue(email);
   if (!e) return false;
   const domain = emailDomain(e);
+  // ← ROUAGE : on teste EN UNE requête l'adresse exacte ET son domaine nu. Un seul des deux
+  //   présent dans la liste suffit à bloquer → couvre « john@acme.com » et « acme.com » d'un coup.
   const candidates = [e, ...(domain ? [domain] : [])];
   const hit = await prisma.optOut.findFirst({ where: { value: { in: candidates } } });
   return hit !== null;
@@ -80,7 +82,9 @@ export async function eraseContact(rawEmail: string, reason?: string): Promise<{
   const targetIds = companies.filter((c) => c.contactEmail.trim().toLowerCase() === email).map((c) => c.id);
   if (targetIds.length === 0) return { erased: 0 };
 
-  // La cascade Prisma (Company → Application) efface aussi les candidatures.
+  // ← ROUAGE de l'effacement : on supprime les Company ; la CASCADE Prisma (onDelete:
+  //   Cascade sur Application.companyId) efface automatiquement les candidatures liées.
+  //   Pas besoin de supprimer les candidatures à la main → cohérence garantie par le schéma.
   const result = await prisma.company.deleteMany({ where: { id: { in: targetIds } } });
   return { erased: result.count };
 }

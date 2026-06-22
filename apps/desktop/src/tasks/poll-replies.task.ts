@@ -12,6 +12,18 @@ import { logger } from '../lib/logger';
 import { matchReply, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
 import { addOptOut } from '../modules/optout/optout.service';
 
+/**
+ * enqueuePollReplies — ROUAGE de la détection des réponses. Relie la boîte mail (IMAP) au
+ * suivi des candidatures, en 3 temps :
+ *   1. fenêtre de relevé : `pollSinceDate` (depuis le dernier relevé, sinon le plus ancien
+ *      envoi borné à 60 j → jamais un scan complet de la boîte) ;
+ *   2. APPARIEMENT (le cœur) : pour chaque candidature envoyée, on cherche dans l'inbox un
+ *      message qui matche (`matchReply`) ET pas déjà consommé (`usedInboxKeys`) ;
+ *   3. effets : markReplied (idempotent), notif, et opt-out RGPD auto si la réponse demande
+ *      une désinscription (sur le texte DÉ-CITÉ pour ne pas réagir à un footer marketing).
+ * `dedup:true` : une seule passe de polling à la fois (le timer ne se chevauche pas).
+ * Les NDR (bounces) sont traités à part, par Message-ID rebondi.
+ */
 export function enqueuePollReplies(): void {
   if (!getImap()) return;
 
@@ -38,6 +50,9 @@ export function enqueuePollReplies(): void {
       const usedInboxKeys = new Set<string>();
       const touchedCampaigns = new Set<string>();
       for (const app of sent) {
+        // ← ROUAGE : on cherche LE message inbox qui répond à cette candidature, en
+        //   excluant ceux déjà attribués (usedInboxKeys) pour qu'un même email ne soit
+        //   pas compté pour deux candidatures. matchReply tranche (Message-ID > email > domaine).
         const reply = inbox.find(
           (m) => !usedInboxKeys.has(inboxKey(m)) && matchReply(m, app, sent)
         );

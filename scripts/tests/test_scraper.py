@@ -741,7 +741,7 @@ class TestScraperProxyPool(unittest.TestCase):
     """Régression : tous les scrapers du registre acceptent proxy_pool (Point 3).
 
     Bug : ajout de proxy_pool à BaseScraper.__init__ mais les sous-classes avec un
-    __init__ custom (SocieteScraper, PappersScraper, FranceTravailScraper) ne le
+    __init__ custom (SocieteScraper, PappersScraper) ne le
     propageaient pas → TypeError 'unexpected keyword argument proxy_pool' au run.
     """
 

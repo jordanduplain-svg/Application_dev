@@ -41,6 +41,13 @@ function leadDept(l: LeadRow): string {
  */
 type SortKey = 'name' | 'sector' | 'city' | 'totalScore' | 'emailSource';
 
+/**
+ * LeadsPage — consultation du MASTER de leads scrapés (le CSV `candio_leads.csv`, pas la base).
+ * ROUAGE : `scraping:listLeads` lit le CSV → on filtre/trie côté client (secteur, lieu, score,
+ * « site douteux », « déjà utilisée »). Les actions mutent le CSV via `scraping:deleteLeads`/
+ * `excludeLeads`/`clearDescriptions` (bloquées si un scraping tourne) et `enrichDescriptions`
+ * relance Python pour (re)générer les fiches. C'est la vue humaine sur la sortie du scraper.
+ */
 export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => void }) {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [loading, setLoading] = useState(true);

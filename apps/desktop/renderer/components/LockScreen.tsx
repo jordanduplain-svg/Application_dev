@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 
 // SEC-M1 : écran de verrouillage automatique.
+//
+// ROUAGE : recouvre toute l'app après inactivité. La vérification du PIN se fait CÔTÉ MAIN
+// (`settings:verifyPin`) — le renderer ne connaît jamais le hash ; il n'envoie que la saisie
+// et reçoit un booléen. `onUnlock()` ne lève l'écran que sur réponse positive.
 interface LockScreenProps {
   onUnlock: () => void;
 }

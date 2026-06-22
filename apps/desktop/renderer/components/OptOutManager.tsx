@@ -13,6 +13,12 @@ const cardAccent = (c: string): CSSProperties => ({ borderLeft: `4px solid ${c}`
 const shStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: '8px' };
 const ACCENT = '#ff9f0a';
 
+/**
+ * OptOutManager — UI de la liste RGPD « ne pas contacter ». ROUAGE : `optout:list/add/remove`
+ * gèrent les entrées (email précis OU domaine entier), et `optout:erase` exerce le DROIT À
+ * L'EFFACEMENT (ajoute à la liste + supprime entreprises/candidatures liées, en cascade). C'est
+ * le point de contrôle qui empêche tout (ré)envoi vers un contact qui s'est désinscrit.
+ */
 export default function OptOutManager() {
   const [entries, setEntries] = useState<OptOutEntry[]>([]);
   const [value, setValue] = useState('');

@@ -28,6 +28,13 @@ const QUERY_KEYS = {
 };
 
 // ANA-1 : tableau de bord global avec les KPIs de l'application.
+/**
+ * DashboardPage — tableau de bord (lecture seule). ROUAGE : tout est branché via `useQuery`
+ * sur les canaux `stats:*` (KPIs, activité, comparaison, A/B, par secteur) → react-query
+ * cache + rafraîchit. Un `useEffect` invalide ces queries quand une tâche se termine
+ * (`task:progress` done) → les chiffres se remettent à jour seuls après un envoi/scrape.
+ * Porte aussi les exports (justificatif France Travail, CSV) qui appellent `report:*`.
+ */
 export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id: string) => void }) {
   const queryClientHook = useQueryClient();
   // ANA-2v3 : sélecteur de plage temporelle (7 / 30 / 90 / 0=tout).

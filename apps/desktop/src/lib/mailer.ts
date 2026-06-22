@@ -42,8 +42,16 @@ const SMTP_THROTTLE_MS = 3_000;
 let lastSmtpSendAt = 0;
 
 /**
- * Envoie un email de candidature. Renvoie le `Message-ID` généré : il est
- * stocké sur la candidature et sert ensuite à rattacher les réponses (IMAP).
+ * sendApplicationEmail — ROUAGE de l'envoi. Renvoie le `Message-ID` généré : c'est la
+ * clé de voûte de tout le suivi, car le matching IMAP des réponses (poll-replies) se base
+ * dessus (In-Reply-To). La ligne qui « fait » l'envoi est `transporter.sendMail(...)` ;
+ * tout ce qui précède est de la sécurité d'en-têtes (anti-injection CRLF), un throttle
+ * anti-ban (3 s mini entre 2 envois) et la signature DKIM optionnelle. Le transporteur
+ * est créé puis FERMÉ à chaque appel (`finally close`) pour ne pas fuir de socket SMTP.
+ *
+ * Pourquoi un transporteur jetable plutôt qu'un pool : un envoi de candidature spontanée
+ * est rare et espacé (throttle 8 s côté task-runner) → un pool persistant ne sert à rien
+ * et laisserait une connexion ouverte vers Gmail entre deux envois.
  */
 export async function sendApplicationEmail(params: SendParams): Promise<string> {
   const smtp = getSmtp();
@@ -97,6 +105,8 @@ export async function sendApplicationEmail(params: SendParams): Promise<string> 
     } : {}),
   });
   try {
+    // ← ROUAGE : l'envoi réel. `info.messageId` revient ensuite jusqu'à la candidature
+    //   (markSent) et devient l'ancre du matching des réponses IMAP.
     const info = await transporter.sendMail({
       from: `"${safeName}" <${safeEmail}>`,
       to: safeTo,

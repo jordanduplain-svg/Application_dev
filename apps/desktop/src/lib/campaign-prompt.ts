@@ -86,8 +86,12 @@ export interface PitchPromptInput {
 }
 
 /**
- * Méta-prompt v2 du rédacteur d'email (logique VOUS → MOI → NOUS). Fonction PURE :
- * toute la sanitisation et le calcul des sections se font en amont dans ai.service.
+ * buildPitchPrompt — ROUAGE de la QUALITÉ des emails. C'est CE texte (et pas le modèle) qui
+ * décide ce que l'IA écrit : structure VOUS→MOI→NOUS, interdits (clichés, dates inventées,
+ * fusion de réalisations), recadrage salarié↔prestataire selon le contrat. La sortie du LLM
+ * ne vaut que ce que vaut ce prompt → améliorer les emails = éditer ici, pas changer de modèle.
+ * Fonction PURE : la sanitisation (anti-injection) et le calcul des sections sont faits en
+ * amont par ai.service ; on n'assemble ici que des morceaux déjà nettoyés → testable.
  */
 export function buildPitchPrompt(i: PitchPromptInput): string {
   // Détection pilotée par la donnée (aucun domaine en dur) : si le contrat visé

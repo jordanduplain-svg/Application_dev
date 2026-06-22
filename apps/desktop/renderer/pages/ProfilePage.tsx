@@ -6,6 +6,10 @@ import AiConfigBlocks from '../components/AiConfigBlocks';
 
 // Page Profil (fusion Accueil + Profil) : identité + coordonnées + configuration IA
 // (lettres/fiches + crawl) + raccourcis SMTP/IMAP. La gestion du CV reste dans l'onglet CV.
+//
+// ROUAGE : `profile:get`/`profile:update` (la ligne unique de profil) ; ces coordonnées
+// (nom, email d'envoi, tel, liens) alimentent ENSUITE le mailer (expéditeur) et generatePitch
+// (signature/§contact). C'est la source d'identité que tout le reste de l'app consomme.
 export default function ProfilePage({ onGoToCv, onGoToSettings, onGoToScraping }: {
   onGoToCv?: () => void;
   onGoToSettings?: () => void;

@@ -16,6 +16,13 @@ import {
   EMAIL_RE, PAGE_SIZE_OPTIONS, EMPTY_COMPANY, type CompanyForm,
 } from '../lib/campaignDetail';
 
+/**
+ * CampaignDetailPage — l'ÉTABLI d'une campagne (la page la plus dense). ROUAGE : c'est d'ici
+ * qu'on pilote tout le cycle de vie d'une candidature via les canaux `application:*` et
+ * `campaign:*` : ajouter/éditer des entreprises, GÉNÉRER les lettres (IA), prévisualiser,
+ * ENVOYER, relancer, régénérer. Comme les envois/générations sont des tâches de fond, la
+ * page s'abonne à `task:progress` et se recharge à chaque fin de tâche → l'état suit en direct.
+ */
 export default function CampaignDetailPage({
   id, onBack, onGoToSettings,
 }: {

@@ -44,6 +44,10 @@ function computeHeuristicReview(parsed: NonNullable<Cv['parsed']>): { score: num
  * L'utilisateur crée plusieurs CV (un par type de poste : Data Analyst, Chef de
  * projet…), importe un PDF pour chacun (analysé par l'IA), puis choisit lequel
  * utiliser par campagne (sélecteur dans le formulaire de campagne).
+ *
+ * ROUAGE : `cv:importFile` copie le PDF puis enfile la tâche `cv-parse` (extraction IA) ;
+ * la page suit `task:progress` type `cv-parse` pour passer le badge « Analyse… » → « ✓ Analysé »
+ * sans rechargement manuel. C'est le `parsed` produit ici qui rendra les lettres personnalisées.
  */
 export default function CvPage() {
   const [cvs, setCvs] = useState<Cv[]>([]);

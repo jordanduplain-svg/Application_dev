@@ -464,10 +464,15 @@ export function getDailySendCount(): { count: number; date: string } {
 }
 
 /**
- * Vérifie si la limite est atteinte et, si non, incrémente le compteur de façon atomique.
- * Retourne true si l'envoi est autorisé, false si la limite est atteinte.
+ * tryIncrementDailySend — ROUAGE du plafond anti-suspension Gmail. « test-and-increment »
+ * atomique : vérifie le quota du jour et, si OK, le consomme — en UN seul geste.
  *
- * L'atomicité est garantie par la file d'écriture sérialisée (enqueueWrite).
+ * Le rouage de l'atomicité est `enqueueWrite()` : il sérialise TOUTES les écritures de
+ * secrets.json dans une chaîne de promesses, donc deux envois simultanés ne peuvent pas
+ * lire `count` puis écrire `count+1` en se chevauchant (lost-update). Sans cette file, le
+ * compteur partirait à la dérive et on dépasserait le plafond (= radar anti-spam Gmail).
+ * Limite borné par le ramp-up cyclique (_rampLimit : 10→20→30→40→49→…). Le verrou est
+ * INTRA-process : c'est pourquoi l'app interdit une seconde instance (cf. main.ts).
  */
 export async function tryIncrementDailySend(): Promise<boolean> {
   let allowed = false;

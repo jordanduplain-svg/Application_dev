@@ -5,6 +5,11 @@ import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
 
 // UX-5v3 : page centralisée des candidatures nécessitant une action.
+//
+// ROUAGE : `application:listActionRequired` (relances dues, réponses à qualifier, échecs) +
+// `report:agenda` (entretiens à venir, prochaines relances datées). Le bouton « Relancer les
+// éligibles » appelle `application:followUpAllEligible` (borné au quota du jour). Le compteur
+// d'éligibles vient de l'agenda serveur → cohérent avec la relance multiple (rangs 1 ET 2).
 
 // Libellé de l'action requise selon le contexte de la candidature.
 function actionLabel(a: Application): string {

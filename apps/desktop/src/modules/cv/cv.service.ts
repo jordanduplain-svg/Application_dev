@@ -4,6 +4,12 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 
 // CV-MULTI : gestion de plusieurs CV nommés (remplace le CV unique du profil).
+//
+// ROUAGE : un CV porte DEUX choses qui servent à des étages différents — `filePath` (le
+// PDF, joint tel quel à l'email par le mailer) et `parsed` (le CV extrait en JSON par l'IA,
+// injecté dans le prompt de generatePitch pour personnaliser la lettre). Une campagne
+// pointe vers UN cv (campaign.cvId) → c'est ce lien qui décide quel CV part et quel profil
+// nourrit la rédaction. `parsed` peut être corrompu en base → toDTO le parse défensivement.
 
 function toDTO(c: DbCv): CvDTO {
   let parsed: CvParsed | null = null;

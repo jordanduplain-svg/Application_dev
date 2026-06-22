@@ -11,8 +11,13 @@ import { setCvParsed } from '../modules/cv/cv.service';
 const MAX_CV_CHARS = 15_000;
 
 /**
- * Enfile l'analyse d'un CV : extraction du texte du PDF, structuration par l'IA,
- * puis enregistrement du résultat sur le CV ciblé (cvId).
+ * enqueueCvParse — ROUAGE de l'analyse de CV. Chaîne PDF → IA → base, en 3 temps :
+ *   1. extractPdfText : texte brut du PDF. Si vide (CV scanné en IMAGE) → on échoue net
+ *      plutôt que d'envoyer du vide à l'IA (qui produirait un CV inexploitable) ;
+ *   2. parseCV ← LE rouage : l'IA transforme le texte libre en JSON structuré (expériences,
+ *      compétences…). C'est ce JSON (`parsed`) qui nourrira ensuite generatePitch ;
+ *   3. reviewCv : score qualité (best-effort — si l'IA est muette, l'UI a un score heuristique).
+ * Le texte est tronqué à MAX_CV_CHARS avant l'IA → borne le timeout et la facture sur un gros PDF.
  */
 export function enqueueCvParse(cvId: string, cvPath: string): void {
   taskRunner.enqueue({

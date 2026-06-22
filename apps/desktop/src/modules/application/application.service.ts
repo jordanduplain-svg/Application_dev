@@ -171,6 +171,9 @@ export async function upsertDraft(params: {
 // Retourne false si une autre tâche a déjà pris cette candidature (double-clic,
 // sendAll + send simultanés) — l'appelant peut alors s'arrêter proprement.
 export async function markSending(id: string): Promise<boolean> {
+  // ← ROUAGE anti-doublon (utilisé par enqueueSend). Une seule requête SQL fait à la fois
+  //   le test (status DRAFT/FAILED ?) et la prise (→ SENDING). Deux tâches concurrentes : la
+  //   première met count=1, la seconde voit 0 ligne (le status n'est plus DRAFT/FAILED) → false.
   const result = await prisma.application.updateMany({
     where: { id, status: { in: ['DRAFT', 'FAILED'] } },
     data: { status: 'SENDING' },
@@ -199,6 +202,9 @@ export async function markFailed(id: string, errorMessage: string): Promise<void
  * L'appelant peut ainsi éviter d'émettre une notification en double.
  */
 export async function markReplied(id: string, replyContent: string): Promise<{ marked: boolean }> {
+  // ← ROUAGE de l'idempotence : `updateMany ... WHERE status IN (SENT, FOLLOWED_UP)` ne
+  //   touche la ligne QUE si elle n'est pas déjà REPLIED. result.count = 0 → c'était déjà
+  //   traité (le re-scan IMAP du même jour ne renotifie donc pas). La base arbitre, pas le code.
   // B2 : accepter aussi FOLLOWED_UP → REPLIED (réponse reçue après une relance).
   const result = await prisma.application.updateMany({
     where: { id, status: { in: ['SENT', 'FOLLOWED_UP'] } },

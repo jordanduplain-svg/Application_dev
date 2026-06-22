@@ -5,6 +5,11 @@ import { prisma } from '../../lib/prisma';
 import { logger } from '../../lib/logger';
 
 // Gestion du profil unique de l'utilisateur (une seule ligne en base).
+//
+// ROUAGE : l'app est mono-utilisateur → le profil est une SEULE ligne, retrouvée par
+// `findFirst()` (pas d'id à connaître). updateProfile fait donc un upsert maison :
+// findFirst → update si présent, sinon create (avec rattrapage P2002 si une autre
+// requête a créé la ligne entre-temps). C'est ce qui rend « Profil » idempotent et sans id.
 
 function toDTO(p: DbProfile): Profile {
   return {

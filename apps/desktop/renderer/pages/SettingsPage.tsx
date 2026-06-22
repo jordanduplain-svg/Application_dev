@@ -56,6 +56,11 @@ function friendlyMailError(raw: string | undefined): string {
 // Page Réglages : clé OpenAI, SMTP, IMAP, option scraping. Aucun secret n'est
 // JAMAIS relu côté UI (seuls les drapeaux openaiKeySet/smtpConfigured/… sont
 // remontés). Re-saisir = remplacer.
+//
+// ROUAGE de sécurité : les secrets ne descendent QUE dans le sens UI→main (`settings:set*`),
+// jamais l'inverse — `settings:getStatus` ne renvoie que des booléens « configuré ? ». Ainsi
+// une clé/un mot de passe n'est jamais réexposé au renderer après saisie. Les tests SMTP/IMAP
+// (`testSmtp`/`testImap`) valident sans rien stocker ; le polling IMAP se hot-reload au changement.
 export default function SettingsPage() {
   const [status, setStatus] = useState<SettingsStatus | null>(null);
   const [openaiKey, setOpenaiKey] = useState('');

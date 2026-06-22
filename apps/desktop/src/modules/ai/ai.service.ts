@@ -19,10 +19,11 @@ function getActiveModel(): string {
   return getAiProvider() === 'ollama' ? getOllamaModel() : getAiModel();
 }
 
-// Crée un client OpenAI-compatible selon le provider configuré.
-// Ollama expose une API compatible OpenAI sur /v1 — le SDK se connecte sans changement.
-// Anthropic (Claude) expose un endpoint compatible OpenAI sur api.anthropic.com/v1 :
-// on réutilise le même SDK en changeant juste baseURL + clé.
+// getClient — ROUAGE du support multi-provider. L'astuce qui fait marcher OpenAI, Ollama,
+// Claude, Gemini ET Groq avec UN SEUL SDK : tous exposent une API compatible OpenAI, donc
+// on ne change QUE `baseURL` + la clé. `maxRetries: 0` est volontaire — le task-runner gère
+// déjà ses propres réessais ; laisser le SDK retenter en parallèle dupliquerait les appels
+// (et la facture). C'est ce qui « branche » la bonne IA selon le réglage utilisateur.
 function getClient(): OpenAI {
   const provider = getAiProvider();
   if (provider === 'ollama') {
@@ -311,6 +312,18 @@ export interface CompanyContext {
   description?: string | null;
 }
 
+/**
+ * generatePitch — ROUAGE de la rédaction d'email. Pipeline en 3 temps :
+ *   1. PROMPT : on assemble un prompt à partir de données NETTOYÉES (`sanitizeForPrompt`
+ *      retire balises/backticks/sauts de ligne → bloque l'injection de prompt depuis un
+ *      contenu scrapé ou saisi). C'est la garde de sécurité du LLM.
+ *   2. APPEL : `getClient().chat.completions.create(...)` ← la ligne qui génère réellement.
+ *      `response_format: json_object` force une sortie {subject, body} parsable.
+ *   3. POLISH DÉTERMINISTE : le 1er jet passe par des correcteurs 100 % fiables (clichés,
+ *      cadratin = marqueur n°1 d'IA, élisions du possessif, déduplication de paragraphes).
+ *      C'est ce qui rend la sortie « humaine » sans dépendre du modèle. En cas d'IA muette
+ *      ou de JSON cassé → email de repli minimal mais valide (la campagne ne se bloque pas).
+ */
 export async function generatePitch(
   jobTitle: string,
   promptInfo: string,

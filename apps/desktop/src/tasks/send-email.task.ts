@@ -46,9 +46,20 @@ export async function throttleSend(): Promise<void> {
 }
 
 /**
- * Enfile l'envoi d'une candidature. Asynchrone car on pré-charge le nom de
- * l'entreprise pour libeller la tâche ("Envoi à Acme" plutôt qu'"Envoi…") —
- * utile dans le journal de la sidebar quand plusieurs envois s'enchaînent.
+ * enqueueSend — ROUAGE de l'envoi d'une candidature, blindé contre le double-envoi et le
+ * dépassement de quota. L'ordre des gardes EST le rouage (chacune protège la suivante) :
+ *   1. idempotence : on ne renvoie jamais un SENT/REPLIED (doublon recruteur) ;
+ *   2. on refuse les emails « devinés » (pattern non vérifié → bounce → réputation) ;
+ *   3. RGPD : on n'envoie jamais à un opt-out ;
+ *   4. on EXIGE un CV attaché (une candidature spontanée sans CV est pire que rien) ;
+ *   5. `markSending` = claim ATOMIQUE DRAFT/FAILED→SENDING : si deux tâches visent la même
+ *      candidature (double-clic, sendAll + send), une seule gagne — LE verrou anti-doublon ;
+ *   6. quota quotidien consommé AVANT le throttle (pour ne pas attendre 8 s si plafond atteint) ;
+ *   7. envoi SMTP, puis markSent. Si le SMTP réussit mais que markSent échoue, on force SENT
+ *      sans messageId (JAMAIS FAILED) — sinon un renvoi manuel = double email parti.
+ *
+ * Asynchrone car on pré-charge le nom de l'entreprise pour libeller la tâche ("Envoi à
+ * Acme") — lisible dans le journal quand plusieurs envois s'enchaînent.
  */
 export async function enqueueSend(applicationId: string): Promise<void> {
   const initial = await getApplication(applicationId);
@@ -118,8 +129,9 @@ export async function enqueueSend(applicationId: string): Promise<void> {
         return;
       }
 
-      // H1 : slot atomique — si une autre tâche a déjà pris cette candidature
-      // (double-clic "Envoyer" ou sendAll + send simultanés), on s'arrête proprement.
+      // ← ROUAGE anti-doublon : claim atomique DRAFT/FAILED→SENDING en une requête SQL.
+      //   La base arbitre la course (UPDATE ... WHERE status IN (...)) → une seule tâche
+      //   passe. Sans ce claim, deux clics « Envoyer » enverraient deux fois le même email.
       const claimed = await markSending(applicationId);
       if (!claimed) return;
 

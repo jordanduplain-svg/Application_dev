@@ -50,9 +50,6 @@ const DEFAULT_CONFIG: ScrapingConfig = {
   // (Snov.io / Apollo.io retirés — voir ScrapingConfig.)
   // SCRAPE-05 : nouvelles améliorations.
   pappersKey: '',
-  // France Travail (ex-Pôle Emploi) — credentials OAuth, vides par défaut
-  franceTravailId: '',
-  franceTravailSecret: '',
   // Source email alerts (webhook) — réutilise les creds IMAP des Réglages
   alertsFolder: 'INBOX',
   alertsSinceDays: 7,
@@ -272,6 +269,35 @@ function pushProgress(line: string, done = false, csvPath: string | null = null)
 
 // ── Lancement du script ───────────────────────────────────────────────────────
 
+/**
+ * launchScript — LE rouage du scraping : transforme la config saisie dans l'UI en
+ * un appel du script Python `scrape_leads.py`, puis relaie sa sortie vers l'interface.
+ *
+ * POURQUOI cette fonction existe : le scraping (crawl web, annuaires SIRENE, IA) est
+ * trop lourd et trop long pour tourner dans le process Electron → on l'isole dans un
+ * PROCESS ENFANT Python. Cette fonction est le SEUL pont entre les deux mondes ; c'est
+ * elle, et elle seule, qui décide si une option de l'UI est réellement « prise en compte ».
+ *
+ * COMMENT ça marche (le rouage, étape par étape) :
+ *   1. Garde anti-concurrence : un seul scraping à la fois (`activeProcess` non nul → on sort).
+ *   2. Construction de `args[]` : CHAQUE champ de la config devient (ou non) un argument
+ *      CLI `--xxx`. C'est ICI qu'une option « marche » ou « ne marche pas » — si le nom
+ *      d'argument ne correspond pas exactement à l'argparse de pipeline.py, Python
+ *      (`parse_args()`) plante tout le scrape. Les booléens ne sont poussés que si actifs ;
+ *      les valeurs égales au défaut Python sont omises (moins de bruit, même comportement).
+ *   3. Secrets via ENV (`spawnEnv`), jamais via args : un argument CLI est visible dans la
+ *      liste des process (`ps`) → les clés (Hunter/OpenAI/Anthropic) passent par variable d'env.
+ *   4. spawn() ← LE rouage qui démarre tout (cf. plus bas). Pas de `shell:true` → les
+ *      arguments sont passés tels quels, donc aucune injection shell possible.
+ *   5. Streaming : on lit stdout LIGNE PAR LIGNE et on repousse chaque ligne vers l'UI
+ *      (`scraping:progress`). La ligne « Exporté → ….csv » est le signal qui capture le
+ *      chemin du résultat (`lastCsvPath`) — c'est ce qui relie « Python a fini » à « voici le fichier ».
+ *   6. close : code 0 + CSV détecté ⇒ succès ; sinon erreur.
+ *
+ * @param config    Réglages du scraping (UI) — chaque champ est mappé en argument à l'étape 2.
+ * @param overrides Modes spéciaux qui court-circuitent la collecte : enrich-only (ré-enrichir
+ *                  un CSV existant), resume (reprendre un run interrompu), linkedin_csv (import).
+ */
 async function launchScript(
   config: ScrapingConfig,
   overrides: {
@@ -281,6 +307,8 @@ async function launchScript(
     linkedin_csv?: string;
   } = {},
 ): Promise<void> {
+  // Étape 1 — garde anti-concurrence : si un process tourne déjà, on refuse (sinon deux
+  // scrapers écriraient le même CSV master en même temps → corruption).
   if (activeProcess) {
     logger.warn('Scraping déjà en cours — appel ignoré.');
     return;
@@ -292,6 +320,13 @@ async function launchScript(
   const cleanSources      = (config.sources ?? []).filter((s) => VALID_SOURCES.has(s));
   const cleanEmailSources = (config.emailSources ?? []).filter((s) => VALID_EMAIL_SOURCES.has(s));
 
+  // ── Étape 2 — TABLE DE CORRESPONDANCE option → argument CLI ──────────────────
+  // C'est le cœur du « est-ce que l'option est prise en compte ». Règle d'or : chaque
+  // `--xxx` poussé ici DOIT exister à l'identique dans l'argparse de pipeline.py, sinon
+  // `parse_args()` rejette l'inconnu et tout le scrape échoue (exit 2). Convention :
+  //  - valeur libre (sector, city, max…)  → toujours poussée ;
+  //  - booléen (skipNoEmail, useGithub…)   → poussé seulement si vrai ;
+  //  - valeur = défaut Python              → omise (même effet, args plus courts).
   const args: string[] = [
     // -u : Python en mode unbuffered. Sans ça, stdout est block-buffered quand piped
     // à Electron → l'utilisateur ne voit rien tant que ~4 KB de logs ne sont pas accumulés
@@ -436,8 +471,11 @@ async function launchScript(
   if (config.exploreNewPages) args.push('--explore-new-pages');
   if (config.exploreSources)  args.push('--explore-sources');
   // Limite de temps globale (0 = illimité).
+  // BUG : l'argument Python est `--max-runtime` (cf. argparse pipeline.py), PAS
+  // `--max-runtime-min`. Avec `parse_args()`, un nom inconnu faisait planter TOUT
+  // le scrape (exit 2) dès que l'utilisateur fixait une limite de temps.
   if (config.maxRuntimeMin !== undefined && config.maxRuntimeMin > 0) {
-    args.push('--max-runtime-min', String(config.maxRuntimeMin));
+    args.push('--max-runtime', String(config.maxRuntimeMin));
   }
   // Pages lues par run par source (1 | 5 | 10 | 25).
   if (config.pagesPerRun && config.pagesPerRun > 0) {
@@ -539,22 +577,32 @@ async function launchScript(
     logger.warn('[SCRAPING] Fiches via Claude demandées mais aucune clé Anthropic — fiches en texte brut.');
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // ROUAGE PRINCIPAL — c'est CETTE ligne qui « fait tourner » tout le scraping.
+  // spawn(python, args) lance scrape_leads.py en process enfant. Tout ce qui précède
+  // n'était que la préparation (args + env) ; tout ce qui suit n'est que de l'écoute.
+  // Pas de `shell:true` : les arguments sont passés tels quels (zéro injection shell).
+  // `buffer` accumule les fragments stdout entre deux events 'data' pour reconstituer
+  // des lignes complètes (un chunk TCP peut couper une ligne en deux).
+  // ════════════════════════════════════════════════════════════════════════════
   let buffer = '';
   activeProcess = spawn(config.pythonPath, args, {
     env: spawnEnv,
     windowsHide: true,
   });
 
-  // Stream stdout ligne par ligne
+  // Écoute stdout : on découpe en lignes et on repousse chacune vers l'UI en direct.
   activeProcess.stdout?.setEncoding('utf8');
   activeProcess.stdout?.on('data', (chunk: string) => {
-    buffer += chunk;
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? '';
+    buffer += chunk;                       // ajoute le nouveau fragment au tampon
+    const lines = buffer.split(/\r?\n/);   // découpe en lignes
+    buffer = lines.pop() ?? '';            // la dernière (peut-être incomplète) repart au tampon
     for (const line of lines) {
       if (!line.trim()) continue;
-      pushProgress(line);
-      // Détecte le chemin CSV dans la sortie ("Exporté → /path/to/file.csv")
+      pushProgress(line);                  // → affiché en temps réel dans le journal de l'UI
+      // ROUAGE secondaire : c'est CE match qui relie « Python a terminé » à « voici le
+      // fichier ». Le script Python imprime « Exporté → …/candio_leads.csv » ; on en
+      // extrait le chemin pour que le 'close' (plus bas) sache quel CSV présenter.
       const match = line.match(/→\s*(.+\.csv)/);
       if (match) lastCsvPath = match[1].trim();
     }
@@ -579,9 +627,13 @@ async function launchScript(
     }
   });
 
+  // Étape 6 — fin du process : c'est ici qu'on décide « succès » vs « échec » et qu'on
+  // libère le verrou de concurrence (`activeProcess = null`), rouvrant le droit à un
+  // prochain scraping. Le verdict repose sur DEUX conditions : code de sortie 0 ET un
+  // chemin CSV capté au streaming — un code 0 sans CSV = anomalie (rien produit).
   activeProcess.on('close', async (code) => {
-    if (buffer.trim()) pushProgress(buffer.trim());
-    activeProcess = null;
+    if (buffer.trim()) pushProgress(buffer.trim());   // vide le reliquat du tampon stdout
+    activeProcess = null;                              // libère le verrou (cf. étape 1)
 
     if (code === 0 && lastCsvPath) {
       jobStatus = 'done';

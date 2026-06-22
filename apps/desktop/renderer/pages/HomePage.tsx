@@ -29,6 +29,12 @@ interface HomeStats {
 // SETUP-1 : alertes « à régler » d'une carte. On affiche TOUTES celles actives.
 type Alert = { show: boolean; cls: 'red' | 'amber'; label: string; title: string };
 
+/**
+ * HomePage — accueil-lanceur (bento), page par défaut. ROUAGE : c'est un TABLEAU DE BORD
+ * d'orientation — il agrège quelques chiffres réels (`stats:getGlobal`, leads, scraping) et
+ * surtout calcule des ALERTES « à régler » (profil/IA/SMTP/CV manquants) qui guident le
+ * 1er paramétrage. Chaque carte appelle `onNavigate(section)` → délègue la vraie nav à App.tsx.
+ */
 export default function HomePage({ onNavigate }: { onNavigate: (n: Nav) => void }) {
   const [s, setS] = useState<HomeStats>({ firstName: '', active: 0, drafts: 0, todo: 0, leads: 0, cvOk: false, aiOk: true, smtpOk: true, imapOk: true, profileOk: true });
 

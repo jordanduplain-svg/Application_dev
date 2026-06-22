@@ -16,7 +16,11 @@ export interface AppRef {
 }
 
 /**
- * Détermine si un message IMAP est une réponse à une candidature.
+ * matchReply — ROUAGE de l'appariement réponse↔candidature. Fonction PURE (sans DB/réseau)
+ * → testable et déterministe. Elle applique 4 critères du plus fiable au plus risqué, et
+ * s'arrête au premier qui matche. Le dernier (domaine partagé) n'est accepté QUE s'il est
+ * non ambigu (une seule candidature sur ce domaine) — sinon on risquerait d'attribuer une
+ * réponse à la mauvaise entreprise.
  *
  * Priorités :
  *  1. In-Reply-To contient le Message-ID de l'envoi initial (B8 : includes au lieu de ===).

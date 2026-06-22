@@ -8,5 +8,8 @@ declare global {
   }
 }
 
-// Raccourci d'import : `import { api } from '../lib/api'` puis `api.invoke(…)`.
+// ROUAGE du pont renderer→main : `window.api` est le SEUL canal du React vers Node.
+// Il a été injecté par preload.ts (contextBridge) au démarrage de la fenêtre. Toute la
+// communication passe par `api.invoke(canal, payload)` (requête/réponse typée) et
+// `api.on(event, cb)` (push du main). Le renderer n'a aucun autre accès à Node/DB/réseau.
 export const api = window.api;

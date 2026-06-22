@@ -129,6 +129,20 @@ export async function verifyImap(config: ImapInput): Promise<void> {
   await client.logout().catch(() => undefined);
 }
 
+/**
+ * fetchInboxSince — ROUAGE de la détection des réponses. Récupère les emails reçus
+ * depuis `since`, les parse, et renvoie une liste enrichie (expéditeur, In-Reply-To,
+ * bounce ?, auto-reply ?) que poll-replies confrontera ensuite aux candidatures envoyées.
+ *
+ * Les 2 lignes qui « font » le travail : `client.search({ since })` (quels emails) puis
+ * `client.fetch(... source:true)` + `simpleParser` (lire et décoder chacun). Tout le reste
+ * est de la robustesse réseau, INDISPENSABLE sur une vraie boîte mail :
+ *   • borne `since` à 60 j en amont (cf. pollSinceDate) → jamais un scan complet ;
+ *   • cap MAX_EMAILS_TOTAL=500, et on garde les UID les plus RÉCENTS (slice(-N)) car les
+ *     UID IMAP sont croissants → sinon on lirait les plus vieux et raterait les réponses ;
+ *   • timeouts connexion (15 s) + opérations mailbox (60 s) avec fermeture de socket, sinon
+ *     une grande INBOX peut bloquer indéfiniment.
+ */
 export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
   const imap = getImap();
   if (!imap) throw new Error('Configuration IMAP absente — renseignez-la dans les Réglages');
@@ -151,6 +165,9 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
     const mailboxOp = async () => {
       const lock = await client.getMailboxLock('INBOX');
       try {
+        // ← ROUAGE 1/2 : QUELS emails. search({ since }) demande au serveur les UID des
+        //   messages reçus depuis la date — granularité au JOUR côté IMAP (d'où le re-scan
+        //   bénin du jour courant, neutralisé par l'idempotence de markReplied en aval).
         // BUG-M4 fix : tronquer à MAX_EMAILS_TOTAL avant de batcher.
         // client.search() peut retourner false (boîte vide) ou number[].
         const rawUids = await client.search({ since }, { uid: true });
@@ -162,6 +179,9 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
         if (uids.length > 0) {
           for (let offset = 0; offset < uids.length; offset += FETCH_BATCH_SIZE) {
             const batch = uids.slice(offset, offset + FETCH_BATCH_SIZE);
+            // ← ROUAGE 2/2 : LIRE chaque email. fetch(source:true) télécharge le message
+            //   brut, simpleParser le décode (en-têtes, texte, In-Reply-To). C'est d'ici
+            //   que sortent les champs sur lesquels matchReply décidera « c'est une réponse ».
             for await (const msg of client.fetch(batch, { source: true }, { uid: true })) {
               if (!msg.source) continue;
               const parsed: ParsedMail = await simpleParser(msg.source);

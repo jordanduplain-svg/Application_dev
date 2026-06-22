@@ -33,11 +33,15 @@ export function encryptBuffer(plain: Buffer, passphrase: string): Buffer {
   if (!passphrase || passphrase.length < 8) {
     throw new Error('Mot de passe trop court (8 caractères minimum).');
   }
+  // ← ROUAGE sécurité : salt ALÉATOIRE par sauvegarde → deux backups du même fichier avec
+  //   le même mot de passe donnent des clés/chiffrés différents (pas de table de correspondance).
   const salt = randomBytes(SALT_LEN);
   const iv = randomBytes(IV_LEN);
-  const key = deriveKey(passphrase, salt);
+  const key = deriveKey(passphrase, salt);   // scrypt : lent à dessein → brute-force coûteux
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([cipher.update(plain), cipher.final()]);
+  // getAuthTag = sceau d'intégrité : au déchiffrement, un mauvais mot de passe ou 1 octet
+  // altéré fait échouer final() → on ne rend JAMAIS de données corrompues silencieusement.
   const tag = cipher.getAuthTag();
   return Buffer.concat([MAGIC, Buffer.from([VERSION]), salt, iv, tag, ciphertext]);
 }

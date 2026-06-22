@@ -633,6 +633,17 @@ export async function resetUsedLeads(keys: string[]): Promise<{ reset: number; s
  * - Exclut les leads déjà utilisés dans une campagne.
  * - Trie par score (pertinence + fraîcheur) décroissant et plafonne à `limit`.
  */
+/**
+ * importLeadsFromMasterContent — ROUAGE du pré-remplissage automatique d'une campagne
+ * (SECTOR-AUTO). C'est un ENTONNOIR en 5 étages appliqués dans cet ordre précis :
+ *   1. LIEU (ville/dépt/région) — avec repli `widened` si zéro lead du lieu (jamais campagne vide) ;
+ *   2. SECTEUR préféré — élargit aussi si trop peu (même logique anti-vide) ;
+ *   3. EXCLUSION : leads déjà utilisés dans N'IMPORTE quelle campagne + opt-out RGPD →
+ *      ne jamais re-proposer ni redémarcher un contact (c'est ce qui évite les doublons inter-campagnes) ;
+ *   4. TRI par score (pertinence + fraîcheur) décroissant, puis PLAFOND `limit` → on garde les meilleurs ;
+ *   5. INSERT ligne par ligne en sautant les doublons d'email DANS la campagne (P2002).
+ * Les `widened`/`capped`/`skippedUsed` remontés servent à expliquer le résultat dans l'UI.
+ */
 export async function importLeadsFromMasterContent(
   campaignId: string,
   content: string,

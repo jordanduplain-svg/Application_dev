@@ -47,7 +47,10 @@ const EMPTY: PromptHelperInput = {
   skills: '', financialArg: '', mobility: '',
 };
 
-// Construit les deux variantes de directives à partir du matériel saisi.
+// buildPrompts — ROUAGE de l'assistant de prompt (repli 100 % LOCAL, sans IA). À partir du
+// matériel factuel saisi, génère 2 variantes de DIRECTIVES A/B (angle IMPACT vs MOTIVATION)
+// par simple templating. C'est le filet quand l'IA d'enrichissement est indisponible : l'UI
+// a toujours deux prompts exploitables. Rappel : un « prompt » = consignes à GPT, pas l'email.
 export function buildPrompts(input: PromptHelperInput): { promptA: string; promptB: string } {
   const lines: string[] = [];
   if (input.training)     lines.push(`- Formation / situation : ${input.training}`);

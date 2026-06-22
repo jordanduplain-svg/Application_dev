@@ -19,7 +19,15 @@ import { logger } from '../lib/logger';
 let task: ScheduledTask | null = null;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Exécute une passe de relance automatique. Renvoie le nombre enfilé. No-op si désactivé. */
+/**
+ * runAutoFollowUps — ROUAGE de l'automatisation des relances. Le rouage tient en 2 idées :
+ *   • on calcule le quota RESTANT du jour, et on ne demande QUE ce nombre d'éligibles
+ *     (`listFollowUpEligibleIds(remaining)`) → impossible de dépasser le plafond Gmail ;
+ *   • on ne fait qu'ENFILER (`enqueueFollowUp`) : tous les garde-fous réels (opt-out, claim
+ *     atomique, quota, throttle 8 s) sont DANS la tâche → une relance auto suit exactement
+ *     le même chemin sûr qu'une relance manuelle. Cette fonction n'est qu'un déclencheur.
+ * Appelée par le cron 09:00 ET par la passe de rattrapage au démarrage (cf. startScheduler).
+ */
 export async function runAutoFollowUps(): Promise<number> {
   if (!getAutoFollowUpEnabled()) return 0;
   const remaining = Math.max(0, getDailySendLimit() - getDailySendCount().count);
@@ -40,7 +48,10 @@ export async function runAutoFollowUps(): Promise<number> {
  */
 export function startScheduler(): void {
   stopScheduler();
-  // Tous les jours à 09:00 (heure locale de la machine).
+  // ← ROUAGE de la planification : node-cron déclenche la passe chaque jour à 09:00 (heure
+  //   locale). LIMITE assumée : c'est un timer EN PROCESS → rien ne tourne si l'app est
+  //   fermée. Le filet, c'est le `startupTimer` ci-dessous (rattrapage 30 s après le boot)
+  //   couplé à l'option « lancer au démarrage » → l'app s'ouvre, la passe se fait.
   task = cron.schedule('0 9 * * *', () => {
     void runAutoFollowUps().catch((err) => logger.warn('[scheduler] Échec de la relance auto planifiée', err));
   });

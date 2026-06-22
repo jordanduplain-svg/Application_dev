@@ -39,6 +39,18 @@ type Route =
 // M1 : garde les 100 dernières entrées du journal des tâches.
 const MAX_LOG_ENTRIES = 100;
 
+/**
+ * App — ROUAGE du renderer. Deux mécanismes le font vivre :
+ *   1. ROUTING MAISON : un simple `useState<Route>` + un switch dans le rendu (pas de
+ *      react-router — inutile pour une nav locale fermée). `setRoute({name})` = naviguer ;
+ *      la route `campaign` porte un `id` → c'est ainsi qu'on ouvre une campagne précise.
+ *      Les pages sont en `lazy()` → chargées à la 1ʳᵉ visite (boot plus léger).
+ *   2. CÂBLAGE DES ÉVÉNEMENTS du main : des `useEffect(() => api.on(event, …))` s'abonnent
+ *      aux push du process principal (task:progress, reply:received, bounce:detected,
+ *      update:ready) et alimentent le journal/les toasts. Chaque abonnement rend sa fonction
+ *      de désabonnement → pas de fuite de listener au démontage. C'est le pont temps-réel
+ *      qui reflète dans l'UI ce que font les tâches de fond.
+ */
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   // L3 : uid stable pour éviter l'antipattern key={index} quand le tableau est tronqué.

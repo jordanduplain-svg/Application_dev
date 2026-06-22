@@ -244,10 +244,6 @@ export interface ScrapingConfig {
   //  jamais utilisés ; enrichissement = crawl web gratuit + Hunter free tier.)
   // SCRAPE-05 : nouvelles améliorations scraping.
   pappersKey: string;         // Pappers.fr token (SIRENE + dirigeants, 500 req/mois gratuits)
-  // France Travail (ex-Pôle Emploi) — API officielle FR, OAuth2 client_credentials.
-  // Inscription gratuite sur francetravail.io → souscrire "Offres d'emploi v2".
-  franceTravailId?: string;   // OAuth client_id
-  franceTravailSecret?: string; // OAuth client_secret
   // Source "email alerts" (webhook) : lit les alertes emploi dans la boîte mail IMAP
   // (creds IMAP réutilisés depuis les Réglages). Voir source 'email_alerts'.
   alertsFolder?: string;      // dossier IMAP à scanner (défaut: INBOX)

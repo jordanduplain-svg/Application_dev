@@ -52,9 +52,24 @@ def _run_collect(
 ) -> list[Company]:
     """
     Phase 1 : collecte multi-sources + filtres date et blacklist.
+
+    ROUAGE / comment le VOLUME de résultats est gouverné (3 leviers distincts — c'est la
+    source de la confusion fréquente « 1 page = beaucoup de résultats ») :
+      • cap = cfg.effective_max (option « Max entreprises ») → PLAFOND TOTAL, toutes
+        sources confondues. C'est lui qui borne réellement le nombre final.
+      • per_source = cap // nb_sources → part max attribuée à CHAQUE source.
+      • cfg.pages_per_run (option « Pages par run ») → PROFONDEUR de lecture par source :
+        combien de pages de résultats on lit par run. Attention : pour SIRENE c'est par
+        CODE NAF → 1 page × N codes = N×25 résultats. « 1 page » ne veut donc pas dire
+        « peu de résultats » : pour en avoir moins, on baisse `max`, pas `pages_per_run`.
+
+    Curseur de pagination (option « Explorer les pages suivantes ») : chaque source a un
+    offset persistant en cache ; à chaque run on avance de `pages_advanced` pages → le run
+    suivant reprend là où le précédent s'est arrêté, sans rien relire ni sauter.
+
     Lit sector, city, sources, max_results, industry, delay, posted_within_days,
-    blacklist_domains et pappers_key depuis ``cfg``. Retourne les entreprises
-    collectées (non encore filtrées MX/catch-all).
+    pages_per_run, blacklist_domains et pappers_key depuis ``cfg``. Retourne les
+    entreprises collectées (non encore filtrées MX/catch-all).
     """
     industry_query = cfg.industry.strip() or cfg.sector
     all_companies: list[Company] = []
@@ -72,13 +87,6 @@ def _run_collect(
     # Cible de taille d'entreprise (filtre SIRENE par tranche d'effectif).
     if getattr(cfg, "size_target", "all") and cfg.size_target != "all":
         scraper_kwargs["societe"] = {"size_target": cfg.size_target}
-    # France Travail : credentials OAuth + cache pour le token (24h TTL)
-    if cfg.france_travail_id and cfg.france_travail_secret:
-        scraper_kwargs["france_travail"] = {
-            "client_id":     cfg.france_travail_id,
-            "client_secret": cfg.france_travail_secret,
-            "cache":         cache,
-        }
 
     print("\n📡  Phase 1 : collecte multi-sources…")
     # A8 : charge les scrapers plugins de l'utilisateur (~/.cache/carreer-ops/scrapers/)
@@ -157,10 +165,15 @@ def _run_collect(
             # B1-14 : session partagée passée à tous les scrapers.
             scraper = cls(fetcher=fetcher, delay=cfg.delay, rate_limiter=rate_limiter,
                           page_offset=page_offset, session=_shared_session, **extra)
-            # Propage pages_per_run au scraper (remplace son PAGES_PER_RUN de classe).
-            # Permet de lire N pages SIRENE/WTTJ/APEC par run depuis l'UI.
+            # ── ROUAGE de l'option « Pages par run » ────────────────────────────
+            # C'est CETTE ligne qui fait que le réglage de l'UI agit vraiment : on écrase
+            # le PAGES_PER_RUN par défaut de la CLASSE du scraper par la valeur choisie.
+            # Sans elle, chaque scraper garderait sa constante de classe et l'option serait
+            # ignorée (c'était le bug France Travail : un range(...,+10) en dur l'ignorait).
+            # Chaque scraper.search() lit donc `self.PAGES_PER_RUN` pages, puis s'arrête.
             if cfg.pages_per_run and cfg.pages_per_run > 0:
                 scraper.PAGES_PER_RUN = cfg.pages_per_run
+            # Lance la recherche : lit jusqu'à PAGES_PER_RUN pages OU per_source résultats.
             results = scraper.search(query, cfg.city, per_source)
         except Exception as e:
             print(f"   ❌  Erreur {source_name} : {e}")
@@ -282,9 +295,6 @@ class RunConfig:
     hunter_max_searches:        int             = 20
     pappers_key:                str             = ""
     github_token:               str             = ""
-    # France Travail (ex-Pôle Emploi) — OAuth2 client_credentials
-    france_travail_id:          str             = ""
-    france_travail_secret:      str             = ""
 
     # ── Sources d'enrichissement email ──────────────────────────────────────────
     email_sources:        list[str]       = field(default_factory=lambda: ["web_crawl", "hunter", "pattern"])
@@ -900,7 +910,6 @@ _SOURCE_LABELS: dict[str, str] = {
     "pj":            "Pages Jaunes (annuaire)",
     "societe":       "Société.com SIRENE (annuaire)",
     "pappers":       "Pappers (SIRENE + dirigeants)",
-    "france_travail":"France Travail (API officielle)",
     "linkedin_sales_nav": "LinkedIn Sales Nav (import)",
     "email_alert:wttj":   "Alertes email WTTJ",
     "email_alert:indeed": "Alertes email Indeed",
@@ -1389,10 +1398,6 @@ def _prepare_run_kwargs(args: argparse.Namespace) -> RunConfig:
     if args.pappers_key and "pappers" not in sources:
         sources.append("pappers")
 
-    # France Travail — ajoute la source si les credentials OAuth sont fournis.
-    if args.france_travail_id and args.france_travail_secret and "france_travail" not in sources:
-        sources.append("france_travail")
-
     # ── Affichage récapitulatif avant exécution ───────────────────────────────
     industry_display  = args.industry.strip() or f"(fallback : {args.sector})"
     email_src_display = ", ".join(email_sources) if email_sources else "aucune"
@@ -1471,8 +1476,6 @@ def _prepare_run_kwargs(args: argparse.Namespace) -> RunConfig:
         skip_no_email=args.skip_no_email,
         pappers_key=args.pappers_key,
         github_token=args.github_token,
-        france_travail_id=args.france_travail_id,
-        france_travail_secret=args.france_travail_secret,
         llm_provider=args.llm,
         ollama_url=args.ollama_url,
         ollama_model=args.ollama_model,
@@ -1601,12 +1604,6 @@ Sources : wttj · indeed · kompass · pj · apec · cadremploi
     # Pappers.fr (source SIRENE + dirigeants)
     parser.add_argument("--pappers-key", default="", metavar="TOKEN",
                         help="Pappers.fr API token — 500 req/mois gratuits, retourne les dirigeants")
-
-    # France Travail (ex-Pôle Emploi) — API officielle FR
-    parser.add_argument("--france-travail-id", default="", metavar="CLIENT_ID",
-                        help="France Travail OAuth client_id — inscription gratuite sur francetravail.io")
-    parser.add_argument("--france-travail-secret", default="", metavar="CLIENT_SECRET",
-                        help="France Travail OAuth client_secret")
 
     # LLM — extraction structurée via Ollama local ou OpenAI cloud
     parser.add_argument("--llm", default="", choices=["", "ollama", "openai", "claude"],

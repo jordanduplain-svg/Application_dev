@@ -59,6 +59,10 @@ function statusColor(status: string): string {
 }
 
 // Liste des campagnes + formulaire de création inline.
+//
+// ROUAGE : `campaign:create` renvoie le DTO de la campagne créée ; on lance alors l'import
+// AUTO des leads du master (`scraping:importLeadsToCampaign`, non bloquant) puis on ouvre
+// directement le détail (`onOpen(id)`) → une campagne naît déjà pré-remplie d'entreprises.
 export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
   onOpen: (id: string) => void;
   onGoToSettings?: () => void;
