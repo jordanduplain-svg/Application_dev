@@ -14,6 +14,8 @@ export interface InboxMessage {
   subject: string;
   date: Date;
   inReplyTo: string | null;
+  // BUG-2 : chaîne References (threading) — testée en plus d'In-Reply-To au matching.
+  references: string | null;
   text: string;
   // BOUNCE-01 : true si ce message est un NDR (Non-Delivery Report / bounce).
   isBounce: boolean;
@@ -194,11 +196,16 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
                 const v = parsed.headers.get(name);
                 return typeof v === 'string' ? v : null;
               };
+              // BUG-2 : References peut être une chaîne OU un tableau selon mailparser.
+              const references = Array.isArray(parsed.references)
+                ? parsed.references.join(' ')
+                : ((parsed.references as string | undefined) ?? null);
               messages.push({
                 from,
                 subject,
                 date: parsed.date ?? new Date(),
                 inReplyTo: (parsed.inReplyTo as string | null) ?? null,
+                references,
                 text,
                 isBounce,
                 bouncedMessageId,
@@ -216,15 +223,27 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
       }
     };
 
+    // BUG-3 : si l'opération expire, Promise.race abandonne la promesse perdante mais
+    // `mailboxOp()` continue de tourner (lock INBOX tenu) et le `logout()` du finally
+    // partirait pendant un fetch en vol. On ferme donc la socket sur timeout pour
+    // ABANDONNER réellement l'opération (comme connectWithTimeout pour la connexion).
+    let mailboxTimedOut = false;
     const mailboxTimeout = new Promise<never>((_, reject) => {
-      mailboxTimeoutId = setTimeout(
-        () => reject(new Error('IMAP: opérations mailbox timeout (60 s)')),
-        MAILBOX_TIMEOUT_MS
-      );
+      mailboxTimeoutId = setTimeout(() => {
+        mailboxTimedOut = true;
+        reject(new Error('IMAP: opérations mailbox timeout (60 s)'));
+      }, MAILBOX_TIMEOUT_MS);
     });
 
+    const op = mailboxOp();
     try {
-      await Promise.race([mailboxOp(), mailboxTimeout]);
+      await Promise.race([op, mailboxTimeout]);
+    } catch (err) {
+      if (mailboxTimedOut) {
+        op.catch(() => {});                              // absorbe l'op pendante (pas d'unhandledRejection)
+        try { client.close(); } catch { /* socket déjà morte */ }
+      }
+      throw err;
     } finally {
       if (mailboxTimeoutId !== null) clearTimeout(mailboxTimeoutId);
     }

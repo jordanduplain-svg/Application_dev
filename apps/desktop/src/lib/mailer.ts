@@ -121,7 +121,10 @@ export async function sendApplicationEmail(params: SendParams): Promise<string> 
       ...(params.references ? { references: params.references } : {}),
     });
     logger.info(`Email envoyé à ${params.to} (messageId: ${info.messageId})`);
-    return info.messageId;
+    // BUG-4 : nodemailer peut renvoyer un messageId undefined. On retourne '' plutôt
+    // qu'undefined (le type promet `string`) ; le matching IMAP retombe alors sur
+    // l'email/domaine de l'expéditeur (matchReply priorités 3-4).
+    return info.messageId ?? '';
   } finally {
     // Ferme le pool sortant — sans ça, chaque envoi laisse une socket ouverte.
     transporter.close();

@@ -1,7 +1,7 @@
 import { safeStorage } from 'electron';
 import { readFileSync, existsSync, renameSync } from 'fs';
 import { writeFile as writeFileAsync } from 'fs/promises';
-import { createHash } from 'crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import type { SmtpInput, ImapInput, DkimInput } from '@candio/shared';
 import { getSecretsPath } from './paths';
 import { logger } from './logger';
@@ -345,19 +345,25 @@ export function setOllamaHost(host: string): Promise<void> {
 
 // --- PIN de verrouillage (SEC-M1) -------------------------------------------
 
-/** Hashe un PIN en SHA-256 hex. */
-function hashPin(pin: string): string {
-  return createHash('sha256').update(pin).digest('hex');
+// SECU-3 : PIN haché avec SEL + scrypt (KDF lent), format « scrypt$<selHex>$<hashHex> ».
+// Le SHA-256 non salé précédent rendait le brute-force d'un PIN à 4 chiffres trivial si
+// secrets.json fuyait. Comparaison en temps constant (timingSafeEqual). Compat ascendante :
+// un ancien hash SHA-256 (64 hex) reste vérifiable, et sera ré-haché au sel au prochain set.
+const SCRYPT_KEYLEN = 32;
+
+function hashPinSalted(pin: string, salt: Buffer): string {
+  return `scrypt$${salt.toString('hex')}$${scryptSync(pin, salt, SCRYPT_KEYLEN).toString('hex')}`;
 }
 
-/** Retourne le hash SHA-256 du PIN, ou null si non configuré. */
+/** Retourne le hash du PIN stocké, ou null si non configuré. */
 export function getLockPin(): string | null {
   return readFile().lockPin ?? null;
 }
 
-/** Enregistre le PIN hashé SHA-256. */
+/** Enregistre le PIN haché avec sel (scrypt). */
 export function setLockPin(pin: string): Promise<void> {
-  return enqueueWrite(() => writeFile({ ...readFile(), lockPin: hashPin(pin) }));
+  const stored = hashPinSalted(pin, randomBytes(16));
+  return enqueueWrite(() => writeFile({ ...readFile(), lockPin: stored }));
 }
 
 /** Efface le PIN de verrouillage. */
@@ -365,10 +371,21 @@ export function clearLockPin(): Promise<void> {
   return enqueueWrite(() => writeFile({ ...readFile(), lockPin: undefined }));
 }
 
-/** Vérifie un PIN en comparant son hash à celui stocké. */
+/** Vérifie un PIN. Supporte le nouveau format salé ET l'ancien SHA-256 (legacy). */
 export function verifyLockPin(pin: string): boolean {
   const stored = readFile().lockPin;
-  return stored !== undefined && stored === hashPin(pin);
+  if (!stored) return false;
+  if (stored.startsWith('scrypt$')) {
+    const [, saltHex, hashHex] = stored.split('$');
+    if (!saltHex || !hashHex) return false;
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = scryptSync(pin, Buffer.from(saltHex, 'hex'), expected.length);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+  // Legacy : ancien hash SHA-256 non salé (comparaison en temps constant malgré tout).
+  const legacy = Buffer.from(createHash('sha256').update(pin).digest('hex'));
+  const storedBuf = Buffer.from(stored);
+  return legacy.length === storedBuf.length && timingSafeEqual(legacy, storedBuf);
 }
 
 /** Retourne le timeout de verrouillage en minutes (défaut 15). */

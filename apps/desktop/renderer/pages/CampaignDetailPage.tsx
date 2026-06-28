@@ -1209,16 +1209,18 @@ export default function CampaignDetailPage({
           <Sparkles size={15} />
           {isGenerating ? 'Génération…' : 'Régénérer toutes les lettres'}
         </button>
-        <button onClick={sendAll} disabled={isSendingAll} className="btn-success">
-          <Send size={15} />
-          {isSendingAll ? 'Envoi en cours…' : 'Tout envoyer (brouillons + échecs)'}
-        </button>
         {/* TEST-CAMPAGNE : envoi de test de tous les brouillons à soi-même. */}
         <button onClick={sendTestAll} disabled={isTestingAll || isSendingAll} className="btn-secondary" title="S'envoyer tous les brouillons en test (rendu + CV) sans rien envoyer aux entreprises">
           <Send size={15} />{isTestingAll ? 'Test en cours…' : 'Tester (m\'envoyer les brouillons)'}
         </button>
         {/* UX-9 : export CSV. */}
         <button onClick={exportCsv} className="btn-secondary"><Download size={15} />Exporter en CSV</button>
+        {/* Envoi RÉEL aux entreprises — isolé à DROITE (marginLeft:auto) pour le distinguer
+            nettement du bouton « Tester », trop facile à confondre auparavant. */}
+        <button onClick={sendAll} disabled={isSendingAll} className="btn-success" style={{ marginLeft: 'auto' }}>
+          <Send size={15} />
+          {isSendingAll ? 'Envoi en cours…' : 'Envoyer Candidature'}
+        </button>
       </div>
 
       {/* TEST-CAMPAGNE : rapport du test de campagne. */}

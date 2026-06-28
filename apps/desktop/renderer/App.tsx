@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings } from 'lucide-react';
+import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings, PenLine } from 'lucide-react';
 import type { TaskProgress, ReplyNotification, SettingsStatus, SearchResult } from '@candio/shared';
 import { api } from './lib/api';
 // PERF : HomePage (route par défaut) reste en import direct ; les autres pages sont
 // chargées à la demande (code-splitting) pour alléger le bundle initial.
 import HomePage from './pages/HomePage';
 import LockScreen from './components/LockScreen';
+import { PageHelp } from './components/Help';
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CvPage = lazy(() => import('./pages/CvPage'));
 const LeadsPage = lazy(() => import('./pages/LeadsPage'));
@@ -17,6 +18,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TodoPage = lazy(() => import('./pages/TodoPage'));
 const ScrapingPage = lazy(() => import('./pages/ScrapingPage'));
+const CoverLetterPage = lazy(() => import('./pages/CoverLetterPage'));
 
 // Navigation maison. La sélection d'une campagne emporte l'id dans la route.
 type Route =
@@ -24,6 +26,8 @@ type Route =
   | { name: 'home' }
   | { name: 'profile' }
   | { name: 'cv' }
+  // LETTRE-ANNONCE : génération d'une lettre de motivation pour une annonce.
+  | { name: 'coverletter' }
   | { name: 'campaigns' }
   | { name: 'campaign'; id: string }
   | { name: 'replies' }
@@ -341,6 +345,10 @@ export default function App() {
         <button title="CV" onClick={() => setRoute({ name: 'cv' })} className={route.name === 'cv' ? 'active' : ''} style={{ '--nav': '#8E8E93' } as React.CSSProperties}>
           <FileText size={17} className="nav-ico" /> <span>CV</span>
         </button>
+        {/* LETTRE-ANNONCE : lettre de motivation pour une annonce. */}
+        <button title="Lettre de motivation" onClick={() => setRoute({ name: 'coverletter' })} className={route.name === 'coverletter' ? 'active' : ''} style={{ '--nav': '#0a84ff' } as React.CSSProperties}>
+          <PenLine size={17} className="nav-ico" /> <span>Lettre de motivation</span>
+        </button>
         <button title="Profil" onClick={() => setRoute({ name: 'profile' })} className={route.name === 'profile' ? 'active' : ''} style={{ '--nav': '#8E8E93' } as React.CSSProperties}>
           <User size={17} className="nav-ico" /> <span>Profil</span>
         </button>
@@ -364,6 +372,8 @@ export default function App() {
       </nav>
 
       <main className="content">
+        {/* Aide débutant : une bulle repliable par page (texte centralisé dans Help.tsx). */}
+        <PageHelp page={route.name} />
         {/* PERF : fallback pendant le chargement à la demande d'une page (code-splitting). */}
         <Suspense fallback={<div style={{ padding: '24px', color: 'var(--text-sub)' }}>Chargement…</div>}>
         {/* DESIGN-2 : toutes les cibles de HomePage sont des routes sans paramètre → cast sûr. */}
@@ -377,6 +387,8 @@ export default function App() {
           />
         )}
         {route.name === 'cv' && <CvPage />}
+        {/* LETTRE-ANNONCE : génération d'une lettre pour une annonce. */}
+        {route.name === 'coverletter' && <CoverLetterPage />}
         {route.name === 'campaigns' && (
           <CampaignsPage
             onOpen={(id) => setRoute({ name: 'campaign', id })}

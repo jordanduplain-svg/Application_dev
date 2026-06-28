@@ -313,6 +313,15 @@ export interface LeadRow {
 
 export type ScrapingJobStatus = 'idle' | 'running' | 'done' | 'error';
 
+// Résultat de la DERNIÈRE exécution du scraper, persisté entre sessions → permet à l'UI
+// d'afficher un voyant de santé (🟢/🔴 + date + nombre de leads) même après redémarrage.
+export interface ScrapingLastRun {
+  at: string;            // ISO timestamp de fin
+  ok: boolean;           // code de sortie 0 ET CSV produit
+  count: number;         // nombre de leads du CSV (0 si échec)
+  error: string | null;  // message d'échec (null si ok)
+}
+
 export interface Application {
   id: string;
   campaignId: string;
@@ -555,6 +564,13 @@ export interface IpcRequests {
     req: { material: string; cvId?: string | null };
     res: { promptA: string; promptB: string; usedCv: boolean } | null;
   };
+  // LETTRE-ANNONCE : génère une lettre de motivation pour UNE annonce collée.
+  // Réutilise generatePitch (CV + profil) en passant le texte de l'annonce comme
+  // contexte d'entreprise. Pas de stockage : la lettre est rendue à l'écran.
+  'ai:generateCoverLetter': {
+    req: { cvId: string; jobTitle: string; company: string; contact?: string | null; annonce: string; availability?: string | null };
+    res: { subject: string; body: string };
+  };
   'cv:rename': { req: { id: string; name: string }; res: Cv };
   'cv:delete': { req: { id: string }; res: void };
 
@@ -602,7 +618,7 @@ export interface IpcRequests {
   // SCRAPE-01 : annule le job en cours.
   'scraping:cancel': { req: void; res: void };
   // SCRAPE-01 : statut courant du scraper.
-  'scraping:getStatus': { req: void; res: { status: ScrapingJobStatus; csvPath: string | null; linesCount: number } };
+  'scraping:getStatus': { req: void; res: { status: ScrapingJobStatus; csvPath: string | null; linesCount: number; lastRun: ScrapingLastRun | null } };
   // SCRAPE-01 : récupère la configuration sauvegardée.
   'scraping:getConfig': { req: void; res: ScrapingConfig };
   // SCRAPE-01 : sauvegarde la configuration.
@@ -801,6 +817,11 @@ export interface IpcRequests {
 
   // Exclut des leads du futur scraping (domaine + dérivés) et les retire du master.
   'scraping:excludeLeads': { req: { keys: string[]; withDerivatives: boolean }; res: { excludedDomains: number; removedLeads: number } };
+
+  // MAILS EXCLUS : « débannir » un email mis de côté = autoriser son envoi. Repasse
+  // emailSource à 'manual' (= vérifié) pour le lead matché par sa clé, sans toucher
+  // l'adresse. (Les emails devinés — UNVERIFIED_EMAIL_SOURCES — sont sinon bloqués.)
+  'scraping:allowLeadEmail': { req: { key: string }; res: { ok: boolean } };
 
   // RGPD : liste « ne pas contacter » (opt-out / droit d'opposition).
   'optout:list': { req: void; res: OptOutEntry[] };

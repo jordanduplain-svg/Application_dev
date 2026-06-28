@@ -53,19 +53,16 @@ export function enqueuePollReplies(): void {
         // ← ROUAGE : on cherche LE message inbox qui répond à cette candidature, en
         //   excluant ceux déjà attribués (usedInboxKeys) pour qu'un même email ne soit
         //   pas compté pour deux candidatures. matchReply tranche (Message-ID > email > domaine).
+        // BUG-1 fix : on EXCLUT les auto-replies du matching (`!m.isAutoReply`). Avant, un
+        // accusé automatique matchait en premier (UID plus ancien), « consommait » le créneau
+        // de la candidature puis `continue` → la VRAIE réponse ultérieure, partageant souvent
+        // le même In-Reply-To (donc le même inboxKey) ou le même expéditeur, était masquée à
+        // CHAQUE relevé. En les écartant ici, ils ne prennent plus la place d'une vraie réponse.
         const reply = inbox.find(
-          (m) => !usedInboxKeys.has(inboxKey(m)) && matchReply(m, app, sent)
+          (m) => !m.isAutoReply && !usedInboxKeys.has(inboxKey(m)) && matchReply(m, app, sent)
         );
         if (reply) {
           usedInboxKeys.add(inboxKey(reply));
-
-          // AUTO-REPLY : une réponse automatique (absence du bureau) n'est PAS une
-          // vraie réponse à qualifier. On la consomme (pour ne pas la rematcher) mais
-          // on laisse la candidature en SENT — une vraie réponse pourra matcher ensuite.
-          if (reply.isAutoReply) {
-            logger.info(`[AUTO-REPLY] Réponse automatique ignorée de ${reply.from} (${app.company.name}).`);
-            continue;
-          }
 
           const MAX_REPLY_LENGTH = 50_000;
           const { marked } = await markReplied(app.id, reply.text.slice(0, MAX_REPLY_LENGTH));

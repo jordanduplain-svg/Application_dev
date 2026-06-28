@@ -16,7 +16,7 @@ import { getProfile } from '../../src/modules/profile/profile.service';
 import { isOptedOut } from '../../src/modules/optout/optout.service';
 import { getCv } from '../../src/modules/cv/cv.service';
 import { prisma } from '../../src/lib/prisma';
-import { generatePitch, generateCampaignPrompts } from '../../src/modules/ai/ai.service';
+import { generatePitch, generateCampaignPrompts, generateCoverLetter } from '../../src/modules/ai/ai.service';
 import type { CvParsed } from '@candio/shared';
 
 // L'IA est prête si Ollama est choisi (local, sans clé) OU si une clé OpenAI existe.
@@ -71,6 +71,29 @@ export function registerApplicationHandlers(): void {
       }
     }
     return generateCampaignPrompts(material, cvParsed);
+  });
+
+  // LETTRE-ANNONCE : lettre de motivation pour une annonce collée. Réutilise
+  // generatePitch en injectant le texte de l'annonce comme « fiche entreprise »
+  // (champ description) → le §2/§3 s'ancre dessus. Rien n'est persisté.
+  handle('ai:generateCoverLetter', async ({ cvId, jobTitle, company, contact, annonce, availability }) => {
+    assertAiReady();
+    if (!jobTitle?.trim()) throw new Error('Indique le poste visé.');
+    if (!company?.trim()) throw new Error("Indique le nom de l'entreprise.");
+    if (!annonce?.trim() || annonce.trim().length < 30) {
+      throw new Error("Colle le texte de l'annonce (au moins quelques lignes).");
+    }
+    const cvParsed = await requireCampaignCv(cvId);
+    const profile = await getProfile();
+    return generateCoverLetter(
+      jobTitle.trim(),
+      company.trim(),
+      contact?.trim() || null,
+      annonce,
+      cvParsed,
+      profile,
+      availability?.trim() || null,
+    );
   });
 
   handle('application:listByCampaign', (payload) => {
@@ -238,13 +261,15 @@ export function registerApplicationHandlers(): void {
     const targetIds = await appService.listDraftAndFailedIds(campaignId);
     if (targetIds.length === 0) return { sent: 0, total: 0 };
 
+    // PERF-1 : une seule requête (in: ids) au lieu d'un findUnique par brouillon (N+1).
+    const apps = await prisma.application.findMany({
+      where: { id: { in: targetIds } },
+      include: { company: true, campaign: { include: { cv: true } } },
+    });
+
     let sent = 0;
-    for (const appId of targetIds) {
-      const app = await prisma.application.findUnique({
-        where: { id: appId },
-        include: { company: true, campaign: { include: { cv: true } } },
-      });
-      if (!app || !app.body) continue;
+    for (const app of apps) {
+      if (!app.body) continue;
       await throttleSend();
       await sendApplicationEmail({
         fromName: `${profile.firstName} ${profile.lastName}`,

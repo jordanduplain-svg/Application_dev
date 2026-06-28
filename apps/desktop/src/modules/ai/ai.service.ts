@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import type { CvParsed, Profile } from '@candio/shared';
 import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiModel, getAiProvider, getOllamaModel, getOllamaHost } from '../../lib/secrets';
 // PROMPT-EXTRACT (P2) : les prompts (chaînes) vivent dans campaign-prompt.ts (fonctions pures, testables).
-import { buildCampaignPromptsMessage, buildPitchPrompt } from '../../lib/campaign-prompt';
+import { buildCampaignPromptsMessage, buildPitchPrompt, buildCoverLetterPrompt } from '../../lib/campaign-prompt';
 
 /**
  * Interface avec l'API OpenAI (GPT-4o), pour deux usages :
@@ -448,6 +448,134 @@ export async function generatePitch(
   } catch {
     return fallback;
   }
+}
+
+/**
+ * completePitch — étape commune « APPEL LLM + POLISH DÉTERMINISTE » des rédactions
+ * (email spontané ET lettre sur annonce). Extrait pour ne pas dupliquer le pipeline
+ * qui rend la sortie « humaine » (clichés, cadratin, doublons) et le repli en cas
+ * d'IA muette / JSON cassé. `fallbackSubject` = objet par défaut si l'IA ne renvoie rien.
+ */
+async function completePitch(prompt: string, jobTitle: string, fallbackSubject: string): Promise<GeneratedEmail> {
+  const isOllama = getAiProvider() === 'ollama';
+  // B9 : typage explicite pour éviter l'accès à undefined après le try/catch.
+  let completion: Awaited<ReturnType<ReturnType<typeof getClient>['chat']['completions']['create']>> | null = null;
+  try {
+    completion = await getClient().chat.completions.create({
+      model: getActiveModel(),
+      messages: [{ role: 'user', content: prompt }],
+      // Force du JSON valide. Ollama récent supporte response_format sur /v1 ;
+      // extractJson() reste un filet de sécurité si un modèle l'ignore.
+      ...jsonRequestParams(),
+      temperature: 0.7,  // rédaction variée et naturelle
+    });
+  } catch (err) {
+    // SEC-2v3 : messages d'erreur OpenAI compréhensibles.
+    handleOpenAIError(err);
+  }
+
+  // Repli : email minimal mais valide, pour ne pas bloquer le flux.
+  const fallback: GeneratedEmail = {
+    subject: fallbackSubject,
+    body: `Bonjour,\n\nJe vous adresse ma candidature pour le poste de ${jobTitle}.`,
+  };
+
+  // B9 : guard après le catch (handleOpenAIError throw toujours, mais TypeScript ne le sait pas).
+  if (!completion) return fallback;
+
+  try {
+    const raw = completion.choices[0]?.message?.content || '{}';
+    const parsed = (needsJsonExtraction() ? extractJson(raw) : JSON.parse(raw)) as
+      { subject?: unknown; body?: unknown } | null;
+    // Les petits modèles locaux (qwen 7b…) renvoient parfois `body` sous forme
+    // d'OBJET de paragraphes ({paragraph1, paragraph2…}) ou de tableau au lieu
+    // d'une chaîne. On aplatit au lieu de jeter tout le contenu sur le stub.
+    const body = coerceToText(parsed?.body);
+    const subject = typeof parsed?.subject === 'string' && parsed.subject.trim()
+      ? parsed.subject.trim()
+      : fallbackSubject;
+    // Repli seulement si le corps est réellement vide (sinon email vide envoyé).
+    if (!body || body.length < 40) return fallback;
+    // PASSE 2 : relecture/correction (orthographe, accords, clichés) sans toucher
+    // aux faits. Réservée à Ollama (modèles locaux fautifs) ; inutile avec OpenAI
+    // (1er jet déjà propre) → on évite un 2e appel facturé. Échec → on garde le 1er jet.
+    const revised = isOllama ? await reviseEmail({ subject, body }) : { subject, body };
+    // Filet déterministe (100 % fiable) : clichés, élisions du possessif, doublons.
+    const polish = (t: string) => stripEmojis(fixCapitalization(fixEmDash(fixPossessiveElision(scrubCliches(t)))));
+    return { subject: polish(revised.subject), body: dedupeParagraphs(polish(revised.body)) };
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * LETTRE-ANNONCE : rédige une lettre de motivation EN RÉPONSE À UNE ANNONCE collée.
+ * Distinct de generatePitch (spontané) : utilise buildCoverLetterPrompt, qui ordonne de
+ * RÉPONDRE aux exigences de l'offre. Même pipeline d'appel + polish via completePitch.
+ */
+export async function generateCoverLetter(
+  jobTitle: string,
+  company: string,
+  contactName: string | null,
+  annonce: string,
+  cvParsed: CvParsed,
+  profile?: Pick<Profile, 'phone' | 'linkedin' | 'portfolio' | 'github'> | null,
+  availability?: string | null,
+): Promise<GeneratedEmail> {
+  const safeJob = sanitizeForPrompt(jobTitle);
+  const safeCompany = sanitizeForPrompt(company);
+  const safeContact = contactName ? sanitizeForPrompt(contactName) : null;
+  const safeAvailability = availability ? sanitizeForPrompt(availability).trim() : '';
+  // L'annonce est une DONNÉE : on la nettoie (anti-injection) et on la borne (assez pour
+  // couvrir un descriptif de poste complet sans exploser le contexte).
+  const annonceBlock = sanitizeForPrompt(annonce).slice(0, 4500);
+
+  // Coordonnées candidat → signature uniquement (mêmes règles que le pitch).
+  const contactLines: string[] = [];
+  if (profile?.linkedin) contactLines.push(`LinkedIn: ${sanitizeForPrompt(profile.linkedin)}`);
+  if (profile?.github) contactLines.push(`GitHub (projets / preuve de travail): ${sanitizeForPrompt(profile.github)}`);
+  if (profile?.portfolio) contactLines.push(`Portfolio: ${sanitizeForPrompt(profile.portfolio)}`);
+  if (profile?.phone) contactLines.push(`Téléphone: ${sanitizeForPrompt(profile.phone)}`);
+  const contactSection = contactLines.length > 0
+    ? `\n- Informations de contact du candidat (signature) : ${contactLines.join(', ')}`
+    : '';
+
+  const dispoLine = safeAvailability || '(non précisée)';
+  const dispoInstr = safeAvailability
+    ? `reprends « ${safeAvailability} » (corrige seulement l'orthographe et les accents, ex. « a partir » → « à partir » ; ne change NI la date NI le sens)`
+    : '« disponible rapidement », sans inventer de date';
+
+  const prompt = buildCoverLetterPrompt({
+    safeJob, safeCompany,
+    contactLine: safeContact || '(non fourni)',
+    annonceBlock, dispoLine, dispoInstr, contactSection,
+    cvJson: JSON.stringify(cvParsed),
+  });
+
+  const email = await completePitch(prompt, jobTitle, `Candidature – ${jobTitle}`);
+  // Filet déterministe SPÉCIFIQUE à la lettre annonce (le flux spontané n'est pas touché).
+  return { subject: email.subject, body: scrubCoverLetterTics(email.body) };
+}
+
+/**
+ * LETTRE-ANNONCE : filet déterministe (100 % fiable) pour les tics que même un bon modèle
+ * laisse passer — souvent parce que la formule vient des DONNÉES (le niveau de langue est
+ * recopié du CV). Appliqué UNIQUEMENT à la lettre sur annonce, jamais au flux spontané.
+ */
+export function scrubCoverLetterTics(text: string): string {
+  let out = text;
+  // « C'est ce que je fais. » = conclusion-paraphrase de l'annonce → on coupe (avec sa ponctuation).
+  out = out.replace(/\s*C['’]est ce que je fais\s*[.!]?/gi, '');
+  // Niveau de langue façon CV (C1/B2…) : on GARDE la langue, on retire le niveau.
+  out = out.replace(/\bniveau\s+[ABC][12]\b/gi, 'niveau');
+  out = out.replace(/\b(anglais|français|espagnol|allemand|italien)\s+[ABC][12]\b/gi, '$1');
+  out = out.replace(/\s*\([ABC][12]\)/g, '');
+  // Anglicisme « stakeholder(s) » dans une lettre FR → « partie(s) prenante(s) ».
+  out = out.replace(/\bstakeholders\b/gi, 'parties prenantes').replace(/\bstakeholder\b/gi, 'partie prenante');
+  // Buzzword « actionnable » (banni au prompt) → « exploitable ».
+  out = out.replace(/\bactionnables\b/gi, 'exploitables').replace(/\bactionnable\b/gi, 'exploitable');
+  // Nettoie les espaces orphelins laissés par les suppressions.
+  return out.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/[ \t]+([.,;:])/g, '$1');
 }
 
 /**

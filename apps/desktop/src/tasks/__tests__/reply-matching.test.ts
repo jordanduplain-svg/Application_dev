@@ -10,7 +10,8 @@ const app = (contactEmail: string, messageId = '<msg-123@smtp>', followUpMessage
   company: { contactEmail },
 });
 
-const msg = (from: string, inReplyTo: string | null) => ({ from, inReplyTo, date: new Date() });
+const msg = (from: string, inReplyTo: string | null, references: string | null = null) =>
+  ({ from, inReplyTo, references, date: new Date() });
 
 describe('matchReply', () => {
   // Test 6 : matching par Message-ID
@@ -18,6 +19,15 @@ describe('matchReply', () => {
     const inboxMsg = msg('recruiter@acme.com', '<msg-123@smtp>');
     const candidature = app('recruiter@acme.com', '<msg-123@smtp>');
 
+    expect(matchReply(inboxMsg, candidature, [candidature])).toBe(true);
+  });
+
+  // BUG-2 : matching par l'en-tête References quand In-Reply-To est absent.
+  test('matche par References même si l\'expéditeur diffère (In-Reply-To absent)', () => {
+    // ATS qui répond depuis une adresse no-reply (≠ contact) sans In-Reply-To, mais
+    // dont le header References cite le Message-ID initial → doit matcher.
+    const inboxMsg = msg('ats-noreply@workday.com', null, '<thread-x@smtp> <msg-123@smtp>');
+    const candidature = app('recruiter@acme.com', '<msg-123@smtp>');
     expect(matchReply(inboxMsg, candidature, [candidature])).toBe(true);
   });
 

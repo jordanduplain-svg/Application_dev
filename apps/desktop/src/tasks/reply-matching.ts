@@ -6,6 +6,9 @@
 export interface InboxMsg {
   from: string;
   inReplyTo: string | null;
+  // BUG-2 : certains clients ne renseignent que `References` (et pas In-Reply-To),
+  // surtout dans les longs fils. On la teste aussi pour ne pas rater de réponses.
+  references: string | null;
   date: Date;
 }
 
@@ -29,14 +32,17 @@ export interface AppRef {
  *  4. Domaine partagé, uniquement si UNE SEULE candidature cible ce domaine (H2 : anti-ambiguïté).
  */
 export function matchReply(
-  inboxMsg: Pick<InboxMsg, 'from' | 'inReplyTo'>,
+  inboxMsg: Pick<InboxMsg, 'from' | 'inReplyTo' | 'references'>,
   app: AppRef,
   allApps: Pick<AppRef, 'company'>[]
 ): boolean {
+  // BUG-2 : on cherche le Message-ID dans In-Reply-To OU References (threading).
+  const threadCites = (mid: string): boolean =>
+    !!inboxMsg.inReplyTo?.includes(mid) || !!inboxMsg.references?.includes(mid);
   // Priorité 1 : Message-ID initial.
-  if (app.messageId && inboxMsg.inReplyTo?.includes(app.messageId)) return true;
+  if (app.messageId && threadCites(app.messageId)) return true;
   // Priorité 2 : Message-ID de la relance (B2).
-  if (app.followUpMessageId && inboxMsg.inReplyTo?.includes(app.followUpMessageId)) return true;
+  if (app.followUpMessageId && threadCites(app.followUpMessageId)) return true;
 
   const senderLower = inboxMsg.from.toLowerCase();
   const contactLower = app.company.contactEmail.toLowerCase();
