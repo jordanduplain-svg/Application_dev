@@ -27,8 +27,9 @@ export const CampaignIdSchema = z.object({
   campaignId: z.string().min(1, 'L\'identifiant de campagne est requis'),
 });
 
-// Schéma pour l'envoi d'une candidature.
-export const ApplicationSendSchema = z.object({ id: z.string().min(1) });
+// Schéma pour l'envoi d'une candidature. force=true : contourne le blocage anti-bounce
+// des emails devinés (décision explicite depuis le bouton « Envoyer quand même »).
+export const ApplicationSendSchema = z.object({ id: z.string().min(1), force: z.boolean().optional() });
 
 export const ApplicationUpdateDraftSchema = z.object({
   id: z.string().min(1),

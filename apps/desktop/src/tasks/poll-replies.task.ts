@@ -9,8 +9,9 @@ import {
   markBounced,
 } from '../modules/application/application.service';
 import { logger } from '../lib/logger';
-import { matchReply, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
+import { matchReply, matchBounce, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
 import { addOptOut } from '../modules/optout/optout.service';
+import { markLeadBounced } from '../lib/leadsMaster';
 
 /**
  * enqueuePollReplies — ROUAGE de la détection des réponses. Relie la boîte mail (IMAP) au
@@ -100,14 +101,14 @@ export function enqueuePollReplies(): void {
       // Un NDR = le serveur destinataire a rejeté l'email → on marque la candidature
       // comme rebondie et on notifie l'UI pour proposer un email alternatif.
       for (const msg of inbox) {
-        if (!msg.isBounce || !msg.bouncedMessageId) continue;
+        if (!msg.isBounce) continue;
 
-        // Cherche la candidature correspondant au Message-ID qui a rebondi.
-        const bouncedApp = sent.find(
-          (a) =>
-            a.messageId === msg.bouncedMessageId ||
-            a.followUpMessageId === msg.bouncedMessageId
-        );
+        // BOUNCE-FALLBACK : matchBounce essaie d'abord le Message-ID (fiable), puis
+        // replie sur l'adresse du contact citée dans le NDR (non ambigu uniquement) —
+        // un rejet immédiat « adresse introuvable » (email pattern/deviné inexistant)
+        // ne recopiant souvent PAS le Message-ID original, ces bounces étaient jusque-là
+        // silencieusement ignorés.
+        const bouncedApp = matchBounce(msg, sent);
         if (!bouncedApp) continue;
 
         const { marked } = await markBounced(bouncedApp.id);
@@ -126,6 +127,16 @@ export function enqueuePollReplies(): void {
             nextEmailAvailable: hasAlternatives,
           });
           logger.info(`[BOUNCE] ${bouncedApp.company.name} — ${bouncedApp.company.contactEmail} a rebondi.`);
+        }
+
+        // BOUNCE-CSV : propage le rebond vers le master de leads (page Leads), sinon un
+        // email confirmé mauvais reste « valide » pour une future campagne. HORS du gate
+        // `marked` (et idempotent) : si un relevé précédent l'a sautée (scraper actif),
+        // ce relevé-ci la ré-applique. Best-effort — n'échoue jamais le traitement du bounce.
+        try {
+          markLeadBounced(bouncedApp.company.contactEmail);
+        } catch (err) {
+          logger.warn('[BOUNCE] Propagation vers le master de leads échouée (non bloquant).', err);
         }
       }
 

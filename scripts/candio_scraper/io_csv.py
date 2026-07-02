@@ -31,6 +31,8 @@ CSV_FIELDNAMES: list[str] = [
     "source", "jobCount", "growthSignals", "postedDate",
     # Qualité : "1" si le domaine du site ne correspond pas au nom (homonyme louche).
     "domainSuspect",
+    # BOUNCE-CSV : "1" si Carreer-ops a détecté un rebond confirmé sur cet email.
+    "bounced",
 ]
 
 
@@ -79,6 +81,8 @@ def load_companies_from_csv(csv_path: str) -> list[Company]:
                     job_count      = int(row.get("jobCount", 0) or 0),
                     growth_signals = row.get("growthSignals", ""),
                     posted_date    = row.get("postedDate", ""),
+                    # BOUNCE-CSV : round-trip simple, jamais recalculé côté Python.
+                    bounced        = row.get("bounced", ""),
                 )
                 if c.name:
                     # Backfill localisation/secteur/taille depuis les champs bruts

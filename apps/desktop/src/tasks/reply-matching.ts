@@ -62,6 +62,44 @@ export function matchReply(
   return appsOnDomain.length === 1;
 }
 
+export interface BounceMsg {
+  bouncedMessageId: string | null;
+  bouncedCandidateEmails: string[];
+}
+
+export interface BounceAppRef {
+  messageId: string | null;
+  followUpMessageId?: string | null;
+  emailBounced: boolean;
+  company: { contactEmail: string };
+}
+
+/**
+ * matchBounce — ROUAGE de l'appariement NDR↔candidature. Priorité au Message-ID (le
+ * plus fiable). REPLI par adresse email (BOUNCE-FALLBACK) quand le NDR ne recopie pas
+ * le Message-ID original — cas typique d'un rejet immédiat « adresse introuvable »
+ * (l'email pattern/deviné n'existe pas), qui restait silencieusement ignoré avant ce
+ * repli. Le repli n'accepte le match QUE s'il désigne sans ambiguïté une seule
+ * candidature encore en jeu (pas déjà marquée rebondie) — même principe anti-ambiguïté
+ * que matchReply pour le domaine partagé.
+ */
+export function matchBounce<A extends BounceAppRef>(
+  msg: BounceMsg,
+  allSent: A[]
+): A | undefined {
+  const byMessageId = allSent.find(
+    (a) => (a.messageId && a.messageId === msg.bouncedMessageId) ||
+           (a.followUpMessageId && a.followUpMessageId === msg.bouncedMessageId)
+  );
+  if (byMessageId) return byMessageId;
+
+  if (msg.bouncedCandidateEmails.length === 0) return undefined;
+  const candidates = allSent.filter(
+    (a) => !a.emailBounced && msg.bouncedCandidateEmails.includes(a.company.contactEmail.toLowerCase())
+  );
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
 /**
  * Clé d'unicité d'un message inbox pour éviter de matcher le même email
  * à deux candidatures différentes.

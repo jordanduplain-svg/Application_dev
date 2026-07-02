@@ -309,6 +309,9 @@ export interface LeadRow {
   source: string;
   // Qualité : le domaine du site ne correspond pas au nom (homonyme louche) → à vérifier.
   domainSuspect: boolean;
+  // BOUNCE-CSV : un envoi réel à cet email a rebondi (NDR confirmé) — propagé depuis
+  // le suivi des candidatures. Ne pas réutiliser cette adresse dans une future campagne.
+  bounced: boolean;
 }
 
 export type ScrapingJobStatus = 'idle' | 'running' | 'done' | 'error';
@@ -696,7 +699,10 @@ export interface IpcRequests {
   // Modifie l'objet/le corps d'un brouillon avant envoi.
   'application:updateDraft': { req: { id: string; subject: string; body: string }; res: Application };
   // Enfile l'envoi SMTP d'une candidature (ou de toutes les DRAFT).
-  'application:send': { req: { id: string }; res: void };
+  // force=true : contourne le blocage anti-bounce des emails « devinés » (pattern/
+  // catch-all) — décision explicite de l'utilisateur, pas un défaut (cf. bouton
+  // « Envoyer quand même » dans la campagne).
+  'application:send': { req: { id: string; force?: boolean }; res: void };
   'application:sendAll': { req: { campaignId: string }; res: void };
   // UX-10 : enregistre une note de suivi sur une candidature.
   'application:addFollowUpNote': { req: { id: string; note: string }; res: void };

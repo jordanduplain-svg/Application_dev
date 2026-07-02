@@ -10,13 +10,13 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, readFile } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readFile, renameSync } from 'fs';
 import { shell } from 'electron';
 import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { app, BrowserWindow } from 'electron';
-import type { ScrapingConfig, ScrapingJobStatus } from '@candio/shared';
+import type { ScrapingConfig, ScrapingJobStatus, ScrapingLastRun } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { handle } from './registry';
 import { logger } from '../../src/lib/logger';
@@ -24,6 +24,7 @@ import { getHunterKey, getImap, getOpenaiKey, getAnthropicKey } from '../../src/
 import * as companyService from '../../src/modules/company/company.service';
 import { getExcludedDomains, addExcludedDomains } from '../lib/scrape-exclude';
 import { levenshteinSimilarity } from '../../src/lib/levenshtein';
+import { registerScraperRunningProvider } from '../../src/lib/scraperState';
 
 // ── Persistance de la config ──────────────────────────────────────────────────
 
@@ -224,6 +225,18 @@ function toCsvLine(fields: string[]): string {
   }).join(',');
 }
 
+/**
+ * Écriture ATOMIQUE du master de leads : écrit dans un temp du MÊME dossier puis rename
+ * (atomique sur le même volume). Un crash en cours d'écriture laisse soit l'ancien fichier
+ * INTACT, soit le nouveau COMPLET — jamais un master tronqué. Tous les writers du master
+ * (delete / exclude / allow) passent par ici pour ne plus jamais risquer de le vider.
+ */
+function writeMasterAtomic(path: string, content: string): void {
+  const tmp = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmp, content, 'utf8');
+  renameSync(tmp, path);
+}
+
 // ── Checkpoint (miroir de ScrapingCheckpoint.make_run_id en Python) ──────────
 
 /**
@@ -244,6 +257,26 @@ let activeProcess: ChildProcess | null = null;
 let jobStatus: ScrapingJobStatus = 'idle';
 let lastCsvPath: string | null = null;
 let lastCsvLines = 0;   // nombre de lignes du CSV (hors header)
+
+// Watchdog d'INACTIVITÉ : on ne tue Python que s'il est SILENCIEUX trop longtemps (site
+// qui ne répond jamais, boucle infinie) — PAS sur la durée totale. Réarmé à chaque ligne
+// de sortie, donc un run long mais qui avance (crawl + fiches IA) n'est jamais interrompu.
+let watchdog: NodeJS.Timeout | null = null;
+const SCRAPE_IDLE_MS = 30 * 60_000;   // ponytail: 30 min SANS la moindre sortie = gelé
+
+// Dernière exécution, persistée dans userData → voyant de santé dans l'UI après redémarrage.
+const LASTRUN_FILE = 'scraping-lastrun.json';
+function lastRunPath(): string { return join(app.getPath('userData'), LASTRUN_FILE); }
+function readLastRun(): ScrapingLastRun | null {
+  try {
+    const p = lastRunPath();
+    return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) as ScrapingLastRun : null;
+  } catch { return null; }
+}
+function writeLastRun(r: ScrapingLastRun): void {
+  try { writeFileSync(lastRunPath(), JSON.stringify(r), 'utf8'); }
+  catch (e) { logger.warn('[SCRAPING] Écriture lastRun échouée.', e); }
+}
 // SCRAPE-DESC : un enrichissement de fiches tourne-t-il ? Permet à la page Leads de se
 // reconnecter (afficher la progression, recharger à la fin) si on l'a quittée puis rouverte.
 let enrichRunning = false;
@@ -591,9 +624,23 @@ async function launchScript(
     windowsHide: true,
   });
 
+  // (Ré)arme le watchdog d'inactivité : si Python reste SILENCIEUX SCRAPE_IDLE_MS, on le
+  // tue (→ 'close' code non-0 = échec). Appelé au lancement ET à chaque ligne de sortie,
+  // donc seul un vrai gel (aucune sortie) le déclenche — pas un run simplement long.
+  const armWatchdog = () => {
+    if (watchdog) clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      logger.warn(`[SCRAPING] Aucune sortie depuis ${SCRAPE_IDLE_MS / 60_000} min → process gelé, kill.`);
+      pushProgress(`⏱  Aucune activité depuis ${SCRAPE_IDLE_MS / 60_000} min — scraping considéré gelé, interrompu.`);
+      activeProcess?.kill();
+    }, SCRAPE_IDLE_MS);
+  };
+  armWatchdog();
+
   // Écoute stdout : on découpe en lignes et on repousse chacune vers l'UI en direct.
   activeProcess.stdout?.setEncoding('utf8');
   activeProcess.stdout?.on('data', (chunk: string) => {
+    armWatchdog();                         // activité → repousse le délai d'inactivité
     buffer += chunk;                       // ajoute le nouveau fragment au tampon
     const lines = buffer.split(/\r?\n/);   // découpe en lignes
     buffer = lines.pop() ?? '';            // la dernière (peut-être incomplète) repart au tampon
@@ -613,6 +660,7 @@ async function launchScript(
   // sont pas des avertissements (sinon l'utilisateur croit que tout est cassé).
   activeProcess.stderr?.setEncoding('utf8');
   activeProcess.stderr?.on('data', (chunk: string) => {
+    armWatchdog();                         // les libs Python loggent ici aussi → c'est de l'activité
     for (const line of chunk.split(/\r?\n/)) {
       const trimmed = line.trim();
       if (!trimmed) continue;
@@ -632,28 +680,34 @@ async function launchScript(
   // prochain scraping. Le verdict repose sur DEUX conditions : code de sortie 0 ET un
   // chemin CSV capté au streaming — un code 0 sans CSV = anomalie (rien produit).
   activeProcess.on('close', async (code) => {
+    if (watchdog) { clearTimeout(watchdog); watchdog = null; }
     if (buffer.trim()) pushProgress(buffer.trim());   // vide le reliquat du tampon stdout
     activeProcess = null;                              // libère le verrou (cf. étape 1)
 
     if (code === 0 && lastCsvPath) {
       jobStatus = 'done';
-      // Compter les lignes du CSV généré (hors header)
+      // Compter les ENREGISTREMENTS du CSV (hors header) avec le parseur qui respecte les
+      // guillemets : un simple split('\n') gonfle le total car les fiches IA contiennent
+      // des retours à la ligne DANS les champs entre guillemets (cf. vue Leads = même parseur).
       try {
         const content = await new Promise<string>((res, rej) =>
           readFile(lastCsvPath!, 'utf8', (err, d) => err ? rej(err) : res(d))
         );
-        lastCsvLines = Math.max(0, content.split(/\r?\n/).filter(Boolean).length - 1);
+        lastCsvLines = Math.max(0, parseCsvFile(content).length - 1);
       } catch { /* non bloquant */ }
       pushProgress(`✅  Scraping terminé — ${lastCsvLines} entreprises dans ${lastCsvPath}`, true, lastCsvPath);
       logger.info(`[SCRAPING] Terminé avec succès. CSV : ${lastCsvPath}`);
+      writeLastRun({ at: new Date().toISOString(), ok: true, count: lastCsvLines, error: null });
     } else {
       jobStatus = 'error';
       pushProgress(`❌  Scraping échoué (code ${code})`, true, null);
       logger.error(`[SCRAPING] Échec. Code : ${code}`);
+      writeLastRun({ at: new Date().toISOString(), ok: false, count: 0, error: `Code de sortie ${code}` });
     }
   });
 
   activeProcess.on('error', (err) => {
+    if (watchdog) { clearTimeout(watchdog); watchdog = null; }
     activeProcess = null;
     jobStatus = 'error';
     const hint = err.message.includes('ENOENT')
@@ -661,12 +715,16 @@ async function launchScript(
       : '';
     pushProgress(`❌  Erreur : ${err.message}${hint}`, true, null);
     logger.error(`[SCRAPING] Erreur de spawn`, err);
+    writeLastRun({ at: new Date().toISOString(), ok: false, count: 0, error: err.message });
   });
 }
 
 // ── Handlers IPC ──────────────────────────────────────────────────────────────
 
 export function registerScrapingHandlers(): void {
+  // Expose la vérité « un scraper tourne-t-il ? » (activeProcess) au writer de fond
+  // markLeadBounced (src/lib/leadsMaster) pour éviter une écriture concurrente du master CSV.
+  registerScraperRunningProvider(() => activeProcess !== null);
 
   handle('scraping:launch', async (config) => {
     await launchScript(config);
@@ -676,6 +734,7 @@ export function registerScrapingHandlers(): void {
 
   handle('scraping:cancel', () => {
     if (activeProcess) {
+      if (watchdog) { clearTimeout(watchdog); watchdog = null; }
       activeProcess.kill();
       activeProcess = null;
       jobStatus = 'idle';
@@ -687,6 +746,7 @@ export function registerScrapingHandlers(): void {
     status: jobStatus,
     csvPath: lastCsvPath,
     linesCount: lastCsvLines,
+    lastRun: readLastRun(),
   }));
 
   handle('scraping:getConfig', () => readConfig());
@@ -755,7 +815,8 @@ export function registerScrapingHandlers(): void {
       iCity = idx('city'), iDeptCode = idx('dept'), iDeptName = idx('deptName'),
       iRegAdmin = idx('regionAdmin'), iSector = idx('sector'), iAct = idx('activityDomain'),
       iDesc = idx('companyDescription'), iDescAt = idx('descriptionUpdatedAt'), iNewsAt = idx('newsUpdatedAt'),
-      iScore = idx('totalScore'), iSource = idx('source'), iSuspect = idx('domainSuspect');
+      iScore = idx('totalScore'), iSource = idx('source'), iSuspect = idx('domainSuspect'),
+      iBounced = idx('bounced');
     const at = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '');
     return rows.slice(1).filter((r) => at(r, iName)).map((r) => {
       const name = at(r, iName), email = at(r, iEmail), website = at(r, iWeb);
@@ -771,6 +832,8 @@ export function registerScrapingHandlers(): void {
         description: at(r, iDesc), descriptionUpdatedAt: at(r, iDescAt), newsUpdatedAt: at(r, iNewsAt),
         totalScore: Number(at(r, iScore)) || 0, source: at(r, iSource),
         domainSuspect,
+        // BOUNCE-CSV : "1" posé par poll-replies.task.ts (markLeadBounced) après un vrai NDR.
+        bounced: at(r, iBounced) === '1',
       };
     });
   });
@@ -788,7 +851,7 @@ export function registerScrapingHandlers(): void {
       const k = `${(r[iName] ?? '').trim()}|${(r[iEmail] ?? '').trim()}|${(r[iWeb] ?? '').trim()}`.toLowerCase();
       return !toDelete.has(k);
     });
-    writeFileSync(path, [header, ...kept].map(toCsvLine).join('\n'), 'utf8');
+    writeMasterAtomic(path, [header, ...kept].map(toCsvLine).join('\n'));
     return { remaining: kept.length };
   });
 
@@ -835,9 +898,35 @@ export function registerScrapingHandlers(): void {
       const k = `${at(r, iName)}|${at(r, iEmail)}|${at(r, iWeb)}`.toLowerCase();
       return !removeKeys.has(k);
     });
-    writeFileSync(path, [header, ...kept].map(toCsvLine).join('\n'), 'utf8');
+    writeMasterAtomic(path, [header, ...kept].map(toCsvLine).join('\n'));
     logger.info(`[SCRAPING] Exclusion : ${domains.size} domaine(s) ajouté(s), ${removeKeys.size} lead(s) retiré(s).`);
     return { excludedDomains: domains.size, removedLeads: removeKeys.size };
+  });
+
+  // MAILS EXCLUS : « débannir » = autoriser l'envoi d'un email mis de côté. Repasse
+  // emailSource à 'manual' pour le lead matché (clé name|email|website), sans toucher
+  // l'adresse → l'email n'est plus bloqué à l'envoi (cf. UNVERIFIED_EMAIL_SOURCES).
+  handle('scraping:allowLeadEmail', ({ key }) => {
+    assertNoScraperRunning();
+    const path = masterCsvPath();
+    if (!path) return { ok: false };
+    const rows = parseCsvFile(readFileSync(path, 'utf8'));
+    if (rows.length < 2) return { ok: false };
+    const header = rows[0];
+    const iName = header.indexOf('name'), iEmail = header.indexOf('contactEmail'),
+      iWeb = header.indexOf('website'), iSrc = header.indexOf('emailSource');
+    if (iSrc < 0) return { ok: false };
+    let ok = false;
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      const k = `${(row[iName] ?? '').trim()}|${(row[iEmail] ?? '').trim()}|${(row[iWeb] ?? '').trim()}`.toLowerCase();
+      if (k === key) { row[iSrc] = 'manual'; ok = true; break; }
+    }
+    if (ok) {
+      writeMasterAtomic(path, rows.map(toCsvLine).join('\n'));
+      logger.info('[SCRAPING] Email débanni (source → manual).');
+    }
+    return { ok };
   });
 
   // SECTOR-AUTO : pré-remplit une campagne avec les leads du master filtrés par
@@ -877,7 +966,7 @@ export function registerScrapingHandlers(): void {
       }
       return r;
     });
-    writeFileSync(path, [header, ...out].map(toCsvLine).join('\n'), 'utf8');
+    writeMasterAtomic(path, [header, ...out].map(toCsvLine).join('\n'));
     return { cleared };
   });
 

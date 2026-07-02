@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LeadRow } from '@candio/shared';
+import { UNVERIFIED_EMAIL_SOURCES } from '@candio/shared';
 import { api } from '../lib/api';
 import { FR_REGIONS, FR_DEPTS_BY_REGION } from '../lib/geo';
 
@@ -341,6 +342,29 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
     }
   };
 
+  // MAILS EXCLUS : emails que l'app met de côté = devinés/non vérifiés (emailSource ∈
+  // UNVERIFIED_EMAIL_SOURCES), bloqués à l'envoi (risque de rebond). « Débannir »
+  // autorise l'envoi tel quel (repasse la source à 'manual'). Calculé depuis `leads`.
+  const [exclusOpen, setExclusOpen] = useState(false);
+  const [unbanningKey, setUnbanningKey] = useState<string | null>(null);
+  const exclus = useMemo(
+    () => leads.filter((l) => (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(l.emailSource)),
+    [leads],
+  );
+  const debannir = async (l: LeadRow) => {
+    setUnbanningKey(l.key);
+    setError(null);
+    try {
+      const r = await api.invoke('scraping:allowLeadEmail', { key: l.key });
+      if (!r.ok) throw new Error('Lead introuvable dans le master.');
+      await load(); // recharge → source 'manual', le lead sort de la liste des exclus
+    } catch (e) {
+      if (isMounted.current) setError(e instanceof Error ? e.message : 'Erreur lors du débannissement');
+    } finally {
+      if (isMounted.current) setUnbanningKey(null);
+    }
+  };
+
   // Réinitialise le statut « utilisée » de TOUTES les entreprises utilisées (bouton
   // visible, sans sélection). Les retire de leurs campagnes → réimportables.
   // Avertissement + protection des candidatures déjà envoyées.
@@ -398,6 +422,10 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
         <button onClick={() => void load()} className="btn-secondary" style={{ fontSize: '12px' }} disabled={enriching}>↻ Recharger</button>
+        <button onClick={() => setExclusOpen(true)} className="btn-secondary" style={{ fontSize: '12px' }}
+          title="Voir les emails mis de côté (devinés, bloqués à l'envoi) et les débannir si besoin">
+          🚫 Mails exclus{exclus.length > 0 ? ` (${exclus.length})` : ''}
+        </button>
         <button onClick={() => void importCsv()} disabled={importing}
           title="Importer un CSV d'entreprises (export LinkedIn Sales Navigator, Apollo, Wiza, ou ton propre fichier). L'app enrichit ensuite les emails (Hunter + crawl)."
           style={{ fontSize: '12px', background: '#378ADD', color: '#fff', border: 'none',
@@ -641,6 +669,13 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
                         ⚠ site douteux
                       </span>
                     )}
+                    {l.bounced && (
+                      <span title="Un envoi réel à cet email a rebondi (adresse invalide confirmée) — à éviter dans une future campagne."
+                        style={{ marginLeft: '6px', fontSize: '11px', color: '#fff', background: '#ff453a',
+                          border: '1px solid #ff453a', borderRadius: '10px', padding: '0 6px', whiteSpace: 'nowrap' }}>
+                        ⛔ email rebondi
+                      </span>
+                    )}
                     {l.website && <div style={{ fontSize: '11px', color: '#888' }}>{l.website.replace(/^https?:\/\//, '')}</div>}
                     {l.contactName && <div style={{ fontSize: '11px', color: '#888' }}>{l.contactName}{l.contactRole ? ` · ${l.contactRole}` : ''}</div>}
                   </td>
@@ -754,6 +789,62 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             })()}
             <div style={{ marginTop: '16px', textAlign: 'right' }}>
               <button onClick={() => setViewLead(null)}
+                style={{ padding: '7px 16px', borderRadius: '6px', border: 'none',
+                  background: '#0a84ff', color: '#fff', cursor: 'pointer', fontSize: '13px' }}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAILS EXCLUS : emails bloqués à l'envoi (devinés) → débannir si besoin. */}
+      {exclusOpen && (
+        <div
+          onClick={() => setExclusOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: '12px', padding: '20px 24px', maxWidth: '560px',
+              width: '100%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}
+          >
+            <h3 style={{ margin: '0 0 4px' }}>Mails exclus ({exclus.length})</h3>
+            <p style={{ fontSize: '11px', color: '#888', margin: '0 0 14px' }}>
+              Emails devinés (pattern, catch-all…) que l'app refuse d'envoyer automatiquement
+              (risque de rebond). « Débannir » autorise l'envoi de l'adresse telle quelle.
+            </p>
+            {exclus.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#555' }}>Aucun mail exclu.</p>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {exclus.map((l) => {
+                  const busy = unbanningKey === l.key;
+                  return (
+                    <li key={l.key} style={{ display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap',
+                          overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name}</div>
+                        <div style={{ fontSize: '12.5px', fontFamily: 'monospace', color: '#444' }}>
+                          {l.email || '(aucune adresse)'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '10.5px', color: '#b35900', background: '#fff3e6',
+                        borderRadius: '4px', padding: '1px 6px', whiteSpace: 'nowrap' }}>{l.emailSource}</span>
+                      <button onClick={() => void debannir(l)} disabled={busy}
+                        style={{ fontSize: '12px', background: '#fff', color: '#1D9E75', border: '1px solid #1D9E75',
+                          borderRadius: '6px', padding: '4px 10px', cursor: busy ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                        {busy ? '…' : 'Débannir'}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <div style={{ marginTop: '16px', textAlign: 'right' }}>
+              <button onClick={() => setExclusOpen(false)}
                 style={{ padding: '7px 16px', borderRadius: '6px', border: 'none',
                   background: '#0a84ff', color: '#fff', cursor: 'pointer', fontSize: '13px' }}>
                 Fermer

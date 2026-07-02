@@ -78,6 +78,10 @@ class Company:
     job_count: int = 0            # Nombre d'offres actives — signal de croissance
     growth_signals: str = ""      # "hiring_spree|recently_funded|…" séparés par |
     posted_date: str = ""         # Date ISO de la dernière offre vue (YYYY-MM-DD)
+    # BOUNCE-CSV : "1" si Carreer-ops a détecté un rebond (NDR) sur cet email lors d'un
+    # envoi réel. Fait EXTERNE au scraper (impossible à déduire du crawl) → simple champ
+    # de ROUND-TRIP : jamais recalculé ici, seulement lu/réécrit tel quel à la fusion.
+    bounced: str = ""
 
     def key(self) -> str:
         """

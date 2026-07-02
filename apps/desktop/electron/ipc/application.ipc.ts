@@ -137,8 +137,8 @@ export function registerApplicationHandlers(): void {
   });
 
   handle('application:send', (payload) => {
-    validate(ApplicationSendSchema, payload);
-    return enqueueSend(payload.id);
+    const { id, force } = validate(ApplicationSendSchema, payload);
+    return enqueueSend(id, force);
   });
 
   handle('application:sendAll', async (payload) => {

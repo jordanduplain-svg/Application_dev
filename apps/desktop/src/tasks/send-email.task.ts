@@ -61,7 +61,7 @@ export async function throttleSend(): Promise<void> {
  * Asynchrone car on pré-charge le nom de l'entreprise pour libeller la tâche ("Envoi à
  * Acme") — lisible dans le journal quand plusieurs envois s'enchaînent.
  */
-export async function enqueueSend(applicationId: string): Promise<void> {
+export async function enqueueSend(applicationId: string, force = false): Promise<void> {
   const initial = await getApplication(applicationId);
   const label = `Envoi à ${initial?.companyName ?? '…'}`;
 
@@ -81,8 +81,9 @@ export async function enqueueSend(applicationId: string): Promise<void> {
       // risque de bounce élevé qui dégrade la réputation d'expéditeur. On bloque
       // l'envoi et on marque la candidature « à vérifier » : l'utilisateur doit
       // confirmer/corriger l'adresse (l'édition repasse emailSource à 'manual',
-      // ce qui débloque l'envoi).
-      if (UNVERIFIED_EMAIL_SOURCES.includes(app.emailSource)) {
+      // ce qui débloque l'envoi), OU envoyer quand même via `force` (décision
+      // explicite depuis le bouton dédié — pas le comportement par défaut).
+      if (!force && UNVERIFIED_EMAIL_SOURCES.includes(app.emailSource)) {
         await markFailed(
           applicationId,
           `⚠️ À vérifier — l'adresse ${app.contactEmail} a été générée automatiquement ` +

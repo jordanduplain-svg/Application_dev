@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { matchReply, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply } from '../reply-matching';
+import { matchReply, matchBounce, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply } from '../reply-matching';
 
 // Pas de dépendances Electron/Prisma — fonctions pures, aucun mock nécessaire.
 
@@ -51,6 +51,44 @@ describe('matchReply', () => {
     const inboxMsg = msg('noreply@bigcorp.fr', null);
     expect(matchReply(inboxMsg, app1, allApps)).toBe(false);
     expect(matchReply(inboxMsg, app2, allApps)).toBe(false);
+  });
+});
+
+describe('matchBounce (BOUNCE-FALLBACK)', () => {
+  const bounceApp = (contactEmail: string, messageId: string, emailBounced = false) =>
+    ({ messageId, followUpMessageId: null, emailBounced, company: { contactEmail } });
+
+  test('matche par Message-ID quand présent (cas fiable)', () => {
+    const a = bounceApp('rh@acme.com', '<msg-1@smtp>');
+    const msg = { bouncedMessageId: '<msg-1@smtp>', bouncedCandidateEmails: [] };
+    expect(matchBounce(msg, [a])).toBe(a);
+  });
+
+  test('replie sur l\'adresse email du NDR quand le Message-ID est absent', () => {
+    // Rejet immédiat « adresse introuvable » : pas de Message-ID dans le corps,
+    // mais l'adresse rejetée y figure en clair.
+    const a = bounceApp('albert.einstein@nuxit.com', '<msg-2@smtp>');
+    const msg = { bouncedMessageId: null, bouncedCandidateEmails: ['albert.einstein@nuxit.com'] };
+    expect(matchBounce(msg, [a])).toBe(a);
+  });
+
+  test('ne matche PAS si l\'adresse est ambiguë (plusieurs candidatures)', () => {
+    const a1 = bounceApp('rh@bigcorp.fr', '<msg-3@smtp>');
+    const a2 = bounceApp('rh@bigcorp.fr', '<msg-4@smtp>');
+    const msg = { bouncedMessageId: null, bouncedCandidateEmails: ['rh@bigcorp.fr'] };
+    expect(matchBounce(msg, [a1, a2])).toBeUndefined();
+  });
+
+  test('ignore une candidature déjà marquée rebondie', () => {
+    const a = bounceApp('rh@acme.com', '<msg-5@smtp>', /* emailBounced */ true);
+    const msg = { bouncedMessageId: null, bouncedCandidateEmails: ['rh@acme.com'] };
+    expect(matchBounce(msg, [a])).toBeUndefined();
+  });
+
+  test('aucun candidat email → pas de match', () => {
+    const a = bounceApp('rh@acme.com', '<msg-6@smtp>');
+    const msg = { bouncedMessageId: null, bouncedCandidateEmails: [] };
+    expect(matchBounce(msg, [a])).toBeUndefined();
   });
 });
 

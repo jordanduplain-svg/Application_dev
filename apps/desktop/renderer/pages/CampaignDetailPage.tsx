@@ -617,6 +617,20 @@ export default function CampaignDetailPage({
     if (isMounted.current) setSendingId(null);
   };
 
+  // Envoi FORCÉ d'un email « à vérifier » (pattern deviné) — décision explicite de
+  // l'utilisateur, confirmée une fois (risque de bounce assumé), pas un défaut.
+  const sendUnverified = async (app: Application) => {
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Envoyer un email non vérifié ?',
+      message: `L'adresse ${app.contactEmail} a été devinée automatiquement (non confirmée) ` +
+        `et risque de rebondir. Envoyer quand même à ${app.companyName} ?`,
+    });
+    if (!ok) return;
+    setSendingId(app.id);
+    await safe(() => api.invoke('application:send', { id: app.id, force: true }));
+    if (isMounted.current) setSendingId(null);
+  };
+
   // UX-1v3 : regénère un email unique.
   const regenerateOne = async (appId: string) => {
     setRegeneratingId(appId);
@@ -1348,6 +1362,14 @@ export default function CampaignDetailPage({
                   {a.body && <button onClick={() => setPreviewAppId(a.id)} style={{ fontSize: '12px', background: '#5ac8fa', color: '#000' }}>Aperçu HTML</button>}
                   {(a.status === 'DRAFT' || a.status === 'FAILED') && (
                     <button onClick={() => sendOne(a.id)} disabled={sendingId === a.id} style={{ fontSize: '12px' }}>{sendingId === a.id ? 'Envoi…' : 'Envoyer'}</button>
+                  )}
+                  {/* Email deviné (pattern) bloqué à l'envoi normal : bypass explicite en un clic. */}
+                  {a.status === 'FAILED' && isUnverifiedEmail(a) && (
+                    <button onClick={() => sendUnverified(a)} disabled={sendingId === a.id}
+                      title="Envoie quand même malgré le risque de rebond (email non vérifié)"
+                      style={{ fontSize: '12px', background: '#ff9f0a', color: '#fff' }}>
+                      {sendingId === a.id ? 'Envoi…' : '⚠ Envoyer quand même'}
+                    </button>
                   )}
                   {(a.status === 'DRAFT' || a.status === 'FAILED') && (
                     <button onClick={() => regenerateOne(a.id)} disabled={regeneratingId === a.id} style={{ fontSize: '12px' }}>{regeneratingId === a.id ? 'Régénération…' : '⟳ Regénérer'}</button>

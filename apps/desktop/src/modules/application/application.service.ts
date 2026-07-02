@@ -1,4 +1,5 @@
 import type { Application, ApplicationStatus } from '@candio/shared';
+import { UNVERIFIED_EMAIL_SOURCES } from '@candio/shared';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
@@ -325,8 +326,11 @@ export async function listActionRequired(): Promise<Application[]> {
         followUpEligibleWhere(sevenDaysAgo),
         // Réponses reçues sans statut manuel (à qualifier).
         { status: 'REPLIED', manualStatus: null },
-        // Échecs à renvoyer.
-        { status: 'FAILED' },
+        // Échecs à renvoyer — SAUF les « à vérifier » (email deviné/pattern bloqué à
+        // l'envoi) : ce n'est pas une action quotidienne, ça polluait « À traiter ».
+        // Ils restent visibles/éditables dans la campagne. On garde ici les vrais
+        // échecs SMTP (email 'manual'/vérifié qui a raté l'envoi).
+        { status: 'FAILED', company: { emailSource: { notIn: [...UNVERIFIED_EMAIL_SOURCES] } } },
       ],
     },
     include: includeCompany,

@@ -21,6 +21,9 @@ export interface InboxMessage {
   isBounce: boolean;
   // BOUNCE-01 : Message-ID de l'email original extrait du corps du NDR.
   bouncedMessageId: string | null;
+  // BOUNCE-FALLBACK : adresses email trouvées dans le corps du NDR (repli de matching
+  // quand bouncedMessageId est absent — cas des rejets « adresse introuvable »).
+  bouncedCandidateEmails: string[];
   // AUTO-REPLY : true si réponse automatique (absence du bureau) — à ne pas
   // marquer comme une vraie réponse à qualifier.
   isAutoReply: boolean;
@@ -37,15 +40,33 @@ const BOUNCE_SUBJECT_RE =
 // Regex pour extraire le Message-ID original depuis le corps du NDR.
 const BOUNCED_MID_RE = /message-id:\s*(<[^>\s]+>)/i;
 
+// BOUNCE-FALLBACK : un NDR « adresse introuvable » (rejet immédiat au RCPT TO, le cas
+// typique d'un email pattern/deviné inexistant) ne recopie SOUVENT PAS le Message-ID
+// original dans son corps — contrairement à un NDR différé (boîte pleine), qui renvoie
+// le message complet avec ses en-têtes. Sans Message-ID, le bounce était jusque-là
+// silencieusement ignoré. On extrait donc aussi les adresses email mentionnées dans le
+// corps (le destinataire rejeté y figure quasi toujours en clair) pour permettre un
+// matching de repli par adresse — non ambigu — côté poll-replies.
+const EMAIL_IN_TEXT_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+
+function extractCandidateEmails(text: string): string[] {
+  const matches = text.match(EMAIL_IN_TEXT_RE) ?? [];
+  return [...new Set(matches.map((e) => e.toLowerCase()))];
+}
+
 function classifyBounce(
   from: string,
   subject: string,
   text: string
-): { isBounce: boolean; bouncedMessageId: string | null } {
+): { isBounce: boolean; bouncedMessageId: string | null; bouncedCandidateEmails: string[] } {
   const isBounce = BOUNCE_FROM_RE.test(from) || BOUNCE_SUBJECT_RE.test(subject);
-  if (!isBounce) return { isBounce: false, bouncedMessageId: null };
+  if (!isBounce) return { isBounce: false, bouncedMessageId: null, bouncedCandidateEmails: [] };
   const match = BOUNCED_MID_RE.exec(text);
-  return { isBounce: true, bouncedMessageId: match ? match[1] : null };
+  return {
+    isBounce: true,
+    bouncedMessageId: match ? match[1] : null,
+    bouncedCandidateEmails: extractCandidateEmails(text),
+  };
 }
 
 // BUG-M4 fix : séparer taille de batch et limite totale.
@@ -190,7 +211,7 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
               const from    = parsed.from?.value?.[0]?.address ?? '';
               const subject = parsed.subject ?? '';
               const text    = parsed.text ?? '';
-              const { isBounce, bouncedMessageId } = classifyBounce(from, subject, text);
+              const { isBounce, bouncedMessageId, bouncedCandidateEmails } = classifyBounce(from, subject, text);
               // AUTO-REPLY : en-têtes RFC 3834 (simpleParser met les clés en minuscules).
               const headerStr = (name: string): string | null => {
                 const v = parsed.headers.get(name);
@@ -209,6 +230,7 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
                 text,
                 isBounce,
                 bouncedMessageId,
+                bouncedCandidateEmails,
                 isAutoReply: isAutoReply({
                   autoSubmitted: headerStr('auto-submitted'),
                   xAutoreply: headerStr('x-autoreply'),

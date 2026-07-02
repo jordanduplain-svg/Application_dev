@@ -14,7 +14,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from pathlib import Path
 
 import requests
@@ -25,7 +25,7 @@ from .infra import (
     PersistentCache, ScrapingCheckpoint, ProxyPool, LRUPageCache,
     RateLimiter, Deadline, _ThreadSafeFetcher, log,
 )
-from .constants import DEFAULT_SOURCES, DIRECTORY_SOURCES
+from .constants import DEFAULT_SOURCES, DIRECTORY_SOURCES, EmailSource
 from .sources import SCRAPERS
 from .enrich import (
     filter_mx, enrich_catch_all, enrich_web_crawl,
@@ -435,6 +435,9 @@ class EmailEnrichConfig:
     # P2-9 : validation SMTP légère gratuite — quand le port 25 est ouvert,
     # tente un RCPT TO sur l'email « pattern » généré ; succès → pattern_verified.
     smtp_light_verify: bool = False
+    # Plafond de recherches Hunter.io pour ce run (miroir de RunConfig.hunter_max_searches ;
+    # sans ce champ, _run_email_enrich plantait dès que Hunter était activé).
+    hunter_max_searches: int = 20
 
 
 def _run_email_enrich(
@@ -668,6 +671,8 @@ def company_to_row_dict(c: Company) -> dict:
         "postedDate":        c.posted_date,
         # Qualité : domaine louche (homonyme) → "1", recalculé à chaque export.
         "domainSuspect":     "1" if is_domain_suspect(c.name, c.website, c.contact_email) else "0",
+        # BOUNCE-CSV : round-trip simple (posé par Carreer-ops, jamais par le scraper).
+        "bounced":           c.bounced,
     }
 
 
@@ -727,6 +732,15 @@ def run_enrich_descriptions(
     companies = load_companies_from_csv(str(path))
     print(f"📚  {len(companies)} entreprises chargées depuis {path.name}")
 
+    # GARDE ANTI-VIDAGE : si le fichier existe et n'est pas vide mais qu'on n'a RIEN
+    # chargé, c'est une lecture ratée (fichier verrouillé/corrompu). On S'ARRÊTE avant
+    # d'écrire : sinon _write_master remplacerait le master par un fichier à l'en-tête
+    # seul → tout le cumul perdu (le bug qu'on cherche justement à ne plus reproduire).
+    if not companies and path.stat().st_size > 100:
+        print("⛔  Master illisible ou verrouillé (0 entreprise chargée d'un fichier non vide)"
+              " — enrichissement annulé, master PRÉSERVÉ intact.")
+        return 0
+
     # Filtre optionnel : ne traiter que les leads affichés/filtrés (clés fournies par l'UI).
     only_keys = None
     if keys_file:
@@ -745,13 +759,18 @@ def run_enrich_descriptions(
         ollama_url=ollama_url, describe_model=describe_model,
     ))
 
-    # Écriture du master CSV (réutilisée pour la sauvegarde incrémentale).
+    # Écriture ATOMIQUE du master (réutilisée pour la sauvegarde incrémentale tous les 3
+    # leads). temp + os.replace (atomique sur le même volume) : fermer l'app / crasher en
+    # pleine écriture laisse soit l'ANCIEN fichier intact, soit le NOUVEAU complet — jamais
+    # un master tronqué. Indispensable ici car save_every=3 écrit très souvent.
     def _write_master() -> None:
-        with path.open("w", newline="", encoding="utf-8") as f:
+        tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+        with tmp.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
             writer.writeheader()
             for c in companies:
                 writer.writerow(company_to_row_dict(c))
+        os.replace(tmp, path)
 
     # save_fn persiste le CSV tous les 3 leads → si l'utilisateur quitte la page (ou
     # ferme l'app) en cours de route, les fiches déjà rédigées ne sont PAS perdues.
@@ -822,12 +841,55 @@ def _run_score_export(
 
     # ── Master cumulatif (toutes sessions confondues, dédup par domaine) ──
     master_file = cfg.output_dir / "candio_leads.csv"
-    merged, n_added, n_updated = merge_into_master(master_file, companies, fieldnames)
-    _write_csv(master_file, merged)
 
-    print(f"\n✅  Archive du run  → {archive_file}")
-    print(f"📚  Master cumulatif → {master_file}")
-    print(f"   +{n_added} nouvelles entreprises · {n_updated} mises à jour · {len(merged)} total")
+    # Comptage ROBUSTE des enregistrements du master AVANT écriture (csv.reader
+    # respecte les champs multi-lignes entre guillemets, contrairement à un split '\n').
+    def _count_records(path: "Path") -> int:
+        if not path.exists():
+            return 0
+        try:
+            with path.open(encoding="utf-8", newline="") as f:
+                return max(0, sum(1 for _ in csv.reader(f)) - 1)
+        except Exception:
+            return 0
+
+    existing_count = _count_records(master_file)
+
+    # GARDE-FOU 1 : backup horodaté du master AVANT tout écrasement (une perte de
+    # cumul a déjà eu lieu — le master avait été réduit à 41 puis reconstruit à 85).
+    backup_file = None
+    if existing_count > 0:
+        backup_file = master_file.with_name(
+            f"{master_file.stem}.bak.{datetime.now():%Y%m%d_%H%M%S}.csv")
+        try:
+            from shutil import copy2
+            copy2(master_file, backup_file)
+        except Exception as e:
+            print(f"⚠  Backup du master impossible ({e}) — on continue prudemment.")
+
+    merged, n_added, n_updated = merge_into_master(master_file, companies, fieldnames)
+
+    # GARDE-FOU 2 : merge_into_master part de l'existant et ne fait QU'AJOUTER. Si le
+    # résultat est PLUS PETIT que le master sur disque, c'est que la lecture a échoué
+    # (fichier verrouillé par l'app ouverte, écriture partielle, encodage) → on REFUSE
+    # d'écraser, sinon tout le cumul est perdu silencieusement. Le master reste intact.
+    if existing_count > 0 and len(merged) < existing_count:
+        print(f"⛔  Master NON réécrit : fusion={len(merged)} < existant={existing_count} "
+              f"→ lecture du master probablement échouée. Cumul PRÉSERVÉ intact.")
+        if backup_file:
+            print(f"   (backup de sécurité : {backup_file.name})")
+    else:
+        _write_csv(master_file, merged)
+
+    # Réconciliation explicite : ce run = ajoutées + mises à jour + déjà connues.
+    # (sans ça, « 39 exportées » vs « +30 au master » paraissait incohérent)
+    run_n = len(companies)
+    n_dup = run_n - n_added - n_updated   # déjà présentes au master, inchangées
+    print(f"\n✅  Archive de ce run  → {archive_file}")
+    print(f"📚  Master cumulatif   → {master_file}")
+    print(f"   Ce run : {run_n} entreprise(s) collectée(s) → "
+          f"{n_added} ajoutée(s), {n_updated} mise(s) à jour, {n_dup} déjà connue(s)")
+    print(f"   Master : {len(merged)} entreprise(s) au total (toutes sessions)")
 
     # Aperçu HTML du master
     export_html_preview(merged, master_file.with_suffix(".html"))
@@ -922,6 +984,32 @@ _REAL_EMAIL_SOURCES = frozenset({
     "pattern_verified", "pattern_nominative", "manual", "github_org", "llm_crawl",
 })
 
+# Libellés lisibles par source d'email, ordonnés du plus fiable au moins fiable.
+# La ventilation du récap itère sur CE dict → toute source présente est affichée
+# (plus de lignes manquantes : la somme affichée = le total annoncé).
+_EMAIL_SOURCE_LABELS: dict[str, str] = {
+    # Vérifiés — envoyables directement
+    "hunter_verified":    "✅ Vérifié — Hunter.io",
+    "linkedin_smtp":      "✅ Vérifié — LinkedIn + SMTP",
+    "manual":             "✅ Saisi manuellement",
+    # Trouvés — fiables mais non vérifiés SMTP
+    "web_crawl":          "🟢 Trouvé sur le site web",
+    "llm_crawl":          "🟢 Trouvé sur le site web (IA)",
+    "whois":              "🟢 Trouvé via WHOIS",
+    "snov_found":         "🟢 Trouvé via Snov.io",
+    "apollo_found":       "🟢 Trouvé via Apollo.io",
+    "hunter_found":       "🟢 Trouvé via Hunter.io (non vérifié)",
+    "github_org":         "🟢 Trouvé via GitHub",
+    # Motifs construits — à vérifier avant envoi en masse
+    "pattern_verified":   "⚡ Motif vérifié SMTP (rh@…)",
+    "pattern_nominative": "⚡ Motif nominatif (prénom.nom@)",
+    "linkedin_pattern":   "🔸 Motif LinkedIn (non vérifié)",
+    "catch_all":          "🟠 Domaine catch-all (fiabilité faible)",
+    "pattern":            "⚪ Généré (rh@…, risque de bounce)",
+    # Sans email
+    "no_email":           "⛔ Aucun email trouvé",
+}
+
 
 def _print_summary(companies: list["Company"], cfg: "RunConfig") -> None:
     """
@@ -939,43 +1027,44 @@ def _print_summary(companies: list["Company"], cfg: "RunConfig") -> None:
     for c in companies:
         src_counts[c.email_source] = src_counts.get(c.email_source, 0) + 1
 
-    real      = sum(src_counts.get(s, 0) for s in _REAL_EMAIL_SOURCES)
-    generated = src_counts.get("pattern", 0)
-    catch_all = src_counts.get("catch_all", 0)
-    pct_real  = int(real / n * 100)
-    pct_gen   = int(generated / n * 100)
+    # Trois seaux qui se RECONCILIENT : réels + à-vérifier + sans-email = n.
+    real       = sum(src_counts.get(s, 0) for s in _REAL_EMAIL_SOURCES)
+    generated  = src_counts.get("pattern", 0)
+    unverified = sum(src_counts.get(s, 0) for s in EmailSource.UNVERIFIED_SOURCES)
+    none_      = src_counts.get("no_email", 0) + src_counts.get("", 0)
+    pct_real   = round(real / n * 100)
 
     collect_counts: dict[str, int] = {}
     for c in companies:
         collect_counts[c.source] = collect_counts.get(c.source, 0) + 1
 
-    print(f"""
-┌─────────────────────────────────────────────────────┐
-│  RÉCAPITULATIF DU SCRAPING                          │
-├─────────────────────────────────────────────────────┤
-│  Entreprises exportées   : {n:<26}│
-│                                                     │
-│  Sources de collecte :                              │""")
+    sep = "─" * 58
+    print(f"\n{sep}")
+    print(f"  RÉCAPITULATIF DU SCRAPING — {n} entreprise(s) exportée(s)")
+    print(sep)
+
+    print("\n  Sources de collecte :")
     for src, cnt in sorted(collect_counts.items(), key=lambda x: -x[1]):
-        label = _SOURCE_LABELS.get(src, src)
-        print(f"│    {label:<28} : {cnt:<4}               │")
-    print(f"""│                                                     │
-│  Qualité des emails :                               │
-│    ✅ Vérifiés  (hunter_verified)  : {src_counts.get('hunter_verified', 0):<3}              │
-│    🔗 LinkedIn+SMTP (linkedin_smtp): {src_counts.get('linkedin_smtp', 0):<3}              │
-│    🟢 Trouvés   (web_crawl)        : {src_counts.get('web_crawl', 0):<3}              │
-│    🔎 Trouvés   (whois)            : {src_counts.get('whois', 0):<3}              │
-│    🟡 Trouvés   (hunter_found)     : {src_counts.get('hunter_found', 0):<3}              │
-│    🔸 LinkedIn  (linkedin_pattern) : {src_counts.get('linkedin_pattern', 0):<3}              │
-│    ⚡ Pattern+SMTP (pattern_verifie): {src_counts.get('pattern_verified', 0):<3}              │
-│    🟠 Catch-all (domaine permissif) : {catch_all:<3}              │
-│    ⚪ Générés   (pattern rh@…)     : {generated:<3}              │
-│                                                     │
-│  → {real}/{n} emails trouvés ({pct_real}%) — {generated}/{n} générés ({pct_gen}%)  │
-│                                                     │
-│  ℹ  Les emails "pattern" sont à risque de bounce.   │
-│     Activez Hunter.io / LinkedIn pour les grandes boîtes. │
-└─────────────────────────────────────────────────────┘""")
+        print(f"    {_SOURCE_LABELS.get(src, src):<36} {cnt:>4}")
+
+    # Ventilation DÉRIVÉE des données : on n'affiche que les sources présentes, et la
+    # somme des lignes = n (plus jamais d'écart « 19 affichés / 39 annoncés »).
+    print("\n  Qualité des emails (de la plus fiable à la moins fiable) :")
+    for src, label in _EMAIL_SOURCE_LABELS.items():
+        cnt = src_counts.get(src, 0)
+        if cnt:
+            print(f"    {label:<42} {cnt:>4}")
+    # Filet : une source non répertoriée ne doit JAMAIS disparaître silencieusement.
+    for src, cnt in src_counts.items():
+        if cnt and src and src not in _EMAIL_SOURCE_LABELS:
+            print(f"    ❔ {src:<40} {cnt:>4}")
+
+    print(f"\n  → {real} exploitables ({pct_real}%)  ·  {unverified} à vérifier  ·  "
+          f"{none_} sans email   (total {n})")
+    if generated or unverified:
+        print('  ℹ  Les emails « générés/motif » risquent le bounce — activez')
+        print("     Hunter.io / LinkedIn pour fiabiliser les grandes boîtes.")
+    print(sep)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1302,6 +1391,7 @@ def run(cfg: RunConfig) -> None:
                 use_whois=getattr(cfg, "use_whois", False),
                 # P2-9 : validation SMTP légère opt-in (RunConfig.smtp_light_verify).
                 smtp_light_verify=getattr(cfg, "smtp_light_verify", False),
+                hunter_max_searches=cfg.hunter_max_searches,
             )
             _run_email_enrich(
                 companies=all_companies, fetcher=fetcher,
