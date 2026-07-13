@@ -1,6 +1,7 @@
 import { dialog } from 'electron';
 import { readFile, stat, writeFile } from 'fs/promises';
 import { handle } from './registry';
+import { prisma } from '../../src/lib/prisma';
 import * as companyService from '../../src/modules/company/company.service';
 import { assertEmail, assertNonEmpty } from '../../src/lib/validation';
 import { validate, CampaignIdSchema, BulkDeleteSchema, IdSchema } from './validation';
@@ -9,6 +10,30 @@ import { logger } from '../../src/lib/logger';
 /** Handlers IPC du domaine Entreprises cibles. */
 export function registerCompanyHandlers(): void {
   handle('company:listByCampaign', ({ campaignId }) => companyService.listByCampaign(campaignId));
+
+  // DEDUP-01 : entreprises présentes dans PLUSIEURS campagnes actives — évite de contacter
+  // deux fois la même boîte (mauvais effet). Regroupées par domaine email (fiable), sinon
+  // par nom normalisé (insensible casse/accents).
+  handle('company:crossCampaignDuplicates', async () => {
+    const companies = await prisma.company.findMany({
+      where: { campaign: { archivedAt: null } },
+      select: { name: true, contactEmail: true, campaignId: true, campaign: { select: { name: true } } },
+    });
+    const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    const domainOf = (email: string) => { const m = /@(.+)$/.exec(email.trim()); return m ? m[1].toLowerCase() : ''; };
+    const groups = new Map<string, { label: string; campaigns: Map<string, string> }>();
+    for (const c of companies) {
+      const key = domainOf(c.contactEmail) || norm(c.name);
+      if (!key) continue;
+      const g = groups.get(key) ?? { label: c.name, campaigns: new Map<string, string>() };
+      g.campaigns.set(c.campaignId, c.campaign.name);
+      groups.set(key, g);
+    }
+    return [...groups.entries()]
+      .filter(([, g]) => g.campaigns.size >= 2)
+      .map(([key, g]) => ({ key, label: g.label, campaigns: [...g.campaigns.entries()].map(([id, name]) => ({ id, name })) }))
+      .sort((a, b) => b.campaigns.length - a.campaigns.length);
+  });
 
   handle('company:add', (input) => {
     // H6 : validation côté main-process (double-check même si l'UI valide déjà).

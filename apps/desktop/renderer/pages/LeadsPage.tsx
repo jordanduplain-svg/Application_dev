@@ -63,6 +63,10 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
   const [onlyEmail, setOnlyEmail] = useState(false);
   // Qualité : ne montrer que les leads à domaine louche (homonyme à vérifier).
   const [onlySuspect, setOnlySuspect] = useState(false);
+  // BOUNCE-VIEW : ne montrer que les leads dont un envoi réel a rebondi (email mort).
+  const [onlyBounced, setOnlyBounced] = useState(false);
+  // À-VÉRIFIER : ne montrer que les leads à email non fiable (source devinée, bloqué à l'envoi).
+  const [onlyUnverified, setOnlyUnverified] = useState(false);
   // SECTOR-AUTO : clés des leads déjà présents dans une campagne (badge + teinte).
   const [usedKeys, setUsedKeys] = useState<Set<string>>(new Set());
   const [hideUsed, setHideUsed] = useState(false);
@@ -70,6 +74,12 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
   const [sortAsc, setSortAsc] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  // LEADS-UPDATE : « Mettre à jour le CSV » sur les leads affichés (filtres actuels).
+  // Portée fixée à 'all' : les 3 modes (missing/missing_bounced/all) faisaient doublon
+  // avec les cases à cocher du filtre (Emails à vérifier/rebondis, déjà réactives) —
+  // 'all' traite exactement ce que l'utilisateur a choisi d'afficher, sans confusion.
+  const [updatingCsv, setUpdatingCsv] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichMsg, setEnrichMsg] = useState('');
   // Import d'un CSV d'entreprises (export Sales Nav / Apollo / Wiza / CSV maison).
@@ -187,6 +197,8 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
       && (!fSource || l.source === fSource)
       && (!onlyEmail || !!l.email)
       && (!onlySuspect || l.domainSuspect)
+      && (!onlyBounced || l.bounced)
+      && (!onlyUnverified || (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(l.emailSource))
       && (!hideUsed || !usedKeys.has(l.key)));
     r = [...r].sort((a, b) => {
       let cmp = 0;
@@ -196,13 +208,34 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
       return sortAsc ? cmp : -cmp;
     });
     return r;
-  }, [leads, search, fSector, fRegion, fDept, fCity, fSource, onlyEmail, onlySuspect, hideUsed, usedKeys, sortKey, sortAsc]);
+  }, [leads, search, fSector, fRegion, fDept, fCity, fSource, onlyEmail, onlySuspect, onlyBounced, onlyUnverified, hideUsed, usedKeys, sortKey, sortAsc]);
 
-  // SECTOR-AUTO : nombre de leads déjà présents dans une campagne.
-  const usedCount = useMemo(() => leads.filter((l) => usedKeys.has(l.key)).length, [leads, usedKeys]);
+  // Base commune des 4 compteurs de facettes ci-dessous : respecte recherche/secteur/
+  // géo/source/« avec email », mais AUCUNE des 4 cases exclusives → les compteurs sont
+  // indépendants les uns des autres (cf. commentaire des compteurs plus bas).
+  const baseFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return leads.filter((l) =>
+      (!q || l.name.toLowerCase().includes(q) || l.email.toLowerCase().includes(q) || l.contactName.toLowerCase().includes(q))
+      && (!fSector || l.sector === fSector)
+      && (!fRegion || leadRegion(l) === fRegion)
+      && (!fDept || leadDept(l) === fDept)
+      && (!fCity || l.city === fCity)
+      && (!fSource || l.source === fSource)
+      && (!onlyEmail || !!l.email));
+  }, [leads, search, fSector, fRegion, fDept, fCity, fSource, onlyEmail]);
 
-  // Nombre de leads à domaine louche (pour le filtre/compteur).
-  const suspectCount = useMemo(() => leads.filter((l) => l.domainSuspect).length, [leads]);
+  const isUnverified = (l: LeadRow) => (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(l.emailSource);
+
+  // Compteurs des puces de facette = nb de leads de chaque type dans le périmètre courant
+  // (recherche/secteur/géo/source/« avec email »), INDÉPENDAMMENT des 4 cases exclusives.
+  // Indépendance voulue : cocher une case ne fait plus varier (ni disparaître) le compteur
+  // d'une AUTRE case. Avant, les puces se réorganisaient sous le curseur au moindre clic
+  // → on « n'arrivait plus à décocher ». Chaque puce reste stable et cliquable.
+  const usedCount       = useMemo(() => baseFiltered.filter((l) => usedKeys.has(l.key)).length, [baseFiltered, usedKeys]);
+  const suspectCount    = useMemo(() => baseFiltered.filter((l) => l.domainSuspect).length, [baseFiltered]);
+  const bouncedCount    = useMemo(() => baseFiltered.filter((l) => l.bounced).length, [baseFiltered]);
+  const unverifiedCount = useMemo(() => baseFiltered.filter((l) => isUnverified(l)).length, [baseFiltered]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortAsc(!sortAsc);
@@ -223,11 +256,10 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
     setSelected(next);
   };
 
-  // Nb de leads avec site mais sans description — cible de l'enrichissement.
-  const missingDesc = useMemo(
-    () => leads.filter((l) => l.website && !l.description).length, [leads]);
-  // Nb de leads ayant déjà une fiche — cible de la régénération.
-  const withDesc = useMemo(() => leads.filter((l) => !!l.description).length, [leads]);
+  // Leads AFFICHÉS (filtres actuels) avec site mais sans description — cible de l'enrichissement.
+  const missingShown = useMemo(() => view.filter((l) => l.website && !l.description), [view]);
+  // Leads AFFICHÉS ayant déjà une fiche — cible de la régénération.
+  const withDescShown = useMemo(() => view.filter((l) => !!l.description), [view]);
   // Nb de fiches de plus de 7 jours (ou sans date) — cible de la mise à jour.
   const STALE_DAYS = 7;
   const ageDays = (iso: string): number | null => {
@@ -306,8 +338,66 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
     }
   };
 
+  // Exporte en CSV : la sélection si non vide, sinon les leads affichés (respecte les filtres).
+  const exportCsv = async () => {
+    const keys = selected.size > 0 ? [...selected] : view.map((l) => l.key);
+    if (keys.length === 0) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const r = await api.invoke('scraping:exportLeadsCsv', { keys });
+      if (isMounted.current && r) setEnrichMsg(`✅ Export : ${r.count} lead(s) → ${r.path}`);
+    } catch (e) {
+      if (isMounted.current) setError(e instanceof Error ? e.message : 'Erreur lors de l\'export');
+    } finally {
+      if (isMounted.current) setExporting(false);
+    }
+  };
+
+  // LEADS-UPDATE : relance la recherche d'emails (crawl + Hunter) sur les leads AFFICHÉS
+  // (respecte tous les filtres en cours), selon la portée choisie. Le master est réécrit
+  // atomiquement côté Python (temp + os.replace + backup + garde anti-troncature).
+  const updateLeadsCsv = async () => {
+    if (updatingCsv) return;
+    const keys = view.map((l) => l.key);
+    setUpdatingCsv(true);
+    setError(null);
+    setEnrichMsg(`🔄 Mise à jour du CSV en cours sur ${keys.length} lead(s) affiché(s)…`);
+    // B4 : on capte les lignes de BILAN (🔎/⚠/ℹ) pour les afficher à la fin — sinon un run
+    // sans nouvel email se terminait par un « ✅ terminé » muet, donnant l'impression d'un bug.
+    let bilan = '';
+    const off = api.on('scraping:progress', (data) => {
+      if (isMounted.current && data.line) {
+        setEnrichMsg(data.line);
+        if (/^\s*(🔎|⚠|ℹ)/.test(data.line)) bilan = bilan ? `${bilan} · ${data.line.trim()}` : data.line.trim();
+      }
+      if (data.done) {
+        off();
+        if (isMounted.current) { setUpdatingCsv(false); setEnrichMsg(bilan || '✅ Mise à jour du CSV terminée.'); void load(); }
+      }
+    });
+    try {
+      const r = await api.invoke('scraping:updateLeadsCsv', { keys, scope: 'all' });
+      if (!r.ok) {
+        off();
+        if (isMounted.current) { setUpdatingCsv(false); setError('Aucun CSV master trouvé — lance d\'abord un scraping.'); }
+      }
+    } catch (e) {
+      off();
+      if (isMounted.current) { setUpdatingCsv(false); setError(e instanceof Error ? e.message : 'Erreur lors de la mise à jour'); }
+    }
+  };
+
   const deleteSelected = async () => {
     if (selected.size === 0) return;
+    // Garde-fou anti-« tout supprimer d'un coup » : confirmation explicite avec le
+    // décompte exact. L'écriture master est déjà atomique (writeMasterAtomic) → pas
+    // de corruption possible ; ici on protège juste contre un clic accidentel.
+    const ok = await api.invoke('dialog:confirm', {
+      title: 'Supprimer des leads',
+      message: `Supprimer définitivement ${selected.size} lead(s) du master ? Cette action retire ces lignes du fichier candio_leads.csv (irréversible).`,
+    });
+    if (!ok) return;
     setDeleting(true);
     setError(null);
     try {
@@ -347,9 +437,10 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
   // autorise l'envoi tel quel (repasse la source à 'manual'). Calculé depuis `leads`.
   const [exclusOpen, setExclusOpen] = useState(false);
   const [unbanningKey, setUnbanningKey] = useState<string | null>(null);
+  // Réactif aux filtres actuels (view), comme le reste de la page.
   const exclus = useMemo(
-    () => leads.filter((l) => (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(l.emailSource)),
-    [leads],
+    () => view.filter((l) => (UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(l.emailSource)),
+    [view],
   );
   const debannir = async (l: LeadRow) => {
     setUnbanningKey(l.key);
@@ -365,22 +456,23 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
     }
   };
 
-  // Réinitialise le statut « utilisée » de TOUTES les entreprises utilisées (bouton
-  // visible, sans sélection). Les retire de leurs campagnes → réimportables.
-  // Avertissement + protection des candidatures déjà envoyées.
+  // Réinitialise le statut « utilisée » des entreprises utilisées PARMI LES FILTRÉES
+  // (view), pas tout le master : on ne libère que ce que l'utilisateur a trié à l'écran.
+  // Les retire de leurs campagnes → réimportables. Avertissement + protection des
+  // candidatures déjà envoyées.
   const [resetting, setResetting] = useState(false);
+  const usedInView = useMemo(() => view.filter((l) => usedKeys.has(l.key)).map((l) => l.key), [view, usedKeys]);
   const resetAllUsed = async () => {
-    const usedAll = leads.filter((l) => usedKeys.has(l.key)).map((l) => l.key);
-    if (usedAll.length === 0) { setError('Aucune entreprise « utilisée » à réinitialiser.'); return; }
+    if (usedInView.length === 0) { setError('Aucune entreprise « utilisée » à réinitialiser parmi les leads affichés.'); return; }
     const ok = await api.invoke('dialog:confirm', {
       title: 'Réinitialiser les entreprises utilisées',
-      message: `Libérer ${usedAll.length} entreprise(s) « utilisée(s) » : elles seront RETIRÉES de leurs campagnes (brouillons supprimés) et redeviendront réimportables. Les candidatures déjà ENVOYÉES sont conservées. Continuer ?`,
+      message: `Libérer ${usedInView.length} entreprise(s) « utilisée(s) » PARMI LES ${view.length} AFFICHÉES (filtres actuels) : elles seront RETIRÉES de leurs campagnes (brouillons supprimés) et redeviendront réimportables. Les candidatures déjà ENVOYÉES sont conservées. Continuer ?`,
     });
     if (!ok) return;
     setResetting(true);
     setError(null);
     try {
-      const r = await api.invoke('company:resetUsedLeads', { keys: usedAll });
+      const r = await api.invoke('company:resetUsedLeads', { keys: usedInView });
       await load();
       setEnrichMsg(`✅ ${r.reset} entreprise(s) libérée(s)${r.skipped > 0 ? ` · ${r.skipped} conservée(s) (déjà envoyées)` : ''}.`);
     } catch (e) {
@@ -432,38 +524,41 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             borderRadius: '6px', padding: '6px 12px', cursor: importing ? 'default' : 'pointer' }}>
           {importing ? 'Import…' : '📥 Import CSV Entreprise'}
         </button>
-        <button onClick={() => void enrichDescriptions({})} disabled={enriching || leads.length === 0}
-          title="Rédige une fiche IA pour TOUTES les entreprises sans fiche (tout le master)"
+        <button onClick={() => void exportCsv()} disabled={exporting || leads.length === 0}
+          title="Exporte en CSV la sélection en cours, ou les leads affichés (respecte les filtres) si rien n'est sélectionné"
+          className="btn-secondary" style={{ fontSize: '12px' }}>
+          {exporting ? 'Export…' : `⬇ Exporter${selected.size > 0 ? ` la sélection (${selected.size})` : ' en CSV'}`}
+        </button>
+        {/* LEADS-UPDATE : relance la recherche d'emails sur les leads AFFICHÉS (respecte les
+            filtres/cases cochées) — filtre déjà le périmètre exact, pas besoin d'une 2e portée. */}
+        <button onClick={() => void updateLeadsCsv()} disabled={updatingCsv || leads.length === 0}
+          title="Relance la recherche d'emails (crawl web + Hunter) sur les leads AFFICHÉS (respecte les filtres), selon la portée choisie. Le master est réécrit de façon atomique."
+          className="btn-secondary" style={{ fontSize: '12px' }}>
+          {updatingCsv ? '🔄 Mise à jour…' : `🔄 Mettre à jour le CSV (${view.length})`}
+        </button>
+        {/* Un seul bouton d'enrichissement (les 2 anciens — « manquantes » global et « affichés »
+            filtré — faisaient doublon) : toujours scopé aux leads AFFICHÉS (respecte les filtres). */}
+        <button onClick={() => void enrichDescriptions({ keys: missingShown.map((l) => l.key) })}
+          disabled={enriching || missingShown.length === 0}
+          title="Rédige une fiche IA pour les entreprises AFFICHÉES sans fiche (respecte les filtres actuels)"
           style={{ fontSize: '12px', background: '#0a84ff', color: '#fff', border: 'none',
             borderRadius: '6px', padding: '6px 12px', cursor: enriching ? 'default' : 'pointer' }}>
-          {enriching ? '✨ En cours…' : `✨ Enrichir les manquantes${missingDesc > 0 ? ` (${missingDesc})` : ''}`}
+          {enriching ? '✨ En cours…' : `✨ Enrichir les manquantes affichées (${missingShown.length})`}
         </button>
-        {(() => {
-          const missingShown = view.filter((l) => l.website && !l.description);
-          if (missingShown.length === 0 || missingShown.length === missingDesc) return null;
-          return (
-            <button onClick={() => void enrichDescriptions({ keys: missingShown.map((l) => l.key) })} disabled={enriching}
-              title="Rédige une fiche IA uniquement pour les leads AFFICHÉS (respecte les filtres) — rapide"
-              style={{ fontSize: '12px', background: '#5856d6', color: '#fff', border: 'none',
-                borderRadius: '6px', padding: '6px 12px', cursor: enriching ? 'default' : 'pointer' }}>
-              🎯 Enrichir les affichés ({missingShown.length})
-            </button>
-          );
-        })()}
         {/* Boutons « Mettre à jour les fiches > 7j » et « Actus > 7j » retirés :
-            « Régénérer tout » couvre le besoin et allège la barre d'actions. */}
-        {withDesc > 0 && !confirmRegen && (
+            « Régénérer » couvre le besoin et allège la barre d'actions. */}
+        {withDescShown.length > 0 && !confirmRegen && (
           <button onClick={() => setConfirmRegen(true)} disabled={enriching}
-            title="Refait TOUTES les fiches existantes avec le prompt actuel (écrase les anciennes notes)"
+            title="Refait les fiches AFFICHÉES existantes avec le prompt actuel (respecte les filtres, écrase les anciennes notes)"
             style={{ fontSize: '12px', background: '#fff', color: '#0a84ff', border: '1px solid #0a84ff',
               borderRadius: '6px', padding: '6px 12px', cursor: enriching ? 'default' : 'pointer' }}>
-            🔄 Régénérer tout ({withDesc})
+            🔄 Régénérer les affichées ({withDescShown.length})
           </button>
         )}
         {confirmRegen && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-            <span style={{ color: '#b35900' }}>Écraser les {withDesc} fiche(s) ?</span>
-            <button onClick={() => void enrichDescriptions({ force: true })}
+            <span style={{ color: '#b35900' }}>Écraser les {withDescShown.length} fiche(s) affichée(s) ?</span>
+            <button onClick={() => void enrichDescriptions({ force: true, keys: withDescShown.map((l) => l.key) })}
               style={{ fontSize: '12px', background: '#ff9500', color: '#fff', border: 'none',
                 borderRadius: '6px', padding: '6px 10px', cursor: 'pointer' }}>
               Oui, régénérer
@@ -474,12 +569,12 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
             </button>
           </span>
         )}
-        {usedCount > 0 && (
+        {usedInView.length > 0 && (
           <button onClick={() => void resetAllUsed()} disabled={resetting}
-            title="Libère TOUTES les entreprises « utilisée » (les retire de leurs campagnes, brouillons) → réimportables. Ne touche pas aux candidatures déjà envoyées."
+            title="Libère les entreprises « utilisée » PARMI LES LEADS AFFICHÉS (filtres actuels) — les retire de leurs campagnes, brouillons → réimportables. Ne touche pas aux candidatures déjà envoyées, ni au reste du master hors filtre."
             style={{ fontSize: '12px', background: '#fff', color: '#1D9E75', border: '1px solid #1D9E75',
               borderRadius: '6px', padding: '6px 12px', cursor: resetting ? 'default' : 'pointer' }}>
-            {resetting ? 'Réinitialisation…' : `♻ Réinitialiser les utilisées (${usedCount})`}
+            {resetting ? 'Réinitialisation…' : `♻ Réinitialiser les utilisées affichées (${usedInView.length})`}
           </button>
         )}
         {onGoToScraping && (
@@ -552,14 +647,28 @@ export default function LeadsPage({ onGoToScraping }: { onGoToScraping?: () => v
           <input type="checkbox" checked={onlyEmail} onChange={(e) => setOnlyEmail(e.target.checked)} style={{ width: 'auto' }} />
           Avec email
         </label>
-        {suspectCount > 0 && (
+        {(suspectCount > 0 || onlySuspect) && (
           <label style={{ fontSize: '12px', color: '#b8860b', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
             title="Leads dont le domaine du site ne correspond pas au nom (homonyme probable à vérifier)">
             <input type="checkbox" checked={onlySuspect} onChange={(e) => setOnlySuspect(e.target.checked)} style={{ width: 'auto' }} />
             ⚠ Sites douteux ({suspectCount})
           </label>
         )}
-        {usedCount > 0 && (
+        {(bouncedCount > 0 || onlyBounced) && (
+          <label style={{ fontSize: '12px', color: '#ff453a', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
+            title="Leads dont un envoi réel a rebondi (NDR reçu) — adresse morte confirmée, à supprimer ou exclure">
+            <input type="checkbox" checked={onlyBounced} onChange={(e) => setOnlyBounced(e.target.checked)} style={{ width: 'auto' }} />
+            ⛔ Emails rebondis ({bouncedCount})
+          </label>
+        )}
+        {(unverifiedCount > 0 || onlyUnverified) && (
+          <label style={{ fontSize: '12px', color: '#b8860b', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
+            title="Leads à email non fiable (deviné : pattern/catch-all) — bloqué à l'envoi. Isole-les puis lance « Mettre à jour le CSV » pour re-chercher un vrai email.">
+            <input type="checkbox" checked={onlyUnverified} onChange={(e) => setOnlyUnverified(e.target.checked)} style={{ width: 'auto' }} />
+            ⚠ Emails à vérifier ({unverifiedCount})
+          </label>
+        )}
+        {(usedCount > 0 || hideUsed) && (
           <label style={{ fontSize: '12px', color: '#1a7a3a', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
             title="Entreprises déjà présentes dans une campagne (déjà contactées ou prêtes à l'être) — exclues de l'import auto des nouvelles campagnes">
             <input type="checkbox" checked={hideUsed} onChange={(e) => setHideUsed(e.target.checked)} style={{ width: 'auto' }} />

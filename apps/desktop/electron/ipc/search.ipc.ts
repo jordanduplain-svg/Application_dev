@@ -1,10 +1,66 @@
 import Fuse from 'fuse.js';
 import { handle } from './registry';
 import { prisma } from '../../src/lib/prisma';
-import type { SearchResult } from '@candio/shared';
+import type { SearchResult, SearchHit, ApplicationStatus } from '@candio/shared';
+
+// SEARCH-01 / B8 : pliage insensible à la casse ET aux accents (« Réponse » == « reponse »).
+// NFD décompose les accentués (é → e + ◌́) puis on retire les diacritiques. Pour un texte NFC
+// (cas normal) la longueur est préservée → les index restent alignés sur l'original.
+function fold(s: string | null | undefined): string {
+  return (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// SEARCH-01 : extrait ~120 caractères autour de la 1ʳᵉ occurrence (recherche pliée).
+function snippet(text: string | null, term: string): string {
+  if (!text) return '';
+  const i = fold(text).indexOf(fold(term));
+  if (i < 0) return text.slice(0, 120).trim();
+  const start = Math.max(0, i - 40);
+  return (start > 0 ? '…' : '') + text.slice(start, i + term.length + 80).replace(/\s+/g, ' ').trim() + '…';
+}
 
 // UX-S10 : recherche globale sur campagnes, entreprises et candidatures.
 export function registerSearchHandlers(): void {
+  // SEARCH-01 : recherche PLEIN-TEXTE dans les contenus (un hit par candidature, champ le
+  // plus pertinent). LIKE SQLite (insensible à la casse ASCII) — suffisant en mono-utilisateur.
+  // ponytail: passer en FTS5 (better-sqlite3 déjà présent) si le volume l'exige.
+  handle('search:content', async ({ q }) => {
+    const term = (q ?? '').trim();
+    if (term.length < 2) return [];
+    const needle = fold(term);
+    const inField = (t: string | null | undefined) => fold(t).includes(needle);
+    // B8/ponytail : LIKE SQLite n'est pas insensible aux accents → on plie en JS sur un
+    // périmètre borné (500 candidatures les plus récentes). Passer en FTS5 (tokenizer
+    // unicode61 remove_diacritics) si le volume dépasse un jour cette échelle mono-utilisateur.
+    const apps = await prisma.application.findMany({
+      where: { campaign: { archivedAt: null } },
+      include: {
+        company: { select: { name: true } },
+        messages: { select: { direction: true, body: true }, orderBy: { createdAt: 'desc' } },
+      },
+      take: 500,
+      orderBy: { sentAt: 'desc' },
+    });
+    const hits: SearchHit[] = [];
+    for (const a of apps) {
+      const base = {
+        applicationId: a.id, campaignId: a.campaignId, companyName: a.company.name,
+        subject: a.subject, status: a.status as ApplicationStatus,
+      };
+      const msg = a.messages.find((m) => inField(m.body));
+      if (inField(a.replyContent)) hits.push({ ...base, field: 'réponse', snippet: snippet(a.replyContent, term) });
+      else if (msg?.direction === 'IN') hits.push({ ...base, field: 'réponse', snippet: snippet(msg.body, term) });
+      else if (inField(a.myReplyContent)) hits.push({ ...base, field: 'ma réponse', snippet: snippet(a.myReplyContent, term) });
+      else if (msg?.direction === 'OUT') hits.push({ ...base, field: 'ma réponse', snippet: snippet(msg.body, term) });
+      else if (inField(a.followUpNote)) hits.push({ ...base, field: 'note', snippet: snippet(a.followUpNote, term) });
+      else if (inField(a.subject)) hits.push({ ...base, field: 'objet', snippet: a.subject });
+      else if (inField(a.body)) hits.push({ ...base, field: 'candidature', snippet: snippet(a.body, term) });
+      else if (inField(a.company.name)) hits.push({ ...base, field: 'entreprise', snippet: a.company.name });
+      if (hits.length >= 60) break;
+    }
+    return hits;
+  });
+
   handle('search:global', async ({ query }) => {
     if (!query || query.trim().length < 2) return [];
 

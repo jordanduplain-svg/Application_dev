@@ -1,5 +1,7 @@
 import { handle } from './registry';
 import { prisma } from '../../src/lib/prisma';
+import { classifyReplySentiment, stripQuotedReply } from '../../src/tasks/reply-matching';
+import { estimateCostUsd } from '../../src/lib/ai-cost';
 
 const SENT_STATUSES = ['SENT', 'REPLIED', 'FOLLOWED_UP'] as const;
 
@@ -29,7 +31,8 @@ export function registerStatsHandlers(): void {
 
   handle('stats:getGlobal', async () => {
     // PERF-S2 : toutes les requêtes indépendantes en parallèle.
-    const [totalCampaigns, totalCompanies, statusGroups, avgRaw, campaignGroups, manualGroups, totalDrafted] =
+    const [totalCampaigns, totalCompanies, statusGroups, avgRaw, campaignGroups, manualGroups, totalDrafted,
+           followUpSent, followUpReplied, replyTexts] =
       await Promise.all([
         prisma.campaign.count({ where: { archivedAt: null } }),
         prisma.company.count(),
@@ -50,6 +53,16 @@ export function registerStatsHandlers(): void {
           _count: { _all: true },
         }),
         prisma.application.count({ where: { body: { not: '' } } }),
+        // STATS-FU : relances RÉELLEMENT envoyées. followUpSentAt n'est posé qu'après
+        // un envoi (le report quota restaure l'état ; seul l'opt-out le laisse posé sans
+        // envoi — cas rare et assumé). Une réponse ne peut arriver qu'APRÈS la relance,
+        // le claim exigeant repliedAt=null → repliedAt non-null ⇒ retour post-relance.
+        prisma.application.count({ where: { followUpSentAt: { not: null } } }),
+        prisma.application.count({ where: { followUpSentAt: { not: null }, repliedAt: { not: null } } }),
+        // STATS-SENT : on charge le texte des réponses pour les classer (heuristique locale,
+        // même code que la page Réponses). ponytail: scan en mémoire ; O(n) sur les réponses
+        // reçues (dizaines/centaines pour un mono-utilisateur) — passer en SQL si ça grossit.
+        prisma.application.findMany({ where: { status: 'REPLIED' }, select: { replyContent: true } }),
       ]);
 
     const countByStatus = Object.fromEntries(
@@ -93,6 +106,15 @@ export function registerStatsHandlers(): void {
     const totalInterviewed = countByManual['INTERVIEWED'] ?? 0;
     const totalOffers = countByManual['OFFER'] ?? 0;
 
+    const followUpReplyRate = followUpSent > 0 ? Math.round((followUpReplied / followUpSent) * 100) : 0;
+
+    // STATS-SENT : classe chaque réponse (positive / négative / neutre) sur le vrai
+    // message (dé-cité), comme la page Réponses — cohérence UI/stats.
+    const sentiment = { positive: 0, neutral: 0, rejection: 0 };
+    for (const r of replyTexts) {
+      sentiment[classifyReplySentiment(stripQuotedReply(r.replyContent))] += 1;
+    }
+
     return {
       totalCampaigns,
       totalCompanies,
@@ -103,6 +125,10 @@ export function registerStatsHandlers(): void {
       topCampaign,
       totalInterviewed,
       totalOffers,
+      followUpSent,
+      followUpReplied,
+      followUpReplyRate,
+      sentiment,
       funnelStats: {
         targeted: totalCompanies,
         drafted: totalDrafted,
@@ -111,6 +137,64 @@ export function registerStatsHandlers(): void {
         interviewed: totalInterviewed,
         offers: totalOffers,
       },
+    };
+  });
+
+  // COST-01 : coût des appels IA — cumulé, 30 derniers jours, moyen par mail, par type.
+  handle('stats:getAiCost', async () => {
+    const rows = await prisma.aiUsage.findMany({
+      select: { model: true, kind: true, promptTokens: true, completionTokens: true, at: true },
+    });
+    const since30 = Date.now() - 30 * 864e5;
+    let totalUsd = 0, totalTokens = 0, last30dUsd = 0, emailCount = 0, emailUsd = 0;
+    const byKind = new Map<string, { count: number; usd: number; tokens: number }>();
+    for (const r of rows) {
+      const usd = estimateCostUsd(r.model, r.promptTokens, r.completionTokens);
+      const tokens = r.promptTokens + r.completionTokens;
+      totalUsd += usd; totalTokens += tokens;
+      if (r.at.getTime() >= since30) last30dUsd += usd;
+      const k = byKind.get(r.kind) ?? { count: 0, usd: 0, tokens: 0 };
+      k.count += 1; k.usd += usd; k.tokens += tokens; byKind.set(r.kind, k);
+      if (r.kind === 'email' || r.kind === 'followup') { emailCount += 1; emailUsd += usd; }
+    }
+    const avgUsdPerEmail = emailCount > 0 ? emailUsd / emailCount : 0;
+
+    // COST-02 : coût ESTIMÉ par campagne = VOLUME réellement envoyé × coût moyen/mail.
+    // Le volume est exact (compté dans les candidatures) : mails générés (corps non vide) +
+    // relances (followUpCount). Marche identiquement pour le passé et le futur, sans dépendre
+    // du rattachement des appels IA. Archivées incluses (le coût a bien eu lieu).
+    const apps = await prisma.application.findMany({
+      select: { campaignId: true, body: true, followUpCount: true },
+    });
+    const vol = new Map<string, { emails: number; followups: number }>();
+    for (const a of apps) {
+      const v = vol.get(a.campaignId) ?? { emails: 0, followups: 0 };
+      if (a.body && a.body.trim()) v.emails += 1;        // un corps généré = 1 appel IA « email »
+      v.followups += a.followUpCount ?? 0;               // chaque relance = 1 appel IA « followup »
+      vol.set(a.campaignId, v);
+    }
+    const cids = [...vol.keys()];
+    const names = cids.length
+      ? new Map((await prisma.campaign.findMany({ where: { id: { in: cids } }, select: { id: true, name: true } })).map((c) => [c.id, c.name]))
+      : new Map<string, string>();
+
+    return {
+      totalUsd, totalTokens, last30dUsd,
+      emailCount,
+      avgUsdPerEmail,
+      byKind: [...byKind.entries()]
+        .map(([kind, v]) => ({ kind, count: v.count, usd: v.usd, tokens: v.tokens }))
+        .sort((a, b) => b.usd - a.usd),
+      byCampaign: [...vol.entries()]
+        .map(([cid, v]) => ({
+          campaignId: cid,
+          name: names.get(cid) ?? '(campagne supprimée)',
+          emails: v.emails,
+          followups: v.followups,
+          usd: (v.emails + v.followups) * avgUsdPerEmail,
+        }))
+        .filter((c) => c.emails + c.followups > 0)
+        .sort((a, b) => b.usd - a.usd),
     };
   });
 

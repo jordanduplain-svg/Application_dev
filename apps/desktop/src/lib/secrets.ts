@@ -433,33 +433,63 @@ export function getLastImapCheck(): { at: string | null; ok: boolean | null } {
 // --- Limite quotidienne d'envois (FM-02 + Strat #3 warm-up) -----------------
 
 /**
- * Strat #3 — Ramp-up progressif CYCLIQUE (warm-up anti-suspension Gmail).
+ * Strat #3 — Ramp-up progressif MONOTONE jusqu'à 100/jour, puis bande haute variable.
  *
- * La limite monte chaque jour : 10 → 20 → 30 → 40 → 49, puis redescend à 10 et
- * recommence le cycle (période 5 jours). L'idée : ne jamais envoyer un volume
- * constant ni un pic brutal qui déclenche les radars anti-spam de Gmail, tout en
- * restant sous le plafond de 50/jour. Le cycle se répète indéfiniment.
+ * Warm-up anti-suspension Gmail : la limite monte chaque jour sans jamais redescendre
+ * brutalement (l'ancien cycle repartait à 10 tous les 5 jours → capacité gâchée pour
+ * zéro gain de délivrabilité). Montée douce (10→50 la 1re semaine, puis +5/jour) pour
+ * chauffer la réputation sans pic, jusqu'à 100/jour au jour 14.
  *
- * Jour 0→10, 1→20, 2→30, 3→40, 4→49, 5→10, 6→20, … (dayAge % 5).
+ * PASSÉ le sommet : on tient dans une bande haute (85–100) qui VARIE chaque jour de
+ * façon déterministe — jamais un volume constant qui ressemble à un robot, jamais de
+ * reset à 10. Note : 100/jour sur un Gmail GRATUIT est agressif ; surveiller les bounces.
+ *
+ * Jour 0→10 … 4→50, 5→55 … 14→100, puis 15+ → 85–100 variable.
  */
-const RAMP_CYCLE = [10, 20, 30, 40, 49];
+const RAMP_UP = [10, 20, 30, 40, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+const HIGH_MIN = 85;
+const HIGH_MAX = 100;
 
 function _rampLimit(firstSendDate: string | undefined): number {
-  if (!firstSendDate) return RAMP_CYCLE[0]; // 1er envoi → bas du cycle
+  if (!firstSendDate) return RAMP_UP[0]; // 1er envoi → bas de la montée
   const start = Date.parse(firstSendDate);
   const today = Date.parse(todayString());
   const dayAge = Math.max(0, Math.floor((today - start) / 86_400_000));
-  return RAMP_CYCLE[dayAge % RAMP_CYCLE.length];
+  if (dayAge < RAMP_UP.length) return RAMP_UP[dayAge];
+  // Bande haute variable : valeur déterministe par jour (STABLE sur tous les appels du
+  // même jour — pas de Math.random qui donnerait un plafond différent à chaque lecture,
+  // varie d'un jour à l'autre). span = 16 valeurs possibles (85..100).
+  const span = HIGH_MAX - HIGH_MIN + 1;
+  return HIGH_MIN + ((dayAge * 7) % span);
 }
 
-/** Retourne la limite d'envois quotidiens effective (ramp-up OU valeur manuelle si > palier). */
+// B7 : plafond DUR (limite d'envoi Gmail gratuit ~500/j — au-delà, blocage fournisseur de
+// toute façon). Borne les valeurs manuelles absurdes sans les brider au ramp-up.
+const HARD_CEILING = 500;
+
+/**
+ * Limite d'envois quotidiens effective.
+ * B7 : un override MANUEL explicite prime (on respecte le choix de l'utilisateur, à la
+ * hausse comme à la baisse), simplement borné au plafond dur. Sans override → ramp-up.
+ * Avant, `min(manuel, ramp)` empêchait de MONTER au-dessus du palier même sur un compte
+ * établi/Workspace — le réglage « limite » était donc silencieusement bridé.
+ */
+function _effectiveLimit(f: SecretsFile): number {
+  if (f.dailySendLimit !== undefined) return Math.max(1, Math.min(f.dailySendLimit, HARD_CEILING));
+  return _rampLimit(f.firstSendDate);
+}
+
+/** Retourne la limite d'envois quotidiens effective (ramp-up OU override manuel). */
 export function getDailySendLimit(): number {
-  const f = readFile();
-  const ramp = _rampLimit(f.firstSendDate);
-  // Si l'utilisateur a configuré une limite manuellement ET qu'elle est inférieure
-  // au palier ramp-up actuel, on respecte son choix (il veut aller plus doucement).
-  if (f.dailySendLimit !== undefined) return Math.min(f.dailySendLimit, ramp);
-  return ramp;
+  return _effectiveLimit(readFile());
+}
+
+/**
+ * Plafond manuel : force un volume max sous le ramp-up (ex : redescendre après des
+ * bounces). `undefined` retire l'override et revient au ramp-up automatique.
+ */
+export function setDailySendLimit(limit: number | undefined): Promise<void> {
+  return enqueueWrite(() => writeFile({ ...readFile(), dailySendLimit: limit }));
 }
 
 /**
@@ -496,9 +526,8 @@ export async function tryIncrementDailySend(): Promise<boolean> {
   await enqueueWrite(async () => {
     const f = readFile();
     const today = todayString();
-    // Respecte le cycle de ramp-up (et l'override manuel s'il est plus bas).
-    const ramp = _rampLimit(f.firstSendDate);
-    const limit = f.dailySendLimit !== undefined ? Math.min(f.dailySendLimit, ramp) : ramp;
+    // B7 : override manuel prioritaire (borné au plafond dur), sinon ramp-up.
+    const limit = _effectiveLimit(f);
     // Réinitialiser si le jour a changé.
     const count = f.dailySendDate === today ? (f.dailySendCount ?? 0) : 0;
     if (count >= limit) {

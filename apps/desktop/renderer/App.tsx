@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings, PenLine } from 'lucide-react';
-import type { TaskProgress, ReplyNotification, SettingsStatus, SearchResult } from '@candio/shared';
+import { Home, ChartBar, User, FileText, Send, Mail, ListChecks, Radar, Building2, Settings, PenLine, KanbanSquare } from 'lucide-react';
+import type { TaskProgress, ReplyNotification, SettingsStatus, SearchResult, SearchHit } from '@candio/shared';
 import { api } from './lib/api';
 // PERF : HomePage (route par défaut) reste en import direct ; les autres pages sont
 // chargées à la demande (code-splitting) pour alléger le bundle initial.
 import HomePage from './pages/HomePage';
 import LockScreen from './components/LockScreen';
+import SetupWizard from './components/SetupWizard';
 import { PageHelp } from './components/Help';
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const CvPage = lazy(() => import('./pages/CvPage'));
@@ -14,6 +15,7 @@ const LeadsPage = lazy(() => import('./pages/LeadsPage'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const RepliesPage = lazy(() => import('./pages/RepliesPage'));
+const PipelinePage = lazy(() => import('./pages/PipelinePage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TodoPage = lazy(() => import('./pages/TodoPage'));
@@ -31,6 +33,8 @@ type Route =
   | { name: 'campaigns' }
   | { name: 'campaign'; id: string }
   | { name: 'replies' }
+  // PIPELINE-01 : vue Kanban des réponses par statut.
+  | { name: 'pipeline' }
   | { name: 'settings' }
   | { name: 'stats' }
   // UX-5v3 : page des actions requises.
@@ -77,6 +81,8 @@ export default function App() {
   // UX-S20 : recherche globale.
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  // SEARCH-01 : hits plein-texte (contenus des candidatures/réponses/notes/fils).
+  const [contentHits, setContentHits] = useState<SearchHit[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // AUDIT-H4 fix : ref sur le conteneur pour détecter le clic extérieur.
@@ -215,10 +221,14 @@ export default function App() {
   // UX-S20 : debounce de la recherche globale (300ms).
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    if (searchQuery.length < 2) { setSearchResults([]); setShowSearch(false); return; }
+    if (searchQuery.length < 2) { setSearchResults([]); setContentHits([]); setShowSearch(false); return; }
     searchDebounceRef.current = setTimeout(() => {
+      // Nav rapide (nom/objet) + recherche plein-texte des contenus, en parallèle.
       api.invoke('search:global', { query: searchQuery })
         .then((r) => { setSearchResults(r); setShowSearch(true); })
+        .catch(() => {});
+      api.invoke('search:content', { q: searchQuery })
+        .then((r) => { setContentHits(r); setShowSearch(true); })
         .catch(() => {});
     }, 300);
     return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
@@ -227,7 +237,7 @@ export default function App() {
   // Fermer le dropdown de recherche sur Escape.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); }
+      if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); setContentHits([]); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -253,6 +263,7 @@ export default function App() {
   const handleSearchResultClick = (result: SearchResult) => {
     setShowSearch(false);
     setSearchQuery('');
+    setContentHits([]);
     if (result.type === 'campaign') {
       setRoute({ name: 'campaign', id: result.id });
     } else if (result.type === 'company') {
@@ -269,6 +280,9 @@ export default function App() {
     <>
       {/* MOD-02 : Toaster sonner — HORS du grid pour ne pas décaler sidebar/content. */}
       <Toaster position="top-right" richColors />
+
+      {/* SETUP-01 : assistant de configuration au 1er lancement (se masque seul si tout est prêt). */}
+      <SetupWizard onNavigate={(n) => setRoute({ name: n } as Route)} />
 
       {/* SEC-M1 : écran de verrouillage (position:fixed, hors du grid). */}
       {locked && settingsStatus?.lockEnabled && (
@@ -291,7 +305,7 @@ export default function App() {
             style={{ width: '100%', fontSize: '13px', padding: '6px 8px', boxSizing: 'border-box' }}
           />
           {/* Dropdown des résultats de recherche. */}
-          {showSearch && searchResults.length > 0 && (
+          {showSearch && (searchResults.length > 0 || contentHits.length > 0) && (
             // BUG-F1 fix : key stable = type+id, pas l'index du tableau.
             <div className="search-dropdown" onMouseDown={(e) => e.preventDefault()}>
               {searchResults.map((r) => (
@@ -303,6 +317,20 @@ export default function App() {
                   <div className="search-item-label">{r.label}</div>
                   {r.sublabel && <div className="search-item-sub">{r.sublabel}</div>}
                   <div className="search-item-type">{r.type}</div>
+                </div>
+              ))}
+              {/* SEARCH-01 : hits plein-texte (contenus) avec extrait + champ trouvé. */}
+              {contentHits.length > 0 && (
+                <div className="search-item-type" style={{ padding: '6px 10px', opacity: 0.7 }}>Dans les contenus</div>
+              )}
+              {contentHits.map((h) => (
+                <div
+                  key={`hit-${h.applicationId}`}
+                  className="search-item"
+                  onClick={() => { setShowSearch(false); setSearchQuery(''); setContentHits([]); setRoute({ name: 'campaign', id: h.campaignId }); }}
+                >
+                  <div className="search-item-label">{h.companyName} <span style={{ fontSize: '10px', color: 'var(--accent)' }}>· {h.field}</span></div>
+                  <div className="search-item-sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.snippet}</div>
                 </div>
               ))}
             </div>
@@ -329,6 +357,10 @@ export default function App() {
         </button>
         <button title="Réponses" onClick={() => setRoute({ name: 'replies' })} className={route.name === 'replies' ? 'active' : ''} style={{ '--nav': '#1D9E75' } as React.CSSProperties}>
           <Mail size={17} className="nav-ico" /> <span>Réponses</span>
+        </button>
+        {/* PIPELINE-01 : vue Kanban des réponses par étape. */}
+        <button title="Pipeline" onClick={() => setRoute({ name: 'pipeline' })} className={route.name === 'pipeline' ? 'active' : ''} style={{ '--nav': '#30b0c7' } as React.CSSProperties}>
+          <KanbanSquare size={17} className="nav-ico" /> <span>Pipeline</span>
         </button>
         {/* UX-5v3 : page des actions requises avec badge. */}
         <button title="À traiter" onClick={() => setRoute({ name: 'todo' })} className={route.name === 'todo' ? 'active' : ''} style={{ '--nav': '#BA7517', ...(todoCount > 0 ? { fontWeight: 600 } : {}) } as React.CSSProperties}>
@@ -404,6 +436,7 @@ export default function App() {
           />
         )}
         {route.name === 'replies' && <RepliesPage />}
+        {route.name === 'pipeline' && <PipelinePage />}
         {/* UX-5v3 : page des actions requises. */}
         {route.name === 'todo' && <TodoPage onOpenCampaign={openCampaign} />}
         {/* SCRAPE-01 : page de scraping. */}

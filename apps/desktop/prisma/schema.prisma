@@ -160,12 +160,19 @@ model Application {
   sentAt     DateTime?
   repliedAt  DateTime?
   replyContent String?
+  // REPLY-IN : adresse RÉELLE d'où le recruteur a répondu (peut différer de l'email
+  // scrapé). Ma réponse doit partir vers CELLE-CI, pas vers le contact d'origine.
+  replyFromEmail String?
+  // REPLY-OUT : ma réponse au recruteur (contenu + date d'envoi). Sert à l'afficher
+  // dans le fil et à calculer le badge « Répondu / En attente » de la page Réponses.
+  myReplyContent String?
+  myRepliedAt    DateTime?
   errorMessage String?
   // UX-10 : note de suivi saisie manuellement dans la page Réponses.
   followUpNote String?
   // UX-12 : date d'envoi de la DERNIÈRE relance automatique.
   followUpSentAt DateTime?
-  // FOLLOWUP-N : nombre de relances déjà envoyées (cadence 7 j, plafonné à MAX_FOLLOWUPS).
+  // FOLLOWUP-N : nombre de relances déjà envoyées (cadence 10 j, plafonné à MAX_FOLLOWUPS).
   followUpCount  Int       @default(0)
   // B2 : Message-ID de la relance — conserve l'original pour le matching IMAP des réponses à la candidature initiale.
   followUpMessageId String?
@@ -180,9 +187,48 @@ model Application {
   // BOUNCE-01 : l'email a rebondi (NDR reçu dans la boîte IMAP).
   emailBounced   Boolean   @default(false)
   emailBouncedAt DateTime?
+  // REMIND-01 : rappel/snooze — « me rappeler de répondre le … ». Ressort dans « À traiter »
+  // quand la date est passée. Effacé quand l'utilisateur répond ou reporte.
+  remindAt   DateTime?
+  // THREAD-01 : fil de conversation complet (messages entrants + sortants).
+  messages   Message[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@index([campaignId])
   @@index([status])
+}
+
+// THREAD-01 : un message d'un fil de conversation avec un recruteur. Entrant (réponse
+// reçue) ou sortant (ma réponse / relance). Remplace à terme les champs mono-message
+// replyContent/myReplyContent de Application (conservés pour compat + tri/badge).
+model Message {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  direction     String      // 'IN' (recruteur) | 'OUT' (candidat)
+  body          String
+  fromEmail     String?     // expéditeur (pour un IN) — peut différer de l'email scrapé
+  messageId     String?     // Message-ID de l'email — sert à dédupliquer les entrants au polling
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
+}
+
+// COST-01 : journal des appels IA (une ligne par génération) → coût cumulé + par mail.
+// Best-effort : jamais bloquant pour la génération. Le prix est calculé côté lecture
+// depuis une grille (modèle → $/1M) pour rester juste même si les tarifs changent.
+model AiUsage {
+  id               String   @id @default(cuid())
+  at               DateTime @default(now())
+  model            String
+  kind             String   // 'email' | 'followup' | 'coverletter' | 'cv' | 'campaign-prompts' | 'revise' | 'other'
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  applicationId    String?
+  // COST-02 : campagne d'origine (regroupement du coût par campagne). Null = hors campagne
+  // (ex. lettre de motivation sur annonce, analyse de CV).
+  campaignId       String?
+
+  @@index([at])
 }

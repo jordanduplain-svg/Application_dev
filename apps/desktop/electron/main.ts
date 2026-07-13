@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Tray, Menu, nativeImage, screen, Notification } from 'electron';
+import { app, BrowserWindow, dialog, Tray, Menu, nativeImage, screen, Notification, session, shell } from 'electron';
 import { fitToWorkArea } from './lib/window-bounds';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
@@ -235,6 +235,23 @@ function createWindow(): void {
     },
   });
 
+  // SEC-6 (B6) : un lien externe (ex. dans une réponse recruteur rendue) ne doit JAMAIS
+  // ouvrir une BrowserWindow interne (webPreferences par défaut = non durcies). On refuse
+  // toute ouverture de fenêtre et on renvoie les http(s) vers le navigateur système.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  // SEC-6 : bloque aussi toute navigation du renderer hors de l'app (un lien cliqué
+  // ne doit pas remplacer l'UI par une page distante). Dev = URL Vite autorisée.
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    if (devUrl && url.startsWith(devUrl)) return;
+    if (url.startsWith('file://')) return;
+    e.preventDefault();
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
+
   // UX-10v3 : restaurer l'état maximisé (ou maximiser au 1er lancement).
   if (winState.maximized) mainWindow.maximize();
 
@@ -324,6 +341,26 @@ function wireTaskProgress(): void {
 app.whenReady().then(async () => {
   ensureDirs();
 
+  // SEC-6 (B1) : Content-Security-Policy stricte en PRODUCTION. Filet de sécurité au cas
+  // où un HTML de réponse recruteur passerait DOMPurify (bypass) : script-src 'self' bloque
+  // tout <script> injecté et les gestionnaires inline. En DEV on n'applique rien (Vite HMR
+  // a besoin de 'unsafe-eval' + ws:). Le renderer ne fait aucun appel réseau direct (tout
+  // passe par IPC) → connect-src 'self' suffit.
+  if (app.isPackaged) {
+    session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+      cb({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+            "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; " +
+            "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+          ],
+        },
+      });
+    });
+  }
+
   preloadSecrets();
   if (secretsWereCorrupted()) {
     dialog.showErrorBox(
@@ -357,6 +394,11 @@ app.whenReady().then(async () => {
 
   // ADM-1v3 : sauvegarde automatique silencieuse avec rotation si dernière > 24h.
   void performAutoBackup();
+
+  // B9 : rétention — purge le journal d'usage IA de plus de 24 mois (croissance non bornée
+  // sinon). Best-effort, non bloquant. Les messages du fil (Message) sont conservés (historique).
+  void prisma.aiUsage.deleteMany({ where: { at: { lt: new Date(Date.now() - 730 * 864e5) } } })
+    .catch((err) => logger.warn('[retention] Purge du journal IA échouée (non bloquant)', err));
 
   // ADM-1 : vérifier les mises à jour après l'ouverture de la fenêtre.
   if (autoUpdater) {

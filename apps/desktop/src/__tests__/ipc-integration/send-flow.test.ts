@@ -42,6 +42,7 @@ import { prisma } from '../../lib/prisma';
 import { taskRunner } from '../../lib/task-runner';
 import { enqueueSend } from '../../tasks/send-email.task';
 import { addOptOut } from '../../modules/optout/optout.service';
+import { listFollowUpEligibleIds, recordInboundMessage, recordOutboundMessage, getThread } from '../../modules/application/application.service';
 
 const requireFromHere = createRequire(import.meta.url);
 let campaignId: string;
@@ -123,13 +124,16 @@ describe('Flux d\'envoi (intégration, SMTP mocké)', () => {
     expect(refundDailySend).toHaveBeenCalledTimes(1); // crédit rendu, pas de sur-comptage
   });
 
-  test('quota atteint : pas d\'envoi, FAILED', async () => {
+  test('quota atteint : pas d\'envoi, reste DRAFT (report, pas un échec)', async () => {
     tryIncrementDailySend.mockResolvedValueOnce(false);
     const id = await makeDraft('quota@acme.com');
     await runSend(id);
 
+    // FM-02 : quota atteint = report au lendemain, PAS un échec. La candidature reste
+    // DRAFT (renvoyable) au lieu de FAILED, pour ne pas polluer « À traiter ».
     const app = await prisma.application.findUnique({ where: { id } });
-    expect(app?.status).toBe('FAILED');
+    expect(app?.status).toBe('DRAFT');
+    expect(app?.messageId).toBeNull();
     expect(sendApplicationEmail).not.toHaveBeenCalled();
   });
 
@@ -158,5 +162,53 @@ describe('Flux d\'envoi (intégration, SMTP mocké)', () => {
     const app = await prisma.application.findUnique({ where: { id } });
     expect(app?.status).toBe('FAILED');
     expect(sendApplicationEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('Éligibilité relance (BOUNCE-01 : ni répondu, ni rebondi)', () => {
+  const oldSent = new Date(Date.now() - 15 * 864e5); // envoyé il y a 15 j (> seuil 10 j)
+
+  // Crée une candidature SENT « ancienne » avec état de suivi paramétrable.
+  async function makeSent(email: string, extra: Record<string, unknown>): Promise<string> {
+    const company = await prisma.company.create({ data: { campaignId, name: `E${seq++}`, contactEmail: email } });
+    const app = await prisma.application.create({
+      data: { campaignId, companyId: company.id, subject: 'O', body: 'B', status: 'SENT', sentAt: oldSent, ...extra },
+    });
+    return app.id;
+  }
+
+  test('relançable seulement si pas de réponse ET pas de rebond', async () => {
+    const normal = await makeSent('relance-ok@acme.com', {});
+    const replied = await makeSent('a-repondu@acme.com', { repliedAt: new Date(), status: 'REPLIED' });
+    const bounced = await makeSent('a-rebondi@acme.com', { emailBounced: true, emailBouncedAt: new Date() });
+
+    const eligible = await listFollowUpEligibleIds();
+    expect(eligible).toContain(normal);
+    expect(eligible).not.toContain(replied);
+    expect(eligible).not.toContain(bounced);
+  });
+});
+
+describe('Fil de conversation (THREAD-01)', () => {
+  test('candidature initiale + entrants/sortants, dédup par Message-ID', async () => {
+    const company = await prisma.company.create({ data: { campaignId, name: `T${seq++}`, contactEmail: 'thread@acme.com' } });
+    const app = await prisma.application.create({
+      data: { campaignId, companyId: company.id, subject: 'O', body: 'Candidature initiale', status: 'SENT', sentAt: new Date(Date.now() - 3 * 864e5) },
+    });
+
+    const first = await recordInboundMessage(app.id, 'Bonjour, intéressé.', 'rh@acme.com', '<in-1@smtp>');
+    // Même Message-ID re-vu au relevé suivant → PAS de doublon.
+    const dup = await recordInboundMessage(app.id, 'Bonjour, intéressé.', 'rh@acme.com', '<in-1@smtp>');
+    await recordOutboundMessage(app.id, 'Merci, disponible.', '<out-1@smtp>');
+
+    expect(first).toBe(true);
+    expect(dup).toBe(false);
+
+    const thread = await getThread(app.id);
+    // La candidature initiale ouvre le fil (sortant), puis 1 entrant + 1 sortant (pas 2 entrants).
+    expect(thread[0]).toMatchObject({ direction: 'OUT', body: 'Candidature initiale' });
+    expect(thread.filter((m) => m.direction === 'IN')).toHaveLength(1);
+    expect(thread.filter((m) => m.direction === 'OUT')).toHaveLength(2);
+    expect(thread.find((m) => m.direction === 'IN')?.fromEmail).toBe('rh@acme.com');
   });
 });

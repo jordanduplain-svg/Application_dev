@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 
 from .models import Company, _domain
+from .constants import UNVERIFIED_EMAIL_SOURCES
 
 
 # ── Liste canonique des colonnes CSV — source unique ─────────────────────────
@@ -200,14 +201,42 @@ def merge_into_master(
         """Met à jour l'entrée existante si la nouvelle a un meilleur email. Retourne True si MAJ."""
         old_c = existing[idx]
         changed = False
-        # Email : on prend le meilleur des deux (rang plus bas = meilleur)
-        if (new_c.contact_email and _email_rank(new_c.email_source) < _email_rank(old_c.email_source)):
+        # LEADS-UPDATE : un lead marqué REBONDI garde une adresse morte. Si le ré-enrichissement
+        # a trouvé un email DIFFÉRENT, il remplace TOUJOURS l'ancien (le rang de source n'a aucun
+        # sens pour une adresse qui a rebondi) et on lève le drapeau bounced. Ne concerne QUE les
+        # leads bounced → le chemin de fusion normal (ci-dessous) est intact.
+        if (old_c.bounced == "1" and new_c.contact_email
+                and new_c.contact_email.strip().lower() != (old_c.contact_email or "").strip().lower()):
             old_c.contact_email   = new_c.contact_email
             old_c.contact_name    = new_c.contact_name or old_c.contact_name
             old_c.contact_role    = new_c.contact_role or old_c.contact_role
             old_c.email_source    = new_c.email_source
             old_c.email_pattern   = new_c.email_pattern or old_c.email_pattern
             old_c.email_validated = new_c.email_validated
+            old_c.bounced         = ""   # nouvelle adresse → on repart propre
+            changed = True
+        # Email : on prend le meilleur des deux (rang plus bas = meilleur)
+        elif (new_c.contact_email and _email_rank(new_c.email_source) < _email_rank(old_c.email_source)):
+            old_c.contact_email   = new_c.contact_email
+            old_c.contact_name    = new_c.contact_name or old_c.contact_name
+            old_c.contact_role    = new_c.contact_role or old_c.contact_role
+            old_c.email_source    = new_c.email_source
+            old_c.email_pattern   = new_c.email_pattern or old_c.email_pattern
+            old_c.email_validated = new_c.email_validated
+            changed = True
+        # LEADS-UPDATE : l'ancien email était déjà NON FIABLE (pattern/catch-all/nominatif
+        # bidon…) et le ré-enrichissement ne trouve RIEN de mieux (new_c.contact_email vide,
+        # ex. faux nom désormais rejeté par le garde-fou anti-faux-positifs, cf. enrich.py
+        # _looks_like_person_name). Sans cette règle, la ligne garde l'adresse fantaisiste
+        # POUR TOUJOURS — la règle générale ci-dessus ne s'applique jamais avec un new_c vide.
+        # On l'efface donc plutôt que de la garder : jamais appliqué à un email réel
+        # (hunter/web_crawl), seulement à une source déjà non fiable.
+        elif (not new_c.contact_email and old_c.contact_email
+              and old_c.email_source in UNVERIFIED_EMAIL_SOURCES):
+            old_c.contact_email = ""
+            old_c.contact_name  = ""
+            old_c.contact_role  = ""
+            old_c.email_source  = "no_email"
             changed = True
         # Backfill : compléter les champs vides de l'ancien avec ceux du nouveau
         for fld in ("website", "sector", "company_size_bucket", "region_admin",
@@ -341,7 +370,10 @@ def export_html_preview(companies: list[Company], out_path: Path) -> None:
         </tr>"""
 
     total = len(companies)
-    real_emails = sum(1 for c in companies if c.email_source not in ("pattern", "", "no_email"))
+    real_emails = sum(
+        1 for c in companies
+        if c.email_source not in UNVERIFIED_EMAIL_SOURCES and c.email_source != "no_email"
+    )
     html = f"""<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8">
 <title>Résultats scraping — {date.today().isoformat()}</title>

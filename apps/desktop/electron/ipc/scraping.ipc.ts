@@ -11,7 +11,8 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, readFile, renameSync } from 'fs';
-import { shell } from 'electron';
+import { writeFile } from 'fs/promises';
+import { shell, dialog } from 'electron';
 import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 import { createHash } from 'crypto';
@@ -336,6 +337,8 @@ async function launchScript(
   overrides: {
     enrich_only?: boolean;
     enrich_csv?: string;
+    enrich_keys_file?: string;   // LEADS-UPDATE : fichier de clés (sous-ensemble affiché)
+    enrich_scope?: string;        // LEADS-UPDATE : missing | missing_bounced | all
     resume?: boolean;
     linkedin_csv?: string;
   } = {},
@@ -481,6 +484,9 @@ async function launchScript(
   // Mode re-enrichissement / reprise
   if (overrides.enrich_only && overrides.enrich_csv) {
     args.push('--enrich-only', '--enrich-csv', overrides.enrich_csv);
+    // LEADS-UPDATE : sous-ensemble affiché + portée choisie.
+    if (overrides.enrich_keys_file) args.push('--enrich-keys-file', overrides.enrich_keys_file);
+    if (overrides.enrich_scope)     args.push('--enrich-scope', overrides.enrich_scope);
   }
   if (overrides.resume) {
     args.push('--resume');
@@ -761,6 +767,27 @@ export function registerScrapingHandlers(): void {
     writeConfig(cfg);
   });
 
+  // LEADS-UPDATE : « Mettre à jour le CSV » depuis la page Leads, restreint aux leads
+  // AFFICHÉS (keys, filtres UI en cours) avec une portée choisie. Réutilise la config
+  // persistée (readConfig) → la page Leads n'a pas à connaître toute la ScrapingConfig.
+  // Écriture master atomique déjà garantie côté Python (temp + os.replace + backup).
+  handle('scraping:updateLeadsCsv', async ({ keys, scope }) => {
+    const master = masterCsvPath();
+    if (!master) return { ok: false as const, reason: 'no-master' };
+    const cfg = readConfig();
+    // Clés du sous-ensemble → fichier temp (jamais en argv : jusqu'à 400 clés).
+    let keysFile: string | undefined;
+    if (keys && keys.length > 0) {
+      keysFile = join(tmpdir(), `carreer-ops-enrich-keys-${Date.now()}.txt`);
+      writeFileSync(keysFile, keys.join('\n'), 'utf8');
+    }
+    await launchScript(
+      { ...cfg, sources: [] },
+      { enrich_only: true, enrich_csv: master, enrich_keys_file: keysFile, enrich_scope: scope },
+    );
+    return { ok: true as const };
+  });
+
   // Import LinkedIn Sales Navigator (CSV externe → enrichissement direct).
   // Saute la collecte multi-sources : les leads viennent du CSV, pas de WTTJ/SIRENE/etc.
   handle('scraping:linkedinImport', async ({ csvPath }: { csvPath: string }) => {
@@ -853,6 +880,39 @@ export function registerScrapingHandlers(): void {
     });
     writeMasterAtomic(path, [header, ...kept].map(toCsvLine).join('\n'));
     return { remaining: kept.length };
+  });
+
+  // Export CSV des leads (tous ou une sélection) vers un fichier choisi par
+  // l'utilisateur. Contrairement à deleteLeads/markLeadBounced, on ne touche PAS
+  // au master : écriture directe (comme campaign:exportCsv) suffit, une
+  // interruption ne peut abîmer qu'un fichier d'export tout neuf, jamais le master.
+  handle('scraping:exportLeadsCsv', async ({ keys }) => {
+    const path = masterCsvPath();
+    if (!path) return null;
+    const rows = parseCsvFile(readFileSync(path, 'utf8'));
+    if (rows.length < 2) return null;
+    const header = rows[0];
+
+    let out = rows.slice(1);
+    if (keys && keys.length > 0) {
+      const iName = header.indexOf('name'), iEmail = header.indexOf('contactEmail'), iWeb = header.indexOf('website');
+      const wanted = new Set(keys);
+      out = out.filter((r) => {
+        const k = `${(r[iName] ?? '').trim()}|${(r[iEmail] ?? '').trim()}|${(r[iWeb] ?? '').trim()}`.toLowerCase();
+        return wanted.has(k);
+      });
+    }
+
+    const result = await dialog.showSaveDialog({
+      title: 'Exporter les leads',
+      defaultPath: 'leads-export.csv',
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+
+    await writeFile(result.filePath, [header, ...out].map(toCsvLine).join('\n'), 'utf8');
+    logger.info(`[exportLeadsCsv] ${out.length} lead(s) exporté(s) : ${result.filePath}`);
+    return { path: result.filePath, count: out.length };
   });
 
   // Exclut des leads du futur scraping : ajoute leur domaine au dictionnaire

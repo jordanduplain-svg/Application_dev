@@ -18,6 +18,13 @@ DEFAULT_SOURCES = ["wttj", "apec", "societe", "indeed"]
 # Annuaires : cherchent par activité (industry), pas par poste. Idéal candidatures spontanées.
 DIRECTORY_SOURCES = {"societe", "pappers"}
 
+# Sources DEVINÉES (jamais confirmées qu'un humain les lit) — même liste que
+# UNVERIFIED_EMAIL_SOURCES côté TS (packages/shared/src/ipc-contract.ts). Miroir
+# volontaire : si une source est ajoutée d'un côté sans l'autre, --skip-no-email
+# laisse passer des emails à risque de bounce (bug corrigé ici : "linkedin_pattern"
+# et "catch_all" avaient un email généré mais n'étaient PAS exclus par le filtre).
+UNVERIFIED_EMAIL_SOURCES = {"pattern", "linkedin_pattern", "pattern_nominative", "catch_all", ""}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WEB CRAWLER — paths à visiter pour trouver un email RH

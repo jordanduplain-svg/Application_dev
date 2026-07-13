@@ -3,8 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Megaphone, Building2, Send, Mail, Percent, Clock,
   CalendarCheck, Trophy, Filter, Activity, BarChart3, FlaskConical,
+  Repeat, MessageSquare, Coins,
 } from 'lucide-react';
-import type { GlobalStats } from '@candio/shared';
+import type { GlobalStats, AiCostStats } from '@candio/shared';
 import { api } from '../lib/api';
 
 // ANA-1v2 : données d'activité quotidienne pour le graphique en barres.
@@ -98,6 +99,12 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
   const { data: bySector = [] } = useQuery({
     queryKey: QUERY_KEYS.bySector,
     queryFn: () => api.invoke('stats:getBySector'),
+  });
+
+  // COST-01 : coût des appels IA.
+  const { data: aiCost } = useQuery({
+    queryKey: ['stats:getAiCost'],
+    queryFn: () => api.invoke('stats:getAiCost'),
   });
 
   // MOD-01 : invalider les queries quand une tâche se termine (équivalent de cacheInvalidate).
@@ -199,6 +206,15 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
             <div className="metric-lbl">Offres reçues</div>
           </div>
         )}
+        {/* STATS-FU : retour après relance — visible dès qu'une relance est partie. */}
+        {stats.followUpSent > 0 && (
+          <div className="metric" style={{ '--m': '#af52de' } as React.CSSProperties}
+            title={`${stats.followUpReplied} réponse(s) reçue(s) après relance sur ${stats.followUpSent} relance(s) envoyée(s)`}>
+            <div className="metric-ico"><Repeat size={18} /></div>
+            <div className="metric-num">{stats.followUpReplyRate}%</div>
+            <div className="metric-lbl">Retour après relance</div>
+          </div>
+        )}
       </div>
 
       <div className="dash-grid">
@@ -244,6 +260,12 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
         </div>
         <ActivityChart data={activity} />
       </div>
+
+      {/* COST-01 : coût des appels IA. */}
+      {aiCost && aiCost.byKind.length > 0 && <AiCostCard data={aiCost} />}
+
+      {/* STATS-SENT : répartition du sentiment des réponses reçues. */}
+      <SentimentCard data={stats.sentiment} />
 
       {/* F3 : taux de réponse par secteur d'activité. */}
       {bySector.length > 0 && (
@@ -373,6 +395,111 @@ export default function DashboardPage({ onOpenCampaign }: { onOpenCampaign?: (id
       )}
       </div>
     </section>
+  );
+}
+
+// COST-01 : coût des appels IA (cumulé, 30 j, par mail, par type).
+const KIND_LABELS: Record<string, string> = {
+  email: 'Candidatures (mails initiaux)',
+  followup: 'Relances',
+  coverletter: 'Lettres de motivation',
+  cv: 'Analyses de CV',
+  'campaign-prompts': 'Prompts de campagne',
+  revise: 'Relectures',
+  other: 'Autres',
+};
+function AiCostCard({ data }: { data: AiCostStats }) {
+  const usd = (n: number) => `$${n.toFixed(n < 1 ? 3 : 2)}`;
+  const cents = (n: number) => `${(n * 100).toFixed(2)} ¢`;
+  return (
+    <div className="card">
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Coins size={17} color="var(--accent)" /> Coût IA
+      </h3>
+      <p style={{ fontSize: '12px', color: 'var(--text-sub)', margin: '0 0 12px' }}>
+        Estimation en USD d'après les tarifs des modèles cloud. Les modèles locaux (Ollama) sont gratuits.
+      </p>
+      <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginBottom: '12px' }}>
+        <div><div style={{ fontSize: '22px', fontWeight: 700 }}>{usd(data.totalUsd)}</div><div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>Total cumulé</div></div>
+        <div><div style={{ fontSize: '22px', fontWeight: 700 }}>{usd(data.last30dUsd)}</div><div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>30 derniers jours</div></div>
+        <div><div style={{ fontSize: '22px', fontWeight: 700 }}>{data.emailCount > 0 ? cents(data.avgUsdPerEmail) : '—'}</div><div style={{ fontSize: '11px', color: 'var(--text-sub)' }}>Par mail ({data.emailCount})</div></div>
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Type</th><th>Appels</th><th>Coût</th></tr></thead>
+        <tbody>
+          {data.byKind.map((k) => (
+            <tr key={k.kind}>
+              <td>{KIND_LABELS[k.kind] ?? k.kind}</td>
+              <td>{k.count}</td>
+              <td><strong>{usd(k.usd)}</strong></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* COST-02 : coût ESTIMÉ par campagne (volume envoyé × coût moyen/mail). */}
+      {data.byCampaign.length > 0 && (
+        <>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-sub)', margin: '14px 0 2px' }}>Par campagne (estimé)</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-sub)', margin: '0 0 6px' }}>
+            Volume réellement envoyé (mails + relances) × coût moyen par mail ({cents(data.avgUsdPerEmail)}).
+          </div>
+          <table className="data-table">
+            <thead><tr><th>Campagne</th><th>Mails</th><th>Relances</th><th>Coût est.</th></tr></thead>
+            <tbody>
+              {data.byCampaign.map((c) => (
+                <tr key={c.campaignId}>
+                  <td>{c.name}</td>
+                  <td>{c.emails}</td>
+                  <td>{c.followups}</td>
+                  <td><strong>{usd(c.usd)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  );
+}
+
+// STATS-SENT : répartition positive / neutre / négative des réponses reçues.
+// Barre empilée + légende. Mêmes couleurs/libellés que la page Réponses (cohérence).
+function SentimentCard({ data }: { data: GlobalStats['sentiment'] }) {
+  const total = data.positive + data.neutral + data.rejection;
+  if (total === 0) return null;
+  const segs = [
+    { key: 'positive', label: 'Positives', value: data.positive, color: '#1D9E75' },
+    { key: 'neutral', label: 'Neutres', value: data.neutral, color: '#8a8a8e' },
+    { key: 'rejection', label: 'Négatives', value: data.rejection, color: '#c4271c' },
+  ];
+  return (
+    <div className="card">
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <MessageSquare size={17} color="var(--accent)" /> Sentiment des réponses
+      </h3>
+      <p style={{ fontSize: '12px', color: 'var(--text-sub)', margin: '0 0 12px' }}>
+        {total} réponse(s) reçue(s), classées automatiquement (heuristique).
+      </p>
+      <div style={{ display: 'flex', height: '22px', borderRadius: '7px', overflow: 'hidden', marginBottom: '12px' }}>
+        {segs.filter((s) => s.value > 0).map((s) => (
+          <div key={s.key} style={{ width: `${(s.value / total) * 100}%`, background: s.color }}
+            title={`${s.label} : ${s.value}`} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {segs.map((s) => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+            <span style={{ width: 12, height: 12, background: s.color, borderRadius: 3, display: 'inline-block' }} />
+            <span style={{ flex: 1 }}>{s.label}</span>
+            <strong>{s.value}</strong>
+            <span style={{ color: 'var(--text-sub)', width: '48px', textAlign: 'right' }}>
+              {Math.round((s.value / total) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

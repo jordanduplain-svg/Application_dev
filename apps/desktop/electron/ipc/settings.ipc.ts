@@ -44,6 +44,7 @@ import {
   setLastSmtpCheck,
   setLastImapCheck,
   getDailySendLimit,
+  setDailySendLimit,
   getDailySendCount,
   getAiProvider,
   setAiProvider,
@@ -179,6 +180,16 @@ export function registerSettingsHandlers(): void {
     validate(PollIntervalSchema, payload);
     await setImapPollInterval(payload.minutes);
     restartReplyPolling();
+  });
+
+  // FM-02 : plafond manuel d'envois/jour (redescendre après des bounces, par exemple).
+  // limit=null retire l'override et revient au ramp-up automatique.
+  handle('settings:setDailySendLimit', async (payload: { limit: number | null }) => {
+    const limit = payload.limit;
+    if (limit !== null && (!Number.isFinite(limit) || limit < 1 || limit > 500)) {
+      throw new Error('Plafond invalide (1 à 500).');
+    }
+    await setDailySendLimit(limit === null ? undefined : Math.floor(limit));
   });
 
   // INT-3 : modèle IA configurable.

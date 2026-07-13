@@ -1,4 +1,5 @@
 import type { CvParsed } from '@candio/shared';
+import { UNVERIFIED_EMAIL_SOURCES } from '@candio/shared';
 import { taskRunner } from '../lib/task-runner';
 import { prisma } from '../lib/prisma';
 import { getProfile } from '../modules/profile/profile.service';
@@ -22,23 +23,38 @@ const PROTECTED_GEN_STATUSES = new Set(['SENDING', 'SENT', 'REPLIED', 'FOLLOWED_
 export async function enqueueGeneration(
   campaignId: string,
   mode: 'missing' | 'regenerate' = 'missing',
-): Promise<{ enqueued: number }> {
+): Promise<{ enqueued: number; skippedUnverified: number }> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     include: { companies: { include: { application: true } } },
   });
-  if (!campaign) return { enqueued: 0 };
+  if (!campaign) return { enqueued: 0, skippedUnverified: 0 };
+
+  // ÉCONOMIE-TOKENS : ne pas générer de lettre pour une entreprise dont l'email est « à
+  // vérifier » (source devinée, risque de rebond → bloquée à l'envoi de toute façon). On
+  // compte les sautées pour le signaler dans l'UI (à corriger via Leads « Mettre à jour le CSV »).
+  let skippedUnverified = 0;
 
   // FM-06 : exclure les entreprises blacklistées de la génération.
   const targets = campaign.companies.filter((c) => {
     if ((c as typeof c & { blacklisted?: boolean }).blacklisted) return false;
+    // ÉCONOMIE-TOKENS : email non fiable → on saute (aucun appel IA), pour les deux modes.
+    if ((UNVERIFIED_EMAIL_SOURCES as readonly string[]).includes(c.emailSource)) {
+      // Ne compter que les entreprises qui AURAIENT été générées (sinon on gonfle le compte
+      // avec des déjà-envoyées/protégées qu'on n'aurait pas régénérées de toute façon).
+      const wouldGenerate = mode === 'regenerate'
+        ? (!c.application || !PROTECTED_GEN_STATUSES.has(c.application.status))
+        : !c.application;
+      if (wouldGenerate) skippedUnverified++;
+      return false;
+    }
     if (mode === 'regenerate') {
       // Tout sauf les candidatures déjà envoyées/en cours (brouillons + échecs + sans lettre).
       return !c.application || !PROTECTED_GEN_STATUSES.has(c.application.status);
     }
     return !c.application;
   });
-  if (targets.length === 0) return { enqueued: 0 };
+  if (targets.length === 0) return { enqueued: 0, skippedUnverified };
 
   const initialProfile = await getProfile();
   if (!initialProfile) {
@@ -112,6 +128,7 @@ export async function enqueueGeneration(
           },
           campaignSnapshot.contractTypes,
           campaignSnapshot.availability,
+          { kind: 'email', campaignId }, // COST-02 : mail de candidature, rattaché à la campagne
         );
         await upsertDraft({
           campaignId,
@@ -125,5 +142,5 @@ export async function enqueueGeneration(
     });
   }
 
-  return { enqueued: targets.length };
+  return { enqueued: targets.length, skippedUnverified };
 }

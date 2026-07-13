@@ -39,6 +39,8 @@ describe('buildPitchPrompt', () => {
     dispoInstr: 'recopie EXACTEMENT « début octobre »',
     safePrompt: 'DIRECTIVE_TEST_123',
     cvJson: '{"name":"CV_TEST"}',
+    opening: 'OUVERTURE_TEST',
+    projection: 'PROJECTION_TEST',
   };
 
   it('interpole poste, entreprise, directives et CV', () => {

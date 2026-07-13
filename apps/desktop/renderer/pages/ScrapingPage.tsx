@@ -16,6 +16,7 @@ import type { ScrapingConfig } from '@candio/shared';
 import { api } from '../lib/api';
 import { COUNTRIES, FR_DEPTS_BY_REGION, FR_REGIONS, FR_CITIES } from '../lib/geo';
 import { INDUSTRY_GROUPS, INDUSTRY_CHOICES } from '../lib/sectors';
+import { HelpNote } from '../components/Help';
 
 // Sources de collecte : job boards (offres actives) vs annuaires (toutes entreprises).
 const ALL_SOURCES = [
@@ -34,8 +35,8 @@ const ALL_SOURCES = [
 // ../lib/geo (partagés avec CampaignsPage). La valeur envoyée au scraper reste
 // `config.city` (string) : nom du département choisi, sinon nom de la région.
 
-// Choix de nombre d'entreprises proposés dans la liste déroulante (plafonné à 300).
-const MAX_CHOICES = [10, 25, 50, 100, 150, 200, 300];
+// Choix de nombre d'entreprises proposés dans la liste déroulante (plafonné à 600).
+const MAX_CHOICES = [10, 25, 50, 100, 150, 200, 300, 400, 500, 600];
 const maxLabel = (n: number) => `${n} entreprises`;
 
 // Plafond de temps de crawl PAR entreprise (secondes). Plus haut = meilleure
@@ -55,7 +56,8 @@ const PAGES_PER_RUN_CHOICES = [
   { value: 2, label: '2 pages — équilibré' },
   { value: 3, label: '3 pages — large' },
   { value: 4, label: '4 pages — très large' },
-  { value: 5, label: '5 pages — maximal (défaut)' },
+  { value: 5, label: '5 pages — large' },
+  { value: 10, label: '10 pages — exhaustif (lent)' },
 ];
 // Nombre maximum de secteurs d'activité sélectionnables simultanément.
 const MAX_INDUSTRY_SELECTION = 3;
@@ -86,6 +88,8 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
   const [running, setRunning] = useState(false);
   const [csvPath, setCsvPath] = useState<string | null>(null);
   const [linesCount, setLinesCount] = useState(0);
+  // Voyant de santé : résultat de la dernière exécution (persisté entre sessions).
+  const [lastRun, setLastRun] = useState<{ at: string; ok: boolean; count: number; error: string | null } | null>(null);
   // Chemins master persistants (disponibles même sans run dans la session courante).
   const [masterPaths, setMasterPaths] = useState<{ csvPath: string | null; htmlPath: string | null } | null>(null);
   const [resumeAvailable, setResumeAvailable] = useState(false);
@@ -111,6 +115,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
       ]);
       if (!isMounted.current) return;
       setMasterPaths(master);
+      setLastRun(status.lastRun);
       // Source LinkedIn+SMTP retirée : on la purge des configs déjà enregistrées
       // (sinon elle resterait active côté scraper pour qui l'avait cochée).
       const hadLinkedin = (cfg.emailSources ?? []).includes('linkedin');
@@ -323,6 +328,19 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         </div>
       </div>
 
+      {/* Voyant de santé : dernière exécution du scraper (persisté entre sessions). */}
+      {lastRun && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-4)', fontSize: '13px', color: 'var(--text-muted, #888)' }}>
+          <span>{lastRun.ok ? '🟢' : '🔴'}</span>
+          <span>
+            Dernier scraping&nbsp;: {new Date(lastRun.at).toLocaleString('fr-FR')}
+            {lastRun.ok
+              ? ` — ${lastRun.count} entreprise${lastRun.count > 1 ? 's' : ''}`
+              : ` — échec${lastRun.error ? ` (${lastRun.error})` : ''}`}
+          </span>
+        </div>
+      )}
+
       {/* ── Configuration (cartes titrées numérotées pour une hiérarchie claire) ── */}
       <section style={{ marginBottom: '28px' }}>
 
@@ -332,6 +350,14 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         {/* ① Recherche */}
         <div style={cardStyle('#2b8aff')}>
         <SectionHeader n={1} title="Recherche" subtitle="Le poste ciblé, la zone géographique et le volume" accent="#2b8aff" />
+        <HelpNote summary="💡 Comment remplir cette section ?" accent="#2b8aff">
+          <p style={{ margin: '0 0 6px' }}>Tu dis <strong>QUOI</strong> et <strong>OÙ</strong> chercher :</p>
+          <ul style={{ margin: 0, paddingLeft: '18px' }}>
+            <li><strong>Poste ciblé</strong> : le métier visé (ex. « data analyst »). Sert à filtrer les offres et à personnaliser les lettres.</li>
+            <li><strong>Zone</strong> : région, département ou ville. Plus c’est large, plus il y a de résultats.</li>
+            <li><strong>Volume max</strong> : combien d’entreprises au maximum. Commence petit (50) pour tester — un gros volume prend du temps.</li>
+          </ul>
+        </HelpNote>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', alignItems: 'start' }}>
           <div style={subGroupStyle}>🎯 Cible</div>
           <label>
@@ -693,6 +719,22 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
               placeholder="Laisser vide pour pattern fallback"
               style={inputStyle}
             />
+            {/* Activation Hunter — co-localisée avec la clé (source unique de vérité :
+                emailSources 'hunter'). L'ancienne case du menu « Emails » a été retirée. */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px',
+              cursor: 'pointer', fontSize: '12.5px' }}>
+              <input
+                type="checkbox"
+                checked={(config.emailSources ?? []).includes('hunter')}
+                onChange={(e) => {
+                  const cur = config.emailSources ?? [];
+                  setConfig({ ...config, emailSources: e.target.checked
+                    ? [...cur, 'hunter'] : cur.filter((s) => s !== 'hunter') });
+                }}
+              />
+              <span>Utiliser Hunter.io pour l'enrichissement des emails</span>
+              <InfoTip text="Interroge Hunter.io pour les emails déjà connus sur le domaine de l'entreprise. Si aucun site n'est encore connu, Hunter essaie d'abord de deviner le domaine à partir du nom. Nécessite une clé ci-dessus. Le plafond ci-dessous protège ton quota." />
+            </label>
           </label>
           <label>
             <span style={labelStyle}>
@@ -723,6 +765,14 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
         {/* ② Sources de collecte */}
         <div style={cardStyle('#1aa179')}>
           <SectionHeader n={2} title="Sources de collecte" subtitle="Où aller chercher les entreprises" accent="#1aa179" />
+          <HelpNote summary="💡 Quelles sources choisir ? (important)" accent="#1aa179">
+            <p style={{ margin: '0 0 6px' }}>Deux familles, très différentes :</p>
+            <ul style={{ margin: '0 0 6px', paddingLeft: '18px' }}>
+              <li><strong>Job boards</strong> (Welcome to the Jungle, APEC, Indeed) : entreprises qui <strong>recrutent activement</strong>, avec un site web → beaucoup d’emails trouvés et des leads pertinents.</li>
+              <li><strong>Registre SIRENE</strong> (Société.com) : <strong>toutes</strong> les entreprises françaises, mais la plupart sans site ni email (artisans, micro-boîtes) → beaucoup de « aucun email ».</li>
+            </ul>
+            <p style={{ margin: 0 }}>👉 <strong>Débutant : coche les job boards.</strong> Garde SIRENE en complément seulement si tu veux du volume brut.</p>
+          </HelpNote>
 
           {/* Job boards */}
           <p style={{ fontSize: '11px', color: '#888', margin: '6px 0 4px' }}>
@@ -875,400 +925,162 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
         {/* ③ ⚙️ Réglages détaillés — une seule grosse zone d'accordéons (listes déroulantes). */}
         <div style={cardStyle('#6c5ce0')}>
-          <SectionHeader n={3} title="Réglages détaillés"
-            subtitle="Tout est optionnel — dépliez seulement ce que vous voulez ajuster" accent="#6c5ce0" />
+          <SectionHeader n={3} title="Emails & enrichissement"
+            subtitle="Où chercher les emails et comment enrichir — tout est optionnel" accent="#6c5ce0" />
+          <HelpNote summary="💡 Faut-il toucher à ça pour débuter ?" accent="#6c5ce0">
+            <p style={{ margin: '0 0 6px' }}><strong>Non — les valeurs par défaut conviennent.</strong> Les seuls réglages utiles au début :</p>
+            <ul style={{ margin: 0, paddingLeft: '18px' }}>
+              <li><strong>Limite de temps du run</strong> : borne la durée. Le scraper s’arrête proprement et garde ce qu’il a trouvé.</li>
+              <li><strong>Plafond recherches Hunter</strong> : seulement si tu as une clé Hunter.io (sinon laisse — 0 = ne s’en sert pas).</li>
+              <li><strong>Assistant IA (LLM)</strong> : laisse <strong>désactivé</strong> sans bon GPU (trop lent sur CPU).</li>
+            </ul>
+          </HelpNote>
 
-        {/* 📧 Emails à récupérer */}
-        <details style={{ marginBottom: '6px' }}>
-          <summary style={accordionSummaryStyle}>
-            📧 Emails à récupérer{' '}
-            <span style={{ fontWeight: 400, fontSize: '12px', color: '#86868b' }}>— méthodes d'obtention (essayées en cascade)</span>
-          </summary>
-          <p style={{ fontSize: '11px', color: '#888', margin: '10px 0 8px' }}>
-            Réglages crawl (budget, exploration) ci-dessus dans « Recherche ».
+        {/* Un seul bloc à plat (même grille 2 col + sous-titres que ① Recherche),
+            plus d'accordéons. Toutes les cases visibles d'un coup d'œil. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', alignItems: 'start' }}>
+
+          {/* ── Groupe : méthodes d'obtention d'email ── */}
+          <div style={subGroupStyle}>📧 Où chercher les emails</div>
+          <p style={{ gridColumn: '1 / -1', fontSize: '11px', color: '#888', margin: '0' }}>
+            Essayées en cascade. 🎯 Hunter.io se règle en haut (« Recherche »), à côté de sa clé.
           </p>
 
-          {/* Même structure que la carte ① Recherche : grille 2 colonnes + sous-titres
-              gris en majuscules (subGroupStyle). Chaque méthode = une cellule-option. */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-
-            <div style={subGroupStyle}>🆓 Tier 1 — Gratuit, aucune clé API requise</div>
-            {[
-              { id: 'web_crawl', label: '🌐 Crawler web', desc: 'Cherche /contact, /equipe, /rh… sur le site de l\'entreprise', color: '#34c759' },
-              { id: 'hunter',    label: '🎯 Hunter.io',    desc: '25 req/mois gratuits — enrichissement + format email',        color: '#ff9f0a' },
-            ].map(({ id, label, desc, color }) => {
-              const on = (config.emailSources ?? []).includes(id);
-              return (
-                <label key={id} style={emailMethodStyle(on)}>
-                  <input type="checkbox" checked={on}
-                    onChange={(e) => {
-                      const cur = config.emailSources ?? [];
-                      setConfig({ ...config, emailSources: e.target.checked ? [...cur, id] : cur.filter((s) => s !== id) });
-                    }}
-                    style={{ marginTop: '2px' }}
-                  />
-                  <span>
-                    <strong style={{ color }}>{label}</strong>
-                    <span style={{ fontSize: '11px', color: '#666', display: 'block', marginTop: '2px' }}>{desc}</span>
-                  </span>
-                </label>
-              );
-            })}
-
-            <div style={subGroupStyle}>⚠️ Tier 3 — Dernier recours</div>
-            {(() => {
-              const on = (config.emailSources ?? []).includes('pattern');
-              return (
-                <label style={emailMethodStyle(on)}>
-                  <input type="checkbox" checked={on}
-                    onChange={(e) => {
-                      const cur = config.emailSources ?? [];
-                      setConfig({ ...config, emailSources: e.target.checked ? [...cur, 'pattern'] : cur.filter((s) => s !== 'pattern') });
-                    }}
-                    style={{ marginTop: '2px' }}
-                  />
-                  <span>
-                    <strong style={{ color: '#888' }}>⚪ Pattern fallback</strong>
-                    <span style={{ fontSize: '11px', color: '#666', display: 'block', marginTop: '2px' }}>
-                      Génère rh@domaine.com si rien trouvé — risque de bounce élevé
-                    </span>
-                  </span>
-                </label>
-              );
-            })()}
-
-            {/* Exclusion — pleine largeur, en bas */}
-            <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px',
-              cursor: 'pointer', padding: '8px 12px', background: '#fff3cd', borderRadius: '8px', fontSize: '12px',
-              border: '1px solid #ffe08a' }}>
-              <input
-                type="checkbox"
-                checked={config.skipNoEmail ?? false}
-                onChange={(e) => setConfig({ ...config, skipNoEmail: e.target.checked })}
-              />
-              <span>
-                <strong>Exclure les entreprises sans email réel</strong>
-                <span style={{ color: '#666', marginLeft: '6px' }}>
-                  (si Pattern est coché, uniquement les entreprises sans site web)
+          {/* Crawler web */}
+          {(() => {
+            const on = (config.emailSources ?? []).includes('web_crawl');
+            return (
+              <label style={optionRow(on)}>
+                <input type="checkbox" checked={on} style={optionCheck}
+                  onChange={(e) => {
+                    const cur = config.emailSources ?? [];
+                    setConfig({ ...config, emailSources: e.target.checked ? [...cur, 'web_crawl'] : cur.filter((s) => s !== 'web_crawl') });
+                  }}
+                />
+                <span style={optionBody}>
+                  <span style={optionTitle}>🌐 Crawler web<InfoTip text="Visite le site web déjà connu de l'entreprise et cherche une page contact/équipe/RH. Gratuit et illimité, mais ne trouve rien si l'entreprise n'a pas de site (ou si on ne l'a pas encore trouvé)." /></span>
+                  <span style={optionDesc}>Cherche /contact, /equipe, /rh… sur le site de l'entreprise</span>
                 </span>
+              </label>
+            );
+          })()}
+
+          {/* Pattern fallback — accent ambre (risqué) */}
+          {(() => {
+            const on = (config.emailSources ?? []).includes('pattern');
+            return (
+              <label style={optionRow(on, '#e0a020')}>
+                <input type="checkbox" checked={on} style={optionCheck}
+                  onChange={(e) => {
+                    const cur = config.emailSources ?? [];
+                    setConfig({ ...config, emailSources: e.target.checked ? [...cur, 'pattern'] : cur.filter((s) => s !== 'pattern') });
+                  }}
+                />
+                <span style={optionBody}>
+                  <span style={optionTitle}>⚪ Pattern fallback<InfoTip text="Invente une adresse du type rh@domaine.com sans vérifier qu'elle existe. Risque de bounce élevé. Ces emails devinés sont marqués « non réels » et retirés par l'exclusion ci-dessous." /></span>
+                  <span style={optionDesc}>Génère rh@domaine.com si rien trouvé — risque de bounce élevé</span>
+                </span>
+              </label>
+            );
+          })()}
+
+          {/* Exclusion — pleine largeur. Fortement recommandée : sans elle, les campagnes
+              écrivent des lettres pour des adresses jamais vérifiées → bloquées à l'envoi
+              (« à vérifier ») ou pire, parties puis rebondies. */}
+          <label style={{ ...optionRow(config.skipNoEmail ?? false, '#2e9e4f'), gridColumn: '1 / -1' }}>
+            <input type="checkbox" checked={config.skipNoEmail ?? false} style={optionCheck}
+              onChange={(e) => setConfig({ ...config, skipNoEmail: e.target.checked })}
+            />
+            <span style={optionBody}>
+              <span style={optionTitle}>
+                ✅ Exclure les entreprises sans email réel <strong>(fortement recommandé)</strong>
+                <InfoTip text="À la fin du scraping, retire du CSV toute entreprise dont l'email n'a pas été CONFIRMÉ (trouvé par Crawler web ou Hunter.io). Toutes les adresses DEVINÉES sont retirées si cette case est cochée : Pattern fallback (rh@domaine.com), catch-all (domaine qui accepte tout sans vérification), et LinkedIn pattern (prenom.nom@ déduit, non confirmé). Sans cette case, ces entreprises restent dans le CSV, entrent en campagne, et l'envoi de leur email sera bloqué plus tard (marqué « à vérifier ») ou pire, partira et rebondira." />
+              </span>
+              <span style={optionDesc}>
+                Retire du CSV final TOUT email deviné/non confirmé (Pattern, catch-all, LinkedIn pattern) —
+                sans ça, ces entreprises entrent quand même en campagne et bloquent l'envoi plus tard.
+              </span>
+            </span>
+          </label>
+
+          {/* ── Groupe : options d'enrichissement ── */}
+          <div style={subGroupStyle}>⚡ Options d'enrichissement</div>
+
+          {/* Fast Crawl */}
+          <label style={optionRow(config.fastCrawl ?? true)}>
+            <input type="checkbox" checked={config.fastCrawl ?? true} style={optionCheck}
+              onChange={(e) => setConfig({ ...config, fastCrawl: e.target.checked })}
+            />
+            <span style={optionBody}>
+              <span style={optionTitle}>⚡ Fast Crawl</span>
+              <span style={optionDesc}>requests+BS4 avant navigateur headless (~6× plus rapide sur les sites simples)</span>
+            </span>
+          </label>
+
+          {/* Trouver le recruteur */}
+          <label style={optionRow(config.findRecruiter ?? true)}>
+            <input type="checkbox" checked={config.findRecruiter ?? true} style={optionCheck}
+              onChange={(e) => setConfig({ ...config, findRecruiter: e.target.checked })}
+            />
+            <span style={optionBody}>
+              <span style={optionTitle}>👤 Trouver le recruteur</span>
+              <span style={optionDesc}>Scrape /equipe, /about pour extraire le nom du DRH/Talent (+30% d'ouverture)</span>
+            </span>
+          </label>
+
+          {/* GitHub — pleine largeur (contient le token) */}
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={optionRow(config.useGithub ?? false)}>
+              <input type="checkbox" checked={config.useGithub ?? false} style={optionCheck}
+                onChange={(e) => setConfig({ ...config, useGithub: e.target.checked })}
+              />
+              <span style={optionBody}>
+                <span style={optionTitle}>🐙 Chercher l'email via GitHub</span>
+                <span style={optionDesc}>Page org GitHub de l'entreprise (60 req/h sans token, 5 000/h avec)</span>
               </span>
             </label>
-          </div>
-        </details>{/* fin 📧 Emails */}
-
-        {/* Les réglages IA (crawl, fiches, lettres) sont sur la page Profil. */}
-
-        {/* ── Validation d'email (replié — optionnel) ── */}
-        <details style={{ marginTop: '10px' }}>
-          <summary style={accordionSummaryStyle}>
-            ✅ Validation d'email <span style={{ fontWeight: 400, fontSize: '11px', color: '#86868b' }}>— optionnel</span>
-          </summary>
-          <div style={{ marginTop: '10px', padding: '12px', background: '#f0fff4', borderRadius: '8px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <label>
-              <span style={labelStyle}>Service de validation</span>
-              <select
-                value={config.validator ?? 'none'}
-                onChange={(e) => setConfig({ ...config, validator: e.target.value as 'none' | 'neverbounce' | 'zerobounce' })}
-                style={{ ...inputStyle, cursor: 'pointer' }}
-              >
-                <option value="none">Aucun (pattern uniquement)</option>
-                <option value="neverbounce">NeverBounce (1000 gratuits)</option>
-                <option value="zerobounce">ZeroBounce (100 gratuits/mois)</option>
-              </select>
-            </label>
-            {config.validator !== 'none' && (
-              <label>
-                <span style={labelStyle}>Clé API {config.validator}</span>
+            {config.useGithub && (
+              <label style={{ paddingLeft: '2px' }}>
+                <span style={labelStyle}>
+                  GitHub Token (optionnel){' '}
+                  <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#007aff' }}>
+                    (créer un token)
+                  </a>
+                </span>
                 <input
                   type="password"
-                  value={config.validatorKey ?? ''}
-                  onChange={(e) => setConfig({ ...config, validatorKey: e.target.value })}
-                  placeholder="Clé API du service de validation"
+                  value={config.githubToken ?? ''}
+                  onChange={(e) => setConfig({ ...config, githubToken: e.target.value })}
+                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                   style={inputStyle}
                 />
               </label>
             )}
           </div>
-          </div>
-        </details>
 
-        {/* ── Enrichissement GitHub + SMTP batch (SCRAPE-05) ── */}
-        <details style={{ marginTop: '8px' }}>
-          <summary style={accordionSummaryStyle}>
-            ⚡ Enrichissement avancé (GitHub, SMTP batch, proxies)
-          </summary>
-          <div style={{ marginTop: '10px', padding: '12px', background: '#f5f0ff', borderRadius: '8px' }}>
-
-            {/* GitHub */}
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={config.useGithub ?? false}
-                  onChange={(e) => setConfig({ ...config, useGithub: e.target.checked })}
-                />
-                <span style={{ fontWeight: 600, fontSize: '13px' }}>🐙 Chercher l'email via GitHub</span>
-                <span style={{ fontSize: '11px', color: '#888' }}>
-                  60 req/h sans token, 5 000/h avec token — page org GitHub de l'entreprise
-                </span>
-              </label>
-              {config.useGithub && (
-                <label>
-                  <span style={labelStyle}>
-                    GitHub Token (optionnel){' '}
-                    <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#007aff' }}>
-                      (créer un token)
-                    </a>
-                  </span>
-                  <input
-                    type="password"
-                    value={config.githubToken ?? ''}
-                    onChange={(e) => setConfig({ ...config, githubToken: e.target.value })}
-                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                    style={inputStyle}
-                  />
-                </label>
-              )}
-            </div>
-
-            {/* SMTP batch */}
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px', cursor: 'pointer',
-              padding: '8px', background: '#fff8e1', borderRadius: '6px' }}>
-              <input
-                type="checkbox"
-                checked={config.useSmtpBatch ?? false}
-                onChange={(e) => setConfig({ ...config, useSmtpBatch: e.target.checked })}
-                style={{ marginTop: '2px' }}
-              />
-              <span>
-                <strong style={{ fontSize: '13px' }}>📨 SMTP batch (12 patterns RH en parallèle)</strong>
-                <span style={{ fontSize: '11px', color: '#888', display: 'block', marginTop: '2px' }}>
-                  Teste rh@, recrutement@, careers@, jobs@… via SMTP RCPT TO.
-                  Lent (~2 s/entreprise) mais fiable. Uniquement si aucun email trouvé ailleurs.
-                </span>
+          {/* ── Groupe : tri des résultats ── */}
+          <div style={subGroupStyle}>🔽 Tri des résultats</div>
+          <label style={{ ...optionRow(!config.skipScoring), gridColumn: '1 / -1' }}>
+            <input type="checkbox" checked={!config.skipScoring} style={optionCheck}
+              onChange={(e) => setConfig({ ...config, skipScoring: !e.target.checked })}
+            />
+            <span style={optionBody}>
+              <span style={{ ...optionTitle, gap: '7px' }}>
+                <ArrowDownWideNarrow size={15} color="#0a84ff" />Trier par fiabilité d'email + fraîcheur
               </span>
-            </label>
-
-            {/* Proxies */}
-            <label>
-              <span style={labelStyle}>
-                Rotation de proxies{' '}
-                <span style={{ fontWeight: 400, color: '#888' }}>
-                  (séparés par virgules ou sauts de ligne)
-                </span>
+              <span style={optionDesc}>
+                {config.skipScoring
+                  ? 'Désactivé — les entreprises sont exportées dans l\'ordre de collecte.'
+                  : 'Les plus prometteuses (email vérifié, offre récente, bonne taille, ATS) remontent en tête pour être contactées en premier.'}
               </span>
-              <textarea
-                value={config.proxies ?? ''}
-                onChange={(e) => setConfig({ ...config, proxies: e.target.value })}
-                placeholder={'http://user:pass@proxy1:8080\nhttp://user:pass@proxy2:8080'}
-                rows={3}
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', resize: 'vertical' }}
-              />
-              <span style={{ fontSize: '11px', color: '#888' }}>
-                Appliqué aux appels HTTP (Hunter, crawler web, WHOIS…). La navigation browser n'est pas affectée.
-              </span>
-            </label>
+            </span>
+          </label>
 
-            {/* Fast crawl + Recruiter finder */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer',
-                padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #ddd' }}>
-                <input
-                  type="checkbox"
-                  checked={config.fastCrawl ?? true}
-                  onChange={(e) => setConfig({ ...config, fastCrawl: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <span>
-                  <strong style={{ fontSize: '13px', display: 'block' }}>⚡ Fast Crawl</strong>
-                  <span style={{ fontSize: '11px', color: '#888' }}>
-                    requests+BS4 avant navigateur headless (~6× plus rapide sur les sites simples)
-                  </span>
-                </span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer',
-                padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #ddd' }}>
-                <input
-                  type="checkbox"
-                  checked={config.findRecruiter ?? true}
-                  onChange={(e) => setConfig({ ...config, findRecruiter: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <span>
-                  <strong style={{ fontSize: '13px', display: 'block' }}>👤 Trouver le recruteur</strong>
-                  <span style={{ fontSize: '11px', color: '#888' }}>
-                    Scrape /equipe, /about pour extraire le nom du DRH/Talent (+30% d'ouverture)
-                  </span>
-                </span>
-              </label>
-            </div>
+        </div>{/* fin grille à plat */}
 
-            {/* Filtre date de publication */}
-            <label>
-              <span style={labelStyle}>
-                Filtre fraîcheur des offres{' '}
-                <span style={{ fontWeight: 400, color: '#888' }}>
-                  — exclure les offres publiées il y a plus de :
-                </span>
-              </span>
-              <select
-                value={config.postedWithinDays ?? 0}
-                onChange={(e) => setConfig({ ...config, postedWithinDays: Number(e.target.value) })}
-                style={{ ...inputStyle, cursor: 'pointer' }}
-              >
-                <option value={0}>Pas de filtre (tout garder)</option>
-                <option value={7}>7 jours</option>
-                <option value={14}>14 jours</option>
-                <option value={30}>30 jours</option>
-                <option value={60}>60 jours</option>
-                <option value={90}>90 jours</option>
-              </select>
-            </label>
-
-            {/* Blacklist */}
-            <label>
-              <span style={labelStyle}>
-                🚫 Blacklist de domaines{' '}
-                <span style={{ fontWeight: 400, color: '#888' }}>
-                  — toujours exclure ces entreprises (un domaine par ligne)
-                </span>
-              </span>
-              <textarea
-                value={config.blacklistDomains ?? ''}
-                onChange={(e) => setConfig({ ...config, blacklistDomains: e.target.value })}
-                placeholder={'concurrent.fr\nentreprise-a-eviter.com'}
-                rows={3}
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', resize: 'vertical' }}
-              />
-            </label>
-
-            {/* Whitelist */}
-            <label>
-              <span style={labelStyle}>
-                ⭐ Whitelist de domaines{' '}
-                <span style={{ fontWeight: 400, color: '#888' }}>
-                  — entreprises prioritaires, montées en tête de liste (un domaine par ligne)
-                </span>
-              </span>
-              <textarea
-                value={config.whitelistDomains ?? ''}
-                onChange={(e) => setConfig({ ...config, whitelistDomains: e.target.value })}
-                placeholder={'entreprise-reve.fr\nstartup-top.io'}
-                rows={3}
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', resize: 'vertical' }}
-              />
-            </label>
-
-          </div>
-        </details>
-
-        {/* ── Paramètres de qualité + chemins Python ── */}
-        <details style={{ marginTop: '8px' }}>
-          <summary style={accordionSummaryStyle}>
-            ⚙️ Paramètres avancés (qualité, performance, chemins)
-          </summary>
-          <div style={{ marginTop: '10px', padding: '12px', background: '#f5f5f7', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-
-            {/* Chemins Python */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <label>
-                <span style={labelStyle}>Exécutable Python</span>
-                <input
-                  value={config.pythonPath}
-                  onChange={(e) => setConfig({ ...config, pythonPath: e.target.value })}
-                  placeholder="python ou python3"
-                  style={inputStyle}
-                />
-              </label>
-              <label>
-                <span style={labelStyle}>Chemin du script</span>
-                <input
-                  value={config.scriptPath}
-                  onChange={(e) => setConfig({ ...config, scriptPath: e.target.value })}
-                  placeholder="/chemin/vers/scrape_leads.py"
-                  style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '12px' }}
-                />
-              </label>
-            </div>
-
-            {/* Clearbit + Fuzzy dedup */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #ddd' }}>
-                <input
-                  type="checkbox"
-                  checked={config.useClearbit ?? true}
-                  onChange={(e) => setConfig({ ...config, useClearbit: e.target.checked })}
-                />
-                <span>
-                  <strong style={{ fontSize: '13px', display: 'block' }}>Enrichissement Clearbit</strong>
-                  <span style={{ fontSize: '11px', color: '#888' }}>
-                    Taille + secteur via l'API gratuite Clearbit autocomplete
-                  </span>
-                </span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                padding: '8px', background: '#fff', borderRadius: '6px', border: '1px solid #ddd' }}>
-                <input
-                  type="checkbox"
-                  checked={config.fuzzyDedup ?? true}
-                  onChange={(e) => setConfig({ ...config, fuzzyDedup: e.target.checked })}
-                />
-                <span>
-                  <strong style={{ fontSize: '13px', display: 'block' }}>Dédoublonnage flou</strong>
-                  <span style={{ fontSize: '11px', color: '#888' }}>
-                    Fusionne "ACME SAS" et "Acme France" (garde le mieux scoré)
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            {/* Fuzzy threshold + parallel workers */}
-            {(config.fuzzyDedup ?? true) && (
-              <label>
-                <span style={labelStyle}>
-                  Seuil de similarité des noms : <strong>{Math.round((config.fuzzyThreshold ?? 0.85) * 100)}%</strong>
-                  <span style={{ fontWeight: 400, color: '#888', marginLeft: '8px' }}>
-                    — plus bas = fusionne plus agressivement
-                  </span>
-                </span>
-                <input
-                  type="range"
-                  min={50} max={99} step={1}
-                  value={Math.round((config.fuzzyThreshold ?? 0.85) * 100)}
-                  onChange={(e) => setConfig({ ...config, fuzzyThreshold: Number(e.target.value) / 100 })}
-                  style={{ width: '100%' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#aaa' }}>
-                  <span>50% (très agressif)</span>
-                  <span>85% (recommandé)</span>
-                  <span>99% (strict)</span>
-                </div>
-              </label>
-            )}
-
-            <label>
-              <span style={labelStyle}>
-                Workers parallèles (MX + catch-all){' '}
-                <span style={{ fontWeight: 400, color: '#888' }}>— 10 par défaut, max recommandé : 20</span>
-              </span>
-              <input
-                type="number"
-                min={1} max={50}
-                value={config.parallelWorkers ?? 10}
-                onChange={(e) => setConfig({ ...config, parallelWorkers: Number(e.target.value) })}
-                style={{ ...inputStyle, width: '80px' }}
-              />
-            </label>
-
-          </div>
-        </details>
         </div>{/* fin ③ Réglages détaillés */}
       </section>
 
-      {/* ── Scoring & tri ── */}
-      <ScoringSection config={config} setConfig={setConfig} />
 
       {/* ── Boutons d'action ── */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1459,39 +1271,6 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
 
 // ── Composant scoring ──────────────────────────────────────────────────────────
 
-function ScoringSection({
-  config,
-  setConfig,
-}: {
-  config: ScrapingConfig;
-  setConfig: (c: ScrapingConfig) => void;
-}) {
-  // Option 2 (simplifiée) : un seul interrupteur. Le tri utilise des poids par
-  // défaut éprouvés (fiabilité email + fraîcheur + taille + ATS) — non exposés,
-  // car les régler à la main n'apporte rien pour un usage mono-utilisateur.
-  return (
-    <div style={{ ...cardStyle('#c98a2b'), marginBottom: '28px' }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={!config.skipScoring}
-          onChange={(e) => setConfig({ ...config, skipScoring: !e.target.checked })}
-        />
-        <span>
-          <strong style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '7px' }}>
-            <ArrowDownWideNarrow size={16} color="#c98a2b" />Trier par fiabilité d'email + fraîcheur
-          </strong>
-          <span style={{ fontSize: '12px', color: 'var(--text-sub)', display: 'block', marginTop: '3px', lineHeight: 1.5 }}>
-            {config.skipScoring
-              ? 'Désactivé — les entreprises sont exportées dans l\'ordre de collecte.'
-              : 'Les entreprises les plus prometteuses (email vérifié, offre récente, bonne taille, ATS détecté) remontent en tête pour être contactées en premier — utile sous le plafond d\'envois quotidien.'}
-          </span>
-        </span>
-      </label>
-    </div>
-  );
-}
-
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: '12.5px', color: '#444', marginBottom: '5px', fontWeight: 600,
 };
@@ -1510,13 +1289,39 @@ const accordionSummaryStyle: React.CSSProperties = {
   cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#1d1d1f',
   padding: '10px 4px', borderBottom: '1px solid #f0f0f0', listStyle: 'none',
 };
-// Cellule-option (méthode email) : cliquable, surlignée si sélectionnée.
-const emailMethodStyle = (on: boolean): React.CSSProperties => ({
-  display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer',
-  padding: '9px 11px', borderRadius: '8px',
-  border: `1px solid ${on ? '#0a84ff' : '#e6e6eb'}`,
-  background: on ? 'rgba(10,132,255,0.06)' : '#fafafa',
+// Tuile-option unique pour TOUTES les cases à cocher de la section ③.
+// flexDirection 'row' explicite : contourne le CSS global `label { flex-direction: column }`
+// qui, sinon, empile la case au-dessus du texte et centre tout (rendu incohérent).
+// `accent` = couleur de surlignage quand cochée (bleu par défaut, ambre pour les options « attention »).
+const optionRow = (on: boolean, accent = '#0a84ff'): React.CSSProperties => ({
+  display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '10px',
+  cursor: 'pointer', padding: '11px 13px', borderRadius: '10px',
+  border: `1px solid ${on ? accent : '#e4e4ea'}`,
+  background: on ? `${accent}12` : '#fbfbfd',
+  transition: 'border-color 0.12s, background 0.12s',
 });
+// Éléments internes d'une tuile-option (structure identique partout).
+const optionCheck: React.CSSProperties = { marginTop: '2px', flexShrink: 0, width: '15px', height: '15px', cursor: 'pointer' };
+const optionBody: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 };
+const optionTitle: React.CSSProperties = { display: 'flex', alignItems: 'center', fontSize: '13px', fontWeight: 600, color: '#1d1d1f' };
+const optionDesc: React.CSSProperties = { fontSize: '11px', color: '#6b6b70', lineHeight: 1.45 };
+
+// Bulle d'aide au survol — tooltip natif du navigateur (title), disparaît
+// tout seul quand la souris s'éloigne. Pas de librairie, pas d'état.
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+        background: '#e6e6eb', color: '#666', fontSize: '10px', fontWeight: 700,
+        cursor: 'help', marginLeft: '5px', verticalAlign: 'middle',
+      }}
+      onClick={(e) => e.preventDefault()}
+    >?</span>
+  );
+}
 
 // ── Tokens de mise en page (hiérarchie claire : cartes titrées numérotées) ────
 // Carte de groupe colorée : fond blanc, coin arrondi, accent latéral teinté.

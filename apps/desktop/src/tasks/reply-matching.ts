@@ -110,54 +110,103 @@ export function inboxKey(msg: Pick<InboxMsg, 'inReplyTo' | 'from' | 'date'>): st
 
 export type ReplySentiment = 'positive' | 'rejection' | 'neutral';
 
-// Marqueurs de REFUS (FR + EN). Volontairement spécifiques pour éviter les faux
-// positifs (« malheureusement » seul ne suffit pas toujours, mais combiné aux
-// formules de rejet ci-dessous il est très fiable dans un contexte RH).
-const _REJECTION_PATTERNS: RegExp[] = [
-  /ne\s+(?:pas\s+)?donn(?:er|ons|ons pas)\s+suite/i,
-  /pas\s+donner\s+suite/i,
-  /n('|’)?(?:a|avons|ont)\s+pas\s+(?:été\s+)?reten/i,   // « n'a pas été retenue »
-  /candidature\s+.*reten/i,
-  /ne\s+correspond\s+pas/i,
-  /pas\s+(?:de\s+)?(?:poste|besoin|opportunit|recrutement)/i,
-  /ne\s+recrut(?:ons|e)\s+pas/i,
-  /déclin(?:ons|er)/i,
-  /pas\s+en\s+mesure/i,
-  /au\s+regret/i,
-  /unfortunately/i,
-  /not\s+(?:moving|proceed|selected|a\s+fit)/i,
-  /we\s+(?:will|won('|’)?t|are\s+not)\s+(?:not\s+)?(?:proceed|moving|hiring)/i,
-  /no\s+(?:current\s+)?(?:openings?|positions?|vacanc)/i,
+// BARRIÈRE LINGUISTIQUE / hors-sujet → NEUTRE (ni intérêt ni refus). Empêche qu'un mail
+// « nous ne lisons pas le français, réécrivez en anglais » soit pris pour de l'intérêt à
+// cause de TA candidature citée en dessous (pleine de « entretien / échange / disponible »).
+const _LANGUAGE_BARRIER: RegExp[] = [
+  /ne\s+(?:parl|li|comprenn|lis)\w*\s+(?:pas\s+)?(?:le\s+)?fran[çc]ais/i,
+  /(?:don['’]?t|do\s+not|cannot|can['’]?t)\s+(?:speak|read|understand)\s+french/i,
+  /(?:in|write|reply|respond|resend|send)\b.{0,25}\benglish\b/i,
+  /\benglish[-\s]?(?:only|speaking)\b/i,
+  /\ben\s+anglais\b/i,
 ];
 
-// Marqueurs d'INTÉRÊT (priment sur le refus — un email d'entretien n'est pas un refus).
+// REFUS FORT — formules de déclin SANS ambiguïté. Vérifié AVANT l'intérêt : une lettre de
+// refus recopie souvent ta candidature (« je reste disponible pour un entretien ») → sans
+// cette priorité, ces mots CITÉS la feraient passer pour « intérêt ».
+const _STRONG_REJECTION: RegExp[] = [
+  /ne\s+(?:pas\s+)?donn(?:er|ons|erons)?\s+(?:pas\s+)?suite/i,
+  /pas\s+donner\s+suite/i,
+  /n['’]?(?:a|avons|ont)\s+pas\s+(?:été\s+)?reten/i,        // « n'a pas été retenue »
+  /pas\s+reten(?:u|ue|us|ues)/i,
+  /au\s+regret/i,
+  /regret\s+to\s+inform/i,
+  /ne\s+recrut\w*\b[^.!?]{0,20}\bpas\b/i,                    // « ne recrute toutefois pas »
+  /déclin(?:ons|er|ée?s?)/i,
+  /(?:poste|offre)\s+(?:déjà\s+)?pourvu/i,
+  /(?:retenu|choisi|sélectionné)\s+(?:un\s+autre|d['’]autres?)\s+(?:candidat|profil)/i,
+  // Refus FR polis (souvent flatteurs : « votre profil a retenu notre attention, MAIS… »),
+  // avec tolérance aux adverbes intercalés (« pas AUJOURD'HUI de besoins »).
+  /bon(?:ne)?\s+(?:continuation|chance|courage|réussite)/i, // clôtures classiques d'un refus
+  /pleine\s+réussite/i,
+  /n['’]envisageons?\s+(?:aucun|pas|plus)/i,
+  /(?:pas|aucun|plus)\b[^.!?]{0,25}(?:de\s+)?(?:poste|besoin|recrutement|opportunit|ouvertur|vacance)/i,
+  /pas\s+(?:encore\s+)?(?:de\s+)?poste\s+(?:adéquat|adapté|correspondant|à\s+pourvoir|disponible|vacant|ouvert)/i,
+  /(?:conserv|gard)\w*\s+votre\s+(?:cv|candidature)/i,       // « conserver votre CV » = non poli
+  /revenir\s+vers\s+vous\s+si/i,
+  // Vœux de clôture d'un refus (« le meilleur pour la suite de votre carrière »).
+  /(?:le\s+meilleur|bonne\s+suite|beaucoup\s+de\s+réussite)\b[^.!?]{0,25}(?:carrière|parcours|recherche|projet|suite)/i,
+  /pour\s+la\s+suite\s+de\s+(?:votre|ta)\s+(?:carrière|parcours|recherche)/i,
+  /unfortunately/i,
+  /not\s+(?:be\s+)?(?:moving\s+forward|proceed(?:ing)?|selected|a\s+(?:good\s+)?fit)/i,
+  /we\s+(?:will\s+not|won['’]?t|regret\s+to|are\s+not\s+(?:able|moving|proceeding|selecting))/i,
+  /no\s+(?:current\s+)?(?:openings?|positions?|vacanc|roles?)\b/i,
+];
+
+// INTÉRÊT — entretien/rencontre proposés. (Après le refus fort → un refus qui cite ton
+// pitch ne l'emporte pas ; avant le refus faible → un vrai entretien « malheureusement… »
+// reste positif.)
 const _POSITIVE_PATTERNS: RegExp[] = [
   /entretien/i,
   /rendez[\s-]?vous/i,
-  /(?:vous\s+)?rencontr(?:er|ons)/i,
-  /échang(?:er|eons|e)\b/i,
-  /(?:votre\s+)?profil\s+.*intéress/i,
-  /intéress(?:é|és|ée|ant)\s+par\s+(?:votre|ton)/i,
-  /disponibilit/i,
+  /(?:vous\s+)?rencontr(?:er|ons|erions)/i,
   /interview/i,
-  /(?:happy|glad|like)\s+to\s+(?:meet|chat|discuss)/i,
   /next\s+steps?/i,
+  // Resserré (.{0,40}, plus .* gourmand) : « votre profil nous intéresse », PAS un refus qui
+  // sème « profil » et « compétences intéressantes » à 3 lignes d'écart.
+  /(?:votre\s+)?(?:profil|candidature)\s+.{0,40}intéress/i,
+  /reten\w*\s+.{0,12}attention/i,                           // « a retenu notre attention »
+  /convenir\s+d['’]un/i,
+  // « échanger / discuter / rencontrer » MAIS en VOIX RECRUTEUR uniquement (« nous aimerions
+  // échanger », « seriez-vous disposé à échanger », « échanger avec le directeur ») → n'attrape
+  // PAS ton pitch, écrit à la 1ʳᵉ personne (« un échange est envisageable »).
+  /(?:aimerions|souhait(?:ons|erions|erions bien)|serions\s+ravis?|serait\s+ravi)\b[^.!?]{0,40}(?:échang|rencontr|discut|entretien|vous\s+(?:voir|recevoir))/i,
+  /dispos\w+[^.!?]{0,15}(?:à|a|ç?a|pour)\s*(?:échang|discut|rencontr|un\s+(?:entretien|appel|échange))/i,
+  /échang\w*\s+avec\s+(?:le|la|notre|nos|un|une|l['’])\s*\w*\s*(?:directeur|responsable|équipe|manager|dirigeant|g[ée]rant|recruteu)/i,
+  // Le recruteur qui DEMANDE tes disponibilités (« quelles sont vos disponibilités ? »).
+  /quelle?s?\s+(?:sont\s+)?(?:vos\s+)?disponibilit/i,
+  /(?:indiquez|donnez|communiquez|vos)\b[^.!?]{0,20}disponibilit/i,
+  /(?:happy|glad|pleased|would\s+like)\s+to\s+(?:meet|chat|discuss|invite|schedule)/i,
+  /proposer\s+un\s+(?:entretien|créneau|rendez)/i,
+];
+
+// REFUS FAIBLE — formules plus douces (après l'intérêt, pour ne pas voler un vrai entretien).
+const _WEAK_REJECTION: RegExp[] = [
+  /malheureusement/i,
+  /ne\s+correspond\s+pas/i,
+  /pas\s+(?:de\s+)?(?:poste|besoin|opportunit|recrutement|ouvert)/i,
+  /pas\s+en\s+mesure/i,
+  /nous\s+reviendrons\s+vers\s+vous/i,
+  /(?:gard|conserv)(?:ons|erons)\s+votre\s+(?:candidature|cv)/i,
+  /vous\s+souhait(?:ons|e)\b.{0,25}(?:réussite|succès|bonne)/i,
 ];
 
 /**
- * Strat #1 — classification légère (heuristique, sans LLM) du sentiment d'une
- * réponse reçue. Sert à distinguer une réponse POSITIVE (intérêt/entretien) d'un
- * REFUS, afin que la boucle de feedback du scraper ne boost pas autant un domaine
- * qui décline systématiquement qu'un domaine intéressé.
- *
- * Priorité : intérêt > refus > neutre (un refus poli peut contenir « malheureusement »
- * tout en proposant un entretien ailleurs — l'intérêt l'emporte).
+ * Strat #1 — classification légère (heuristique, sans LLM) du sentiment d'une réponse.
+ * PALIERS ORDONNÉS (robustes à la citation de ta candidature en dessous) :
+ *   0. barrière linguistique / hors-sujet → neutre ;
+ *   1. refus FORT → refus (prime sur l'intérêt : un refus cite souvent ton pitch) ;
+ *   2. intérêt (entretien/rencontre) → positif ;
+ *   3. refus FAIBLE → refus ;
+ *   4. sinon → neutre.
  */
 export function classifyReplySentiment(text: string | null | undefined): ReplySentiment {
   if (!text) return 'neutral';
   const t = text.slice(0, 4000); // borne : seules les 1res lignes portent le verdict
+  if (_LANGUAGE_BARRIER.some((re) => re.test(t))) return 'neutral';
+  if (_STRONG_REJECTION.some((re) => re.test(t))) return 'rejection';
   if (_POSITIVE_PATTERNS.some((re) => re.test(t))) return 'positive';
-  if (_REJECTION_PATTERNS.some((re) => re.test(t))) return 'rejection';
+  if (_WEAK_REJECTION.some((re) => re.test(t))) return 'rejection';
   return 'neutral';
 }
 
@@ -208,6 +257,8 @@ const _QUOTE_START: RegExp[] = [
   /^\s*>/,                                  // ligne citée « > … »
   /^\s*On\b.*\bwrote\s*:?\s*$/i,            // Gmail EN : « On … wrote: »
   /^\s*Le\b.*\ba\s+écrit\s*:?\s*$/i,        // Gmail FR : « Le … a écrit : »
+  /^\s*wrote\s*:?\s*$/i,                    // « wrote: » seul (attribution repliée sur 2 lignes)
+  /^\s*a\s+écrit\s*:?\s*$/i,                // « a écrit : » seul
   /^\s*-{2,}\s*Original Message\s*-{2,}/i,  // Outlook
   /^\s*_{5,}\s*$/,                          // séparateur Outlook
   /^\s*De\s*:\s.+/i,                        // en-tête Outlook FR (De : …)
@@ -227,8 +278,11 @@ export function stripQuotedReply(text: string | null | undefined): string {
   // 1) Attribution INLINE (Gmail « déplie » souvent la réponse sur une seule ligne :
   //    « … wrote: > Bonjour … »). On coupe dès « On … wrote: » / « Le … a écrit : ».
   for (const re of [
-    /\bOn\b[^\n]{0,300}?\bwrote\s*:/i,        // Gmail EN
-    /\bLe\b[^\n]{0,300}?\ba\s+écrit\s*:/i,    // Gmail FR
+    // [\s\S] (et non [^\n]) : l'attribution Gmail passe souvent à la ligne — « On <date>,
+    // <nom> <email>\nwrote: ». Les ancres « wrote: » / « a écrit : » n'existent pas dans un
+    // texte FR/EN normal → aucun risque de fausse coupe.
+    /\bOn\b[\s\S]{0,300}?\bwrote\s*:/i,        // Gmail EN (mono- ou multi-ligne)
+    /\bLe\b[\s\S]{0,300}?\ba\s+écrit\s*:/i,    // Gmail FR (mono- ou multi-ligne)
     /-{2,}\s*Original Message\s*-{2,}/i,       // Outlook
     /\bBegin forwarded message\b/i,
   ]) {

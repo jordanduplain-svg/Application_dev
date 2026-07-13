@@ -27,7 +27,7 @@ from urllib.parse import quote as url_quote
 
 import requests
 
-from .constants import WHOIS_IGNORE_RE
+from .constants import WHOIS_IGNORE_RE, CEO_TITLES, HR_TITLES
 from .email_pattern import generate_alternatives, guess_email
 from .infra import RateLimiter
 from .models import Company, _domain
@@ -57,6 +57,45 @@ class EmailResult:
     def __bool__(self) -> bool:
         """Truthy si un email a été trouvé."""
         return bool(self.email)
+
+
+# Intitulés SANS ambiguïté française → contact basé en France (pas au siège d'un
+# groupe étranger). Sous-ensemble francophone de CEO_TITLES/HR_TITLES ; on exclut
+# volontairement les titres anglais (« ceo », « hr manager », « founder »…) qui, sur
+# un groupe international, désignent souvent le siège et déclenchent des réponses en
+# anglais/espagnol. ponytail: liste figée, suffit tant qu'on cible des PME FR.
+_FRENCH_TITLES = [
+    "drh", "directeur des ressources humaines", "directeur rh", "directrice rh",
+    "responsable rh", "responsable ressources humaines", "recruteur", "recruteuse",
+    "chargé de recrutement", "chargée de recrutement", "président", "présidente",
+    "presidente", "pdg", "p-dg", "directeur général", "directrice générale",
+    "directeur general", "directrice generale", "gérant", "gerant", "fondateur",
+    "fondatrice", "co-fondateur", "cofondateur",
+]
+
+
+def choose_contact(emails: "list[dict]") -> "dict | None":
+    """
+    Choisit le meilleur contact parmi les emails Hunter d'un domaine.
+    Priorité : titre FRANÇAIS (→ contact France) > dirigeant > RH > meilleure confiance.
+    Le biais « titre français d'abord » évite de retenir le contact du SIÈGE d'un groupe
+    international (Hardis SE, MDS…) qui répond en anglais/espagnol.
+    """
+    if not emails:
+        return None
+
+    def _pos(e: dict) -> str:
+        return (e.get("position") or "").lower()
+
+    def _first(kws) -> "dict | None":
+        return next((e for e in emails if any(kw in _pos(e) for kw in kws)), None)
+
+    return (
+        _first(_FRENCH_TITLES)
+        or _first(CEO_TITLES)
+        or _first(HR_TITLES)
+        or max(emails, key=lambda e: e.get("confidence", 0))
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -143,17 +182,7 @@ class HunterClient:
         if not emails:
             return _empty
 
-        HR_KW = ["rh", "hr", "talent", "recruit", "hiring", "people", "drh"]
-        chosen = None
-        for kw in HR_KW:
-            for e in emails:
-                if kw in (e.get("position") or "").lower():
-                    chosen = e
-                    break
-            if chosen:
-                break
-        if not chosen:
-            chosen = max(emails, key=lambda e: e.get("confidence", 0))
+        chosen = choose_contact(emails)
 
         chosen_email = chosen.get("value", "")
         confidence   = chosen.get("confidence", 0)
@@ -352,43 +381,62 @@ def enrich_hunter(
                 c.email_source = "no_email"
         return
 
-    # Au-delà du budget : on ne fera PAS d'appel Hunter (économie de quota).
-    to_query = need[:budget]
-    overflow = need[budget:]
-    print(f"\n🎯  Phase 5 : Hunter.io ({len(to_query)} domaines interrogés "
-          f"sur {len(need)} sans email · plafond run={max_searches})…")
+    # DEDUP-DOMAINE : plusieurs entreprises partagent souvent un domaine (SPV/filiales,
+    # ex. « IRISOLAR 19..39 » → irisolaris.com). On interroge Hunter UNE SEULE fois par
+    # domaine UNIQUE et on applique le résultat à toutes les entreprises du domaine :
+    # zéro appel API gaspillé, et le BUDGET compte des DOMAINES, pas des entreprises
+    # (avant, 13 filiales du même domaine mangeaient 13 crédits pour 1 seul email).
+    by_domain: "dict[str, list]" = {}
+    for c in need:
+        d = _domain(c.website)
+        if d:
+            by_domain.setdefault(d, []).append(c)
+    domains = list(by_domain.keys())          # ordre d'apparition préservé (dict py3.7+)
+    to_query = domains[:budget]
+    overflow = domains[budget:]
+
+    def _fill(group: list, result) -> None:
+        """Applique le résultat Hunter (ou le repli) à TOUTES les entreprises du domaine."""
+        for c in group:
+            if result:
+                c.contact_email      = result.email
+                c.email_source       = result.source
+                c.email_alternatives = result.alternatives
+                if result.name:
+                    c.contact_name = result.name
+                if result.role:
+                    c.contact_role = result.role
+            elif use_pattern:
+                dom = _domain(c.website)
+                c.contact_email      = guess_email(dom)
+                c.email_source       = "pattern"
+                c.email_alternatives = generate_alternatives(dom, exclude=c.contact_email)
+            else:
+                c.email_source = "no_email"
+
+    print(f"\n🎯  Phase 5 : Hunter.io ({len(to_query)} domaine(s) UNIQUE(s) interrogé(s) "
+          f"sur {len(domains)} · {len(need)} entreprises · plafond run={max_searches})…")
     found = 0
     pattern_fallback = 0
-    for i, c in enumerate(to_query, 1):
+    for i, domain in enumerate(to_query, 1):
         if deadline is not None and deadline.expired():
-            print(f"   ⏱   Limite de temps — Hunter arrêté ({i-1}/{len(to_query)} traités)")
-            # Les non-traités rejoignent l'overflow pour la bascule pattern.
+            print(f"   ⏱   Limite de temps — Hunter arrêté ({i-1}/{len(to_query)} domaines traités)")
+            # Les domaines non traités rejoignent l'overflow pour la bascule pattern.
             overflow = to_query[i-1:] + overflow
             break
-        domain = _domain(c.website)
-        if not domain:
-            continue
+        group = by_domain[domain]
         print(f"   [{i}/{len(to_query)}] {domain}…", end=" ", flush=True)
         result = hunter.find(domain)
+        _fill(group, result)
         if result:
-            c.contact_email      = result.email
-            c.email_source       = result.source
-            c.email_alternatives = result.alternatives
-            if result.name:
-                c.contact_name = result.name
-            if result.role:
-                c.contact_role = result.role
             badge = "✅" if result.source == "hunter_verified" else "🟡"
-            print(f"{badge} {result.email}")
+            suffix = f"  (×{len(group)} entreprises)" if len(group) > 1 else ""
+            print(f"{badge} {result.email}{suffix}")
             found += 1
         elif use_pattern:
-            c.contact_email      = guess_email(domain)
-            c.email_source       = "pattern"
-            c.email_alternatives = generate_alternatives(domain, exclude=c.contact_email)
             print("⚪ pattern")
             pattern_fallback += 1
         else:
-            c.email_source = "no_email"
             print("❌ aucun email trouvé")
         time.sleep(delay * 0.5)
 
@@ -396,14 +444,8 @@ def enrich_hunter(
     if overflow:
         print(f"   ⏭   {len(overflow)} domaine(s) au-delà du plafond → "
               f"{'pattern' if use_pattern else 'no_email'} (quota préservé).")
-        for c in overflow:
-            domain = _domain(c.website)
-            if use_pattern and domain:
-                c.contact_email      = guess_email(domain)
-                c.email_source       = "pattern"
-                c.email_alternatives = generate_alternatives(domain, exclude=c.contact_email)
-            elif not use_pattern:
-                c.email_source = "no_email"
+        for domain in overflow:
+            _fill(by_domain[domain], None)
 
     if use_pattern:
         for c in companies:
@@ -414,6 +456,6 @@ def enrich_hunter(
                     c.email_source       = "pattern"
                     c.email_alternatives = generate_alternatives(domain, exclude=c.contact_email)
 
-    print(f"   → {found}/{len(to_query)} via Hunter · {pattern_fallback} pattern · "
+    print(f"   → {found}/{len(to_query)} domaine(s) via Hunter · {pattern_fallback} pattern · "
           f"{hunter.calls} appels API · {len(overflow)} hors budget")
 

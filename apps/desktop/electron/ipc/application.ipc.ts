@@ -113,12 +113,15 @@ export function registerApplicationHandlers(): void {
     const { campaignId } = validate(CampaignIdSchema, payload);
     assertAiReady();
     // Les pré-requis CV (sélectionné + analysé) sont validés dans enqueueGeneration.
-    const { enqueued } = await enqueueGeneration(campaignId);
-    if (enqueued === 0) {
+    const { enqueued, skippedUnverified } = await enqueueGeneration(campaignId);
+    // Erreur SEULEMENT si rien à faire ET rien sauté : sinon « tout sauté (email à vérifier) »
+    // est un cas normal → on renvoie le résultat pour que l'UI affiche le message d'info.
+    if (enqueued === 0 && skippedUnverified === 0) {
       throw new Error(
         'Tous les emails ont déjà été générés — aucune entreprise sans brouillon dans cette campagne.'
       );
     }
+    return { enqueued, skippedUnverified };
   });
 
   // Régénère TOUTES les lettres régénérables de la campagne (brouillons + échecs +
@@ -127,8 +130,8 @@ export function registerApplicationHandlers(): void {
   handle('application:regenerateAll', async (payload) => {
     const { campaignId } = validate(CampaignIdSchema, payload);
     assertAiReady();
-    const { enqueued } = await enqueueGeneration(campaignId, 'regenerate');
-    return { enqueued };
+    const { enqueued, skippedUnverified } = await enqueueGeneration(campaignId, 'regenerate');
+    return { enqueued, skippedUnverified };
   });
 
   handle('application:updateDraft', (payload) => {
@@ -312,6 +315,11 @@ export function registerApplicationHandlers(): void {
     if (app && (await isOptedOut(app.contactEmail))) {
       throw new Error('Ce contact figure dans la liste « ne pas contacter » (RGPD) — relance impossible.');
     }
+    // BOUNCE-01 (B5) : ne pas générer (ni facturer) l'aperçu d'une relance vers une adresse
+    // déjà rebondie — l'envoi est de toute façon bloqué côté claim.
+    if (app?.emailBounced) {
+      throw new Error('Adresse rebondie (email mort) — relance impossible.');
+    }
     const { generateFollowUpContent } = await import('../../src/tasks/send-followup.task');
     return generateFollowUpContent(payload.id);
   });
@@ -322,7 +330,7 @@ export function registerApplicationHandlers(): void {
     const { id, subject, body } = payload as { id: string; subject: string; body: string };
 
     // FOLLOWUP-N : parité avec enqueueFollowUp — capturer l'état avant le claim,
-    // accepter 1ʳᵉ relance (SENT) ET suivantes (FOLLOWED_UP > 7 j), et SURTOUT
+    // accepter 1ʳᵉ relance (SENT) ET suivantes (FOLLOWED_UP > 10 j), et SURTOUT
     // incrémenter followUpCount (sinon le plafond MAX_FOLLOWUPS est contourné et la
     // candidature reçoit des relances auto supplémentaires).
     const before = await prisma.application.findUnique({
@@ -332,20 +340,21 @@ export function registerApplicationHandlers(): void {
     if (!before) throw new Error('Candidature introuvable.');
     const restore = { status: before.status, followUpSentAt: before.followUpSentAt, followUpCount: before.followUpCount };
 
-    const sevenDaysAgo = new Date(Date.now() - 7 * 864e5);
+    const tenDaysAgo = new Date(Date.now() - 10 * 864e5);
     const claimed = await prisma.application.updateMany({
       where: {
         id,
         repliedAt: null,
+        emailBounced: false, // BOUNCE-01 : jamais de relance sur une adresse rebondie (parité enqueueFollowUp).
         followUpCount: { lt: appService.MAX_FOLLOWUPS },
         OR: [
           { status: 'SENT', followUpSentAt: null },
-          { status: 'FOLLOWED_UP', followUpSentAt: { lt: sevenDaysAgo } },
+          { status: 'FOLLOWED_UP', followUpSentAt: { lt: tenDaysAgo } },
         ],
       },
       data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },
     });
-    if (claimed.count === 0) throw new Error('Candidature non éligible à une relance (déjà relancée récemment ou plafond atteint).');
+    if (claimed.count === 0) throw new Error('Candidature non éligible à une relance (déjà relancée récemment, adresse rebondie, ou plafond atteint).');
 
     const app = await appService.getApplication(id);
     if (!app) throw new Error('Candidature introuvable.');
@@ -404,6 +413,8 @@ export function registerApplicationHandlers(): void {
         where: { id },
         data: { followUpMessageId: messageId },
       });
+      // THREAD-01 : la relance figure comme message sortant dans le fil.
+      await appService.recordOutboundMessage(id, body, messageId);
     } catch (err) {
       if (!smtpSent) {
         // L'email n'est pas parti : on rend le crédit de quota consommé + rollback du claim
@@ -429,17 +440,45 @@ export function registerApplicationHandlers(): void {
     const profile = await getProfile();
     if (!profile?.emailSender) throw new Error('Email de profil non configuré.');
 
+    // REPLY-IN : on répond à l'adresse d'où le recruteur a ÉCRIT (replyFromEmail), qui peut
+    // différer de l'email scrapé d'origine. Repli sur contactEmail si non captée (vieux fils).
+    const replyTo = app.replyFromEmail || app.contactEmail;
+
     // BUG-04 fix : threading — la réponse s'accroche au fil de l'email initial.
     // Le recruteur a répondu à l'email de candidature (messageId) ; on repasse
     // ce même Message-ID pour que la réponse s'imbrique dans le même fil.
-    await sendApplicationEmail({
+    const outMessageId = await sendApplicationEmail({
       fromName: `${profile.firstName} ${profile.lastName}`,
       fromEmail: profile.emailSender,
-      to: app.contactEmail,
+      to: replyTo,
       subject: `Re: ${app.subject}`,
       body,
       inReplyTo: app.messageId ?? undefined,
       references: app.messageId ?? undefined,
     });
+
+    // REPLY-OUT : email parti → on trace ma réponse (contenu + date) pour l'afficher
+    // dans le fil et calculer le badge Répondu / En attente. Après un envoi SMTP réussi.
+    await prisma.application.update({
+      where: { id },
+      data: { myReplyContent: body, myRepliedAt: new Date() },
+    });
+    // THREAD-01 : consigner le message sortant dans le fil de conversation.
+    await appService.recordOutboundMessage(id, body, outMessageId);
+  });
+
+  // THREAD-01 : fil de conversation complet d'une candidature.
+  handle('application:getThread', async (payload) => {
+    validate(IdSchema, payload);
+    return appService.getThread(payload.id);
+  });
+
+  // REMIND-01 : pose/efface un rappel sur une candidature.
+  handle('application:setRemindAt', async (payload) => {
+    validate(IdSchema, payload);
+    const { id, remindAt } = payload as { id: string; remindAt: string | null };
+    const at = remindAt ? new Date(remindAt) : null;
+    if (at && Number.isNaN(at.getTime())) throw new Error('Date de rappel invalide.');
+    await appService.setRemindAt(id, at);
   });
 }

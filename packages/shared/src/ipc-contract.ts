@@ -337,6 +337,13 @@ export interface Application {
   sentAt: string | null;
   repliedAt: string | null;
   replyContent: string | null;
+  // REPLY-IN : adresse réelle d'où le recruteur a répondu (peut différer de contactEmail).
+  replyFromEmail: string | null;
+  // REPLY-OUT : ma réponse au recruteur (contenu + date). Alimente le fil et le badge.
+  myReplyContent: string | null;
+  myRepliedAt: string | null;
+  // REMIND-01 : rappel/snooze — ressort dans « À traiter » quand la date est passée.
+  remindAt: string | null;
   errorMessage: string | null;
   // UX-10 : note de suivi saisie manuellement.
   followUpNote: string | null;
@@ -387,6 +394,13 @@ export interface GlobalStats {
   // UX-4v3 : compteurs de statuts manuels post-réponse.
   totalInterviewed: number;
   totalOffers: number;
+  // STATS-FU : retour après relance. followUpSent = relances envoyées ;
+  // followUpReplied = celles ayant reçu une réponse ensuite ; rate = %.
+  followUpSent: number;
+  followUpReplied: number;
+  followUpReplyRate: number;
+  // STATS-SENT : répartition du sentiment des réponses reçues (heuristique).
+  sentiment: { positive: number; neutral: number; rejection: number };
   // ANA-1v3 : entonnoir de conversion.
   funnelStats: {
     targeted: number;
@@ -396,6 +410,39 @@ export interface GlobalStats {
     interviewed: number;
     offers: number;
   };
+}
+
+// COST-01 : agrégat de coût des appels IA (dollars US).
+export interface AiCostStats {
+  totalUsd: number;
+  totalTokens: number;
+  last30dUsd: number;
+  emailCount: number;       // nb de mails générés (initiaux + relances)
+  avgUsdPerEmail: number;   // coût moyen par mail
+  byKind: { kind: string; count: number; usd: number; tokens: number }[];
+  // COST-02 : coût ESTIMÉ par campagne = volume réellement envoyé (mails + relances comptés
+  // dans les candidatures) × coût moyen réel par mail. Marche pour le passé comme le futur.
+  byCampaign: { campaignId: string; name: string; emails: number; followups: number; usd: number }[];
+}
+
+// SEARCH-01 : résultat de recherche plein-texte globale.
+export interface SearchHit {
+  applicationId: string;
+  campaignId: string;
+  companyName: string;
+  subject: string;
+  status: ApplicationStatus;
+  snippet: string;          // extrait autour du terme trouvé
+  field: 'entreprise' | 'objet' | 'candidature' | 'réponse' | 'ma réponse' | 'note';
+}
+
+// THREAD-01 : un message du fil de conversation.
+export interface ThreadMessage {
+  id: string;
+  direction: 'IN' | 'OUT';
+  body: string;
+  fromEmail: string | null;
+  createdAt: string;
 }
 
 // --- Entrées (payloads de création / mise à jour) ---------------------------
@@ -628,6 +675,12 @@ export interface IpcRequests {
   'scraping:saveConfig': { req: ScrapingConfig; res: void };
   // SCRAPE-06 : re-enrichissement d'un CSV existant.
   'scraping:enrichCsv': { req: { csvPath: string; config: ScrapingConfig }; res: void };
+  // LEADS-UPDATE : « Mettre à jour le CSV » depuis la page Leads, restreint aux leads affichés
+  // (keys) avec la portée choisie. keys vide/absent = tout le master.
+  'scraping:updateLeadsCsv': {
+    req: { keys?: string[]; scope: 'missing' | 'missing_bounced' | 'all' };
+    res: { ok: true } | { ok: false; reason: string };
+  };
   // Import LinkedIn Sales Navigator (CSV externe). Saute la collecte, charge le CSV,
   // enrichit via le pipeline standard (MX, crawl, Hunter, pattern, scoring).
   // Import d'un CSV d'entreprises (export Sales Nav / Apollo / Wiza / CSV maison) →
@@ -650,6 +703,8 @@ export interface IpcRequests {
   // LEADS-VIEW : consultation / suppression des leads scrapés (master CSV).
   'scraping:listLeads': { req: void; res: LeadRow[] };
   'scraping:deleteLeads': { req: { keys: string[] }; res: { remaining: number } };
+  // Export CSV des leads (tous ou une sélection de `keys`) vers un fichier choisi par l'utilisateur.
+  'scraping:exportLeadsCsv': { req: { keys?: string[] }; res: { path: string; count: number } | null };
   // SECTOR-AUTO : pré-remplit une campagne avec les leads du master filtrés par
   // secteur + lieu, en excluant ceux déjà présents dans une autre campagne, plafonné.
   'scraping:importLeadsToCampaign': {
@@ -693,9 +748,10 @@ export interface IpcRequests {
   // UX-S9 : répondre à un recruteur depuis la page Réponses.
   'application:replyToRecruiter': { req: { id: string; body: string }; res: void };
   // Enfile la génération IA des emails pour les entreprises sans candidature.
-  'application:generate': { req: { campaignId: string }; res: void };
+  // skippedUnverified : entreprises sautées car email « à vérifier » (économie de tokens).
+  'application:generate': { req: { campaignId: string }; res: { enqueued: number; skippedUnverified: number } };
   // Régénère toutes les lettres régénérables (brouillons/échecs/sans lettre) — écrase.
-  'application:regenerateAll': { req: { campaignId: string }; res: { enqueued: number } };
+  'application:regenerateAll': { req: { campaignId: string }; res: { enqueued: number; skippedUnverified: number } };
   // Modifie l'objet/le corps d'un brouillon avant envoi.
   'application:updateDraft': { req: { id: string; subject: string; body: string }; res: Application };
   // Enfile l'envoi SMTP d'une candidature (ou de toutes les DRAFT).
@@ -720,6 +776,10 @@ export interface IpcRequests {
   'application:sendTestAll': { req: { campaignId: string }; res: { sent: number; total: number } };
   // UX-4v3 : définit le statut manuel post-réponse.
   'application:setManualStatus': { req: { id: string; manualStatus: string | null }; res: void };
+  // REMIND-01 : pose/efface un rappel (« me rappeler le … »). null = effacer.
+  'application:setRemindAt': { req: { id: string; remindAt: string | null }; res: void };
+  // DEDUP-01 : entreprises présentes dans PLUSIEURS campagnes actives (même domaine/email).
+  'company:crossCampaignDuplicates': { req: void; res: { key: string; label: string; campaigns: { id: string; name: string }[] }[] };
   // UX-5v3 : liste toutes les candidatures nécessitant une action.
   'application:listActionRequired': { req: void; res: Application[] };
   // FM-08 : suivi d'entretien.
@@ -751,6 +811,8 @@ export interface IpcRequests {
   'settings:setLaunchAtLogon': { req: { enabled: boolean }; res: void };
   // UX-11 : intervalle de polling IMAP configurable.
   'settings:setImapPollInterval': { req: { minutes: number }; res: void };
+  // FM-02 : plafond manuel d'envois/jour (null = retour au ramp-up auto).
+  'settings:setDailySendLimit': { req: { limit: number | null }; res: void };
   // INT-3 : modèle IA configurable.
   'settings:setAiModel': { req: { model: string }; res: void };
   // SEC-N1 : effacer la clé OpenAI.
@@ -800,12 +862,20 @@ export interface IpcRequests {
 
   // ANA-1 : statistiques globales pour le tableau de bord.
   'stats:getGlobal': { req: void; res: GlobalStats };
+  // COST-01 : coût des appels IA (cumulé, 30 j, par mail, par type).
+  'stats:getAiCost': { req: void; res: AiCostStats };
   // FM-02 : comparaison A/B par campagne — taux de réponse par variante.
   'stats:getAbTest': { req: { campaignId?: string }; res: { campaignId: string; campaignName: string; variantA: { sent: number; replied: number; replyRate: number }; variantB: { sent: number; replied: number; replyRate: number } }[] };
   // ANA-2v3 : activité par jour avec sélecteur de plage temporelle.
   'stats:getActivityByDay': { req: { days?: number }; res: { date: string; sent: number; replied: number }[] };
   // ANA-4v3 : tableau comparatif des campagnes.
   'stats:getCampaignComparison': { req: void; res: { id: string; name: string; sent: number; replied: number; replyRate: number; avgDays: number | null }[] };
+
+  // SEARCH-01 : recherche PLEIN-TEXTE dans les contenus (corps des candidatures, réponses,
+  // ma réponse, notes, messages du fil) — distinct de search:global (nav nom/objet).
+  'search:content': { req: { q: string }; res: SearchHit[] };
+  // THREAD-01 : fil de conversation complet d'une candidature (messages ordonnés).
+  'application:getThread': { req: { id: string }; res: ThreadMessage[] };
 
   // Justificatif France Travail : PDF du relevé des candidatures envoyées.
   'report:franceTravailPdf': { req: { from?: string; to?: string; detailCap?: number }; res: { path: string; count: number } | null };

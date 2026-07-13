@@ -11,7 +11,7 @@ import {
   markFailed,
 } from '../modules/application/application.service';
 import { prisma } from '../lib/prisma';
-import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
+import { tryIncrementDailySend, refundDailySend } from '../lib/secrets';
 import { isOptedOut } from '../modules/optout/optout.service';
 
 /**
@@ -147,10 +147,15 @@ export async function enqueueSend(applicationId: string, force = false): Promise
       // consommer un slot d'attente de 8 s si la limite est déjà atteinte.
       const allowed = await tryIncrementDailySend();
       if (!allowed) {
-        await markFailed(
-          applicationId,
-          `Limite quotidienne d'envois atteinte (${getDailySendLimit()} emails/jour) — réessayez demain.`
-        );
+        // FM-02 : limite quotidienne atteinte — ce n'est PAS un échec, juste un report.
+        // On remet en DRAFT (renvoyable demain / au prochain run) au lieu de FAILED,
+        // sinon ces candidatures polluent l'onglet « À traiter » comme de faux échecs.
+        // Le quota n'a pas été consommé (tryIncrementDailySend a renvoyé false) → rien à
+        // rembourser. On efface le messageId provisoire pour laisser un DRAFT propre.
+        await prisma.application.update({
+          where: { id: applicationId },
+          data: { status: 'DRAFT', messageId: null, errorMessage: null },
+        });
         await refreshCampaignStatus(app.campaignId);
         return;
       }

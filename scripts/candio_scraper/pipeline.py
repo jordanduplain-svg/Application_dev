@@ -25,7 +25,7 @@ from .infra import (
     PersistentCache, ScrapingCheckpoint, ProxyPool, LRUPageCache,
     RateLimiter, Deadline, _ThreadSafeFetcher, log,
 )
-from .constants import DEFAULT_SOURCES, DIRECTORY_SOURCES, EmailSource
+from .constants import DEFAULT_SOURCES, DIRECTORY_SOURCES, EmailSource, UNVERIFIED_EMAIL_SOURCES
 from .sources import SCRAPERS
 from .enrich import (
     filter_mx, enrich_catch_all, enrich_web_crawl,
@@ -41,6 +41,19 @@ from .io_csv import (
     load_exclude_domains, filter_known_domains,
     CSV_FIELDNAMES,   # B2-5 : source unique pour les colonnes CSV
 )
+
+
+def _load_enrich_keys(path: str) -> set:
+    """LEADS-UPDATE : lit le fichier de clés (une « nom|email|site » par ligne) écrit
+    par l'app quand l'utilisateur ne met à jour QUE les leads affichés. Vide/absent →
+    set() = tout le CSV. Best-effort : un fichier illisible ne bloque pas le run."""
+    if not path:
+        return set()
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {line.strip().lower() for line in f if line.strip()}
+    except OSError:
+        return set()
 
 
 def _run_collect(
@@ -350,6 +363,10 @@ class RunConfig:
     # ── Modes spéciaux ──────────────────────────────────────────────────────────
     enrich_only:          bool            = False
     enrich_csv:           str             = ""
+    # LEADS-UPDATE : sous-ensemble de leads à ré-enrichir (clés format UI « nom|email|site »,
+    # minuscule) + portée. Vide = tout le CSV (comportement historique).
+    enrich_keys:          set             = field(default_factory=set)
+    enrich_scope:         str             = "missing"   # missing | missing_bounced | all
     # LinkedIn Sales Navigator import : CSV à charger en tant que sources directes.
     linkedin_csv:         str             = ""
 
@@ -438,6 +455,14 @@ class EmailEnrichConfig:
     # Plafond de recherches Hunter.io pour ce run (miroir de RunConfig.hunter_max_searches ;
     # sans ce champ, _run_email_enrich plantait dès que Hunter était activé).
     hunter_max_searches: int = 20
+    # LEADS-UPDATE : True pour un run --enrich-only (« Mettre à jour le CSV » depuis l'app).
+    # skip_no_email a un sens différent ici : en scraping frais, il évite d'AJOUTER un
+    # nouveau lead sans email réel au CSV. En ré-enrichissement, les entreprises ciblées
+    # sont DÉJÀ dans le master — les exclure de la sortie ne les supprime pas, ça les rend
+    # juste invisibles à merge_into_master, qui ne peut alors JAMAIS effacer un ancien email
+    # non fiable (pattern/catch-all…) resté sans meilleur remplaçant : la ligne garde son
+    # adresse fantaisiste pour toujours. On désactive donc ce retrait en enrich_only.
+    enrich_only: bool = False
 
 
 def _run_email_enrich(
@@ -464,8 +489,9 @@ def _run_email_enrich(
     # ET n'a pas branché de validator, tout email « pattern » sera jeté en sortie
     # → on n'en génère AUCUN (économise les boucles + log moins bruyant). Hunter
     # garde le droit de générer son pattern interne car il s'appuie sur des emails
-    # vérifiés du même domaine.
-    _pattern_useful = cfg.use_pattern and not (cfg.skip_no_email and not cfg.has_validator)
+    # vérifiés du même domaine. En enrich_only, skip_no_email n'exclut plus rien
+    # (cf. plus bas) → le pattern généré ici n'est plus jeté, donc utile.
+    _pattern_useful = cfg.use_pattern and not (cfg.skip_no_email and not cfg.has_validator and not cfg.enrich_only)
 
     # Phase 4 : crawler web
     if cfg.use_web_crawl:
@@ -591,10 +617,20 @@ def _run_email_enrich(
             extra = f" (dont {count_v} vérifiés SMTP)" if count_v else ""
             print(f"\n⚪  Pattern fallback final : {count_p} emails rh@… générés{extra}")
 
-    # skip_no_email : exclure les entreprises sans email réel
-    if cfg.skip_no_email:
+    # skip_no_email : exclure les entreprises sans email réel.
+    # BUG FIX : ne testait que email_source == "pattern" — "linkedin_pattern" et
+    # "catch_all" ont eux aussi un email GÉNÉRÉ (jamais confirmé) et passaient au
+    # travers du filtre. On exclut maintenant TOUTE source de UNVERIFIED_EMAIL_SOURCES
+    # (même liste que le garde-fou d'envoi côté app — packages/shared/ipc-contract.ts).
+    # BUG FIX (LEADS-UPDATE) : PAS en enrich_only — ces entreprises sont déjà dans le
+    # master ; les retirer d'ici les rend invisibles à merge_into_master, qui ne peut
+    # alors JAMAIS effacer un ancien email non fiable resté sans meilleur remplaçant
+    # (la ligne garde silencieusement son adresse fantaisiste pour toujours, « Mettre
+    # à jour le CSV » semble ne rien faire). En scraping frais, le retrait reste utile
+    # (on n'ajoute pas un nouveau lead sans email réel au CSV).
+    if cfg.skip_no_email and not cfg.enrich_only:
         before = len(companies)
-        kept = [c for c in companies if c.contact_email and c.email_source not in ("pattern", "")]
+        kept = [c for c in companies if c.contact_email and c.email_source not in UNVERIFIED_EMAIL_SOURCES]
         removed = before - len(kept)
         companies[:] = kept
         if removed:
@@ -1266,9 +1302,39 @@ def run(cfg: RunConfig) -> None:
         elif cfg.enrich_only and cfg.enrich_csv:
             print(f"\n🔄  Mode re-enrichissement — chargement de {cfg.enrich_csv}…")
             all_companies = load_companies_from_csv(cfg.enrich_csv)
-            all_companies = [c for c in all_companies
-                             if not c.contact_email or c.email_source in ("pattern", "")]
-            print(f"   → {len(all_companies)} entreprises à ré-enrichir.")
+            # LEADS-UPDATE : si l'app a passé un sous-ensemble (leads affichés/filtrés),
+            # ne garder QUE ces leads. Clé reconstruite au format UI « nom|email|site »
+            # (cf. scraping.ipc.ts listLeads), minuscule + strip pour matcher exactement.
+            if cfg.enrich_keys:
+                def _ui_key(c) -> str:
+                    return (f"{(c.name or '').strip()}|{(c.contact_email or '').strip()}"
+                            f"|{(c.website or '').strip()}").lower()
+                all_companies = [c for c in all_companies if _ui_key(c) in cfg.enrich_keys]
+            # LEADS-UPDATE : portée du ré-enrichissement (défaut historique = missing).
+            # Sources « non fiables » (devinées, bloquées à l'envoi) = doivent AUSSI être
+            # re-cherchées, pas seulement les emails vides. Doit rester synchro avec
+            # UNVERIFIED_EMAIL_SOURCES côté app (packages/shared/src/ipc-contract.ts).
+            UNVERIFIED = ("pattern", "linkedin_pattern", "pattern_nominative", "catch_all", "")
+            scope = cfg.enrich_scope or "missing"
+            def _needs_enrich(c) -> bool:
+                missing = (not c.contact_email) or c.email_source in UNVERIFIED
+                if scope == "all":
+                    return True
+                if scope == "missing_bounced":
+                    return missing or c.bounced == "1"
+                return missing
+            all_companies = [c for c in all_companies if _needs_enrich(c)]
+            # LEADS-UPDATE : un lead REBONDI (adresse morte) ou à email DEVINÉ (source non
+            # fiable) a déjà une adresse → les phases email le sauteraient (elles ne traitent
+            # que « sans email »). On vide son email en mémoire pour qu'il soit re-crawlé et
+            # qu'on lui cherche une VRAIE adresse. Fusion : un email de source réelle
+            # (hunter/web_crawl) a un meilleur rang que « pattern » → merge_into_master
+            # l'accepte ; un lead bounced est traité en plus par la règle dédiée (cf. io_csv).
+            for c in all_companies:
+                if c.bounced == "1" or c.email_source in UNVERIFIED:
+                    c.contact_email = ""
+                    c.email_source = ""
+            print(f"   → {len(all_companies)} entreprises à ré-enrichir (portée : {scope}).")
             resume_phase = 3
         elif cfg.resume and resume_phase > 0:
             all_companies = all_companies_resumed
@@ -1333,14 +1399,22 @@ def run(cfg: RunConfig) -> None:
                 )
             # 2. Hunter en complément pour les domaines encore introuvables (si clé dispo)
             if hunter:
+                # Garde-fou : Hunter devine le domaine à partir du NOM seul et se
+                # trompe souvent (QAPA→qapa.ru, HUNTX PHARMA→sunpharma.com…). On
+                # réutilise le même validateur nom↔domaine que la résolution DNS
+                # → on rejette un domaine dont le TLD est implausible ou dont le nom
+                # ne ressemble pas assez à l'entreprise, au lieu de l'accepter aveuglément.
+                from .domain_resolve import _domain_matches_name
                 still_no_domain = [c for c in all_companies if not c.website]
                 if still_no_domain:
                     print(f"   🔍  Hunter.io : {len(still_no_domain)} domaines restants…")
                     for c in still_no_domain:
                         domain = hunter.find_domain_by_name(c.name)
-                        if domain:
+                        if domain and _domain_matches_name(c.name, domain, country_hint="fr"):
                             c.website = f"https://{domain}"
                             print(f"   ✔  {c.name[:35]:35s} → {domain}")
+                        elif domain:
+                            print(f"   ✗  {c.name[:35]:35s} → {domain} (rejeté : ne correspond pas)")
                         time.sleep(cfg.delay)
 
             # ── Dédup inter-campagnes — 2e passe APRÈS résolution de domaine ──────
@@ -1392,6 +1466,7 @@ def run(cfg: RunConfig) -> None:
                 # P2-9 : validation SMTP légère opt-in (RunConfig.smtp_light_verify).
                 smtp_light_verify=getattr(cfg, "smtp_light_verify", False),
                 hunter_max_searches=cfg.hunter_max_searches,
+                enrich_only=cfg.enrich_only,
             )
             _run_email_enrich(
                 companies=all_companies, fetcher=fetcher,
@@ -1409,6 +1484,19 @@ def run(cfg: RunConfig) -> None:
             checkpoint.save(4, all_companies)
             if crawl_ledger.enabled:
                 print(f"🧭  Registre de crawl : {crawl_ledger.summary()}")
+
+            # B4 : bilan LISIBLE de « Mettre à jour le CSV ». Sans ça, un run sans nouvelle
+            # adresse se terminait par un « ✅ terminé » muet → l'utilisateur croyait la
+            # fonction cassée. On dit combien d'entreprises ont un email, et on ALERTE si
+            # aucune source réseau n'était active (crawl coupé ET Hunter sans clé) → rien à chercher.
+            if cfg.enrich_only:
+                with_email = sum(1 for c in all_companies if c.contact_email)
+                print(f"\n🔎  Enrichissement : {with_email}/{len(all_companies)} entreprise(s) affichée(s) ont un email.")
+                if not use_web_crawl and not (hunter and use_hunter):
+                    print("⚠   Aucune source d'email active : le crawl web est désactivé ET Hunter n'a pas de clé "
+                          "→ rien n'a pu être recherché. Réactive le crawl (Réglages) ou ajoute une clé Hunter.")
+                elif not use_web_crawl:
+                    print("ℹ   Crawl web désactivé — seul Hunter.io a été interrogé (couverture limitée sur les PME).")
 
         # ── Phases 6-7 : métadonnées + validation ────────────────────────────
         # A9 : joindre le thread Clearbit si il tournait en background.
@@ -1597,6 +1685,8 @@ def _prepare_run_kwargs(args: argparse.Namespace) -> RunConfig:
         whitelist_domains=whitelist_set,
         enrich_only=args.enrich_only,
         enrich_csv=args.enrich_csv,
+        enrich_keys=_load_enrich_keys(args.enrich_keys_file),
+        enrich_scope=args.enrich_scope,
         linkedin_csv=args.linkedin_csv,
         max_runtime_min=args.max_runtime,
         crawl_budget_sec=args.crawl_budget,
@@ -1754,6 +1844,12 @@ Sources : wttj · indeed · kompass · pj · apec · cadremploi
                         help="Mode re-enrichissement : charge --enrich-csv, relance uniquement les phases email")
     parser.add_argument("--enrich-csv", default="",
                         help="Chemin CSV source pour --enrich-only")
+    # LEADS-UPDATE : restreindre le ré-enrichissement aux leads affichés + portée.
+    parser.add_argument("--enrich-keys-file", default="",
+                        help="Fichier texte (une clé « nom|email|site » par ligne) : ne ré-enrichit QUE ces leads")
+    parser.add_argument("--enrich-scope", default="missing",
+                        choices=["missing", "missing_bounced", "all"],
+                        help="Portée du ré-enrichissement : sans email (missing), + rebondis (missing_bounced), tous (all)")
     parser.add_argument("--linkedin-csv", default="", metavar="PATH",
                         help=("Import CSV LinkedIn Sales Navigator (ou export tiers : Evaboot, "
                               "PhantomBuster, Apollo, Wiza…). Détection flexible des colonnes. "

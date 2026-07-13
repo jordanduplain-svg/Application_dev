@@ -13,6 +13,8 @@ export interface InboxMessage {
   from: string;
   subject: string;
   date: Date;
+  // THREAD-01 : Message-ID propre du message (dédup des entrants persistés en fil).
+  messageId: string | null;
   inReplyTo: string | null;
   // BUG-2 : chaîne References (threading) — testée en plus d'In-Reply-To au matching.
   references: string | null;
@@ -40,6 +42,16 @@ const BOUNCE_SUBJECT_RE =
 // Regex pour extraire le Message-ID original depuis le corps du NDR.
 const BOUNCED_MID_RE = /message-id:\s*(<[^>\s]+>)/i;
 
+// BOUNCE-SOFT : un serveur émetteur (Gmail…) qui n'arrive pas à remettre un mail réessaie
+// ~48 h et envoie une notif de DIFFÉRÉ à chaque tentative — « Delivery Status Notification
+// (Delay) », DSN `Action: delayed` / `Status: 4.x.x`. L'adresse n'est PAS morte : le mail
+// peut encore passer. Il ne faut donc PAS marquer la candidature rebondie sur un différé,
+// sinon un envoi qui finit par aboutir est flaggé « email mort » à tort (et exclu des
+// relances). On ne retient un VRAI rebond que sur un échec DÉFINITIF (5.x.x / Action: failed).
+const DSN_PERMANENT_RE = /action:\s*failed|status:\s*5\.\d/i;
+const DSN_DELAYED_RE =
+  /action:\s*delayed|status:\s*4\.\d|\(delay(?:ed)?\)|\bdelayed\b|will (?:retry|keep trying)|temporar(?:y|ily)|message delayed|retard(?:é)?|différé/i;
+
 // BOUNCE-FALLBACK : un NDR « adresse introuvable » (rejet immédiat au RCPT TO, le cas
 // typique d'un email pattern/deviné inexistant) ne recopie SOUVENT PAS le Message-ID
 // original dans son corps — contrairement à un NDR différé (boîte pleine), qui renvoie
@@ -54,13 +66,22 @@ function extractCandidateEmails(text: string): string[] {
   return [...new Set(matches.map((e) => e.toLowerCase()))];
 }
 
-function classifyBounce(
+// BOUNCE-01 : exporté pour test unitaire (soft vs hard). Pas d'effet de bord.
+export function classifyBounce(
   from: string,
   subject: string,
   text: string
 ): { isBounce: boolean; bouncedMessageId: string | null; bouncedCandidateEmails: string[] } {
-  const isBounce = BOUNCE_FROM_RE.test(from) || BOUNCE_SUBJECT_RE.test(subject);
-  if (!isBounce) return { isBounce: false, bouncedMessageId: null, bouncedCandidateEmails: [] };
+  const looksLikeDsn = BOUNCE_FROM_RE.test(from) || BOUNCE_SUBJECT_RE.test(subject);
+  if (!looksLikeDsn) return { isBounce: false, bouncedMessageId: null, bouncedCandidateEmails: [] };
+
+  // BOUNCE-SOFT : différé sans échec définitif → l'émetteur réessaie encore, ce n'est PAS
+  // (encore) un rebond. On attend l'échec permanent (5.x.x / failed) ou l'abandon final.
+  const haystack = `${subject}\n${text}`;
+  if (DSN_DELAYED_RE.test(haystack) && !DSN_PERMANENT_RE.test(haystack)) {
+    return { isBounce: false, bouncedMessageId: null, bouncedCandidateEmails: [] };
+  }
+
   const match = BOUNCED_MID_RE.exec(text);
   return {
     isBounce: true,
@@ -225,6 +246,8 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
                 from,
                 subject,
                 date: parsed.date ?? new Date(),
+                // THREAD-01 : Message-ID propre du message reçu → dédup des entrants au polling.
+                messageId: (parsed.messageId as string | undefined) ?? null,
                 inReplyTo: (parsed.inReplyTo as string | null) ?? null,
                 references,
                 text,

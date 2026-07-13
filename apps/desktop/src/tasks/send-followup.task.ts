@@ -2,7 +2,7 @@ import { taskRunner } from '../lib/task-runner';
 import { sendApplicationEmail } from '../lib/mailer';
 import { getProfile } from '../modules/profile/profile.service';
 import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
-import { getApplication, MAX_FOLLOWUPS } from '../modules/application/application.service';
+import { getApplication, MAX_FOLLOWUPS, recordOutboundMessage } from '../modules/application/application.service';
 import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
 import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
@@ -59,11 +59,15 @@ export async function generateFollowUpContent(
     app.companyName,
     null,
     cvParsed,
-    profile
+    profile,
+    undefined, undefined, undefined,
+    { kind: 'followup', campaignId: app.campaignId }, // COST-02 : relance rattachée à la campagne
   );
 
   return {
-    subject: `Relance : ${app.subject}`,
+    // THREAD-02 : « Re: » (pas « Relance : ») → la relance se regroupe dans le fil de la
+    // candidature partout, Gmail compris (dont la vue conversation est sensible à l'objet).
+    subject: `Re: ${app.subject}`,
     body: generated.body,
   };
 }
@@ -90,16 +94,17 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       const restore = before; // alias lisible pour les rollbacks
 
       // Claim atomique : accepte la 1ʳᵉ relance (SENT) ET les suivantes (FOLLOWED_UP
-      // dont la dernière relance date de + de 7 j), sans réponse et sous le plafond.
-      const sevenDaysAgo = new Date(Date.now() - 7 * 864e5);
+      // dont la dernière relance date de + de 10 j), sans réponse et sous le plafond.
+      const tenDaysAgo = new Date(Date.now() - 10 * 864e5);
       const claimed = await prisma.application.updateMany({
         where: {
           id: applicationId,
           repliedAt: null,
+          emailBounced: false, // BOUNCE-01 : jamais de relance sur une adresse rebondie.
           followUpCount: { lt: MAX_FOLLOWUPS },
           OR: [
             { status: 'SENT', followUpSentAt: null },
-            { status: 'FOLLOWED_UP', followUpSentAt: { lt: sevenDaysAgo } },
+            { status: 'FOLLOWED_UP', followUpSentAt: { lt: tenDaysAgo } },
           ],
         },
         data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },
@@ -143,7 +148,7 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       const allowed = await tryIncrementDailySend();
       if (!allowed) {
         // Plafond du jour atteint → on restaure l'état d'avant : redevient éligible
-        // (le quota se libère demain ; le claim 7 j reste cohérent).
+        // (le quota se libère demain ; le claim 10 j reste cohérent).
         await prisma.application.update({
           where: { id: applicationId },
           data: {
@@ -170,10 +175,13 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
           app.companyName,
           null,
           cvParsed,
-          profile  // BUG-M1 fix : coordonnées du candidat injectées dans le prompt
+          profile,  // BUG-M1 fix : coordonnées du candidat injectées dans le prompt
+          undefined, undefined, undefined,
+          { kind: 'followup', campaignId: app.campaignId }, // COST-02 : relance rattachée à la campagne
         );
 
-        const relanceSubject = `Relance : ${app.subject}`;
+        // THREAD-02 : « Re: » (pas « Relance : ») → regroupement fiable dans le fil, Gmail compris.
+        const relanceSubject = `Re: ${app.subject}`;
         // BUG-04 fix : passer le Message-ID original pour que la relance
         // apparaisse dans le même fil (In-Reply-To + References).
         const messageId = await sendApplicationEmail({
@@ -192,6 +200,8 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
           where: { id: applicationId },
           data: { followUpMessageId: messageId },
         });
+        // THREAD-01 : la relance auto figure comme message sortant dans le fil.
+        await recordOutboundMessage(applicationId, generated.body, messageId);
 
         await refreshCampaignStatus(app.campaignId);
       } catch (err) {

@@ -83,6 +83,8 @@ export interface PitchPromptInput {
   dispoInstr: string;       // instruction de reprise de la disponibilité
   safePrompt: string;       // directives candidat (donnée, pas instruction)
   cvJson: string;           // CV sérialisé JSON
+  opening: string;          // ANTI-CLONE : directive d'ouverture tirée au sort (cf. pickLetterVariation)
+  projection: string;       // ANTI-CLONE : forme de la projection §3 tirée au sort
 }
 
 /**
@@ -138,46 +140,64 @@ SALUTATION : si un destinataire est fourni ET que son genre est ÉVIDENT d'aprè
 genre (prénom mixte/ambigu) ou si aucun destinataire n'est fourni → « Bonjour, » seul. N'invente JAMAIS
 de nom et n'écris JAMAIS « Madame, Monsieur ».
 
-MENU DE RÉALISATIONS — cite 1 réalisation par défaut, 2 MAXIMUM au TOTAL dans tout le mail (jamais 3),
-la plus PERTINENTE/TRANSFÉRABLE au poste visé chez ${i.safeCompany} en premier, FIDÈLEMENT (résultat/chiffre
-+ moyens réels — outils, méthodes — + employeur EXACT). ⚠️ Ce plafond de 2 vaut au TOTAL : deux missions
-du MÊME employeur comptent déjà pour 2 — dans ce cas n'ajoute PAS un 3e exemple d'un autre employeur.
-RÈGLE ABSOLUE : une PHRASE = UNE mission. La 2e mission (même employeur OU autre) doit avoir sa PROPRE
-phrase. Préfère 1 réalisation forte et développée à 2 survolées. Mais ne
-FUSIONNE JAMAIS deux missions dans une même phrase — ne combine jamais leurs chiffres, livrables ou
-architectures (ex. un « tableau de bord X substances/Y postes » et un « reporting temps réel accidents »
-sont DEUX projets : ils peuvent coexister dans la lettre, mais CHACUN dans sa phrase, jamais soudés).
+MENU DE RÉALISATIONS — par DÉFAUT, UNE SEULE réalisation développée sur TOUTE la lettre (§1 ET §2
+confondus), la plus PERTINENTE/TRANSFÉRABLE au poste visé chez ${i.safeCompany}, FIDÈLEMENT (résultat/chiffre
++ moyens réels — outils, méthodes — + employeur EXACT). Une 2e réalisation UNIQUEMENT si la cible est du
+MÊME secteur que le projet (sinon UNE seule, développée) — JAMAIS pour « remplir ».
+⚠️ NE DÉCLINE PAS un même projet en 2 livrables dans une lettre à cible NON industrielle : un « tableau de
+bord X substances/Y postes » ET un « reporting temps réel accidents » sont DEUX livrables du même contexte
+industriel → n'en expose QU'UN (celui qui parle à la cible), laisse tomber l'autre. Ne les cite tous les
+deux QUE si la cible est elle-même industrielle.
+RÈGLE ABSOLUE : une PHRASE = UNE mission. Si (exception cible même secteur) tu en cites deux, CHACUNE dans
+sa PROPRE phrase : ne FUSIONNE JAMAIS deux missions dans une même phrase — ne combine jamais leurs chiffres,
+livrables ou architectures.
 Ne transfère/échange/invente jamais l'employeur d'une réalisation. Si le secteur de la cible diffère de
 celui de la réalisation, SUPPRIME le jargon d'origine et ne garde que la MÉCANIQUE TRANSFÉRABLE (volume,
 automatisation, temps réel, fiabilité, remplacement d'un process manuel, aide à la décision). Pour une
-cible NON industrielle (finance, retail, services, tech, conseil, public, éducation, santé), n'emploie
-PAS « substances », « postes de travail », « médecin du travail », « HSE », « TMS » : reformule en termes
-métier neutres (ex. « suivi d'indicateurs en temps réel », « automatisation d'un reporting manuel »).
+cible NON industrielle (finance, retail, services, tech, conseil, public, éducation, santé), SUPPRIME ces
+mots (ne les traduis même pas) et décris le SKILL, pas le décor : « exposition au risque chimique »,
+« risque chimique », « substances », « postes de travail », « médecin du travail », « HSE », « TMS ».
+Dis « un reporting temps réel », « la centralisation de données éparses », « l'automatisation d'un
+process manuel ». Garde le décor industriel UNIQUEMENT si la cible est elle-même industrielle.
 
-STRUCTURE — 3 paragraphes, vouvoiement. Logique VOUS → MOI → NOUS. LONGUEUR : vise 130 à 190 mots ;
-ça reste un EMAIL (lisible en ~20 secondes), ne dépasse JAMAIS ~200 mots. Concis avant tout.
-§1 ACCROCHE (Vous, 1-2 phrases) : commence par ${i.safeCompany} et un fait CONCRET tiré de la fiche
-   (activité réelle, actualité, chiffre) qui crée un lien naturel avec le poste visé. Puis, si un contrat
-   est fourni, mentionne-le naturellement. INTERDIT d'ouvrir par : « je me permets », « je vous
-   adresse/soumets ma candidature », « candidature spontanée pour le poste de », « actuellement en
-   poste/en reconversion/en recherche… je recherche », ou par soi-même. On ouvre sur EUX.
-§2 PREUVE (Moi, 2-3 phrases) : 1 réalisation par défaut, 2 au MAXIMUM (jamais 3), CHACUNE dans sa PROPRE
-   phrase, chiffrée si possible, moyens réels, rattachée à son employeur EXACT. Des faits, pas d'adjectifs
-   (« dynamique », « motivé », « rigoureux »). N'empile pas les missions : mieux vaut UNE preuve forte et
-   un peu développée que trois survolées. INTERDIT ABSOLU : fusionner deux missions en une phrase (ne mêle
-   jamais leurs chiffres/livrables/architectures), et ne dépasse JAMAIS 2 missions au total.
-   PERTINENCE > RÉCITATION : ne récite pas mécaniquement toujours les mêmes réalisations. CHOISIS dans le
-   CV LA réalisation la plus parlante pour CETTE entreprise (selon sa fiche, son secteur, le poste) et
-   développe-la ; n'ajoute une 2e que si elle apporte un angle VRAIMENT complémentaire pour cette cible.
-   Adapte l'angle au contexte (test/conformité → rigueur et fiabilité ; gros volume/contenus → structuration
-   de flux ; produit → impact métier…). Deux entreprises différentes ne doivent pas recevoir le même §2.
-   ATTAQUE VARIÉE : n'ouvre pas systématiquement le paragraphe par « Depuis [date], en alternance chez
-   [employeur], j'ai… ». Alterne d'une lettre à l'autre — attaque parfois par le RÉSULTAT (« Un bilan annuel
-   figé remplacé par un suivi temps réel : … »), parfois par le besoin comblé, parfois par la techno clé.
-§3 PROJECTION + CLÔTURE (Nous, 2-3 phrases) : UNE phrase de projection OBLIGATOIRE, du type « je pourrais
-   aider ${i.safeCompany} à [2-3 actions concrètes et utiles, tirées de la fiche et alignées au poste
-   visé] » (SANS l'amorce « concrètement »). C'est cette phrase qui déclenche les réponses : ne l'omets
-   jamais, ancre-la dans l'activité réelle de l'entreprise (aucune invention). Puis : disponibilité
+STRUCTURE — 3 paragraphes, vouvoiement. LONGUEUR : vise 130 à 190 mots ; ça reste un EMAIL (lisible en
+~20 secondes), ne dépasse JAMAIS ~200 mots. Concis avant tout. L'ORDRE interne suit l'OUVERTURE tirée
+au sort ci-dessous (ne force PAS systématiquement « l'entreprise d'abord, moi ensuite ») :
+${i.opening}
+§1 ACCROCHE (1-2 phrases, applique l'OUVERTURE ci-dessus) : crée un lien CONCRET entre la cible et le
+   candidat (activité réelle, actualité, chiffre, ou un fait du parcours). Si un contrat est fourni,
+   mentionne-le naturellement.
+   TOUCHE LÉGÈRE, PAS UN DIAGNOSTIC : l'observation sur l'entreprise tient en UNE phrase (~25 mots max),
+   pas un paragraphe d'analyse. Tu N'EXPLIQUES PAS à l'entreprise son propre métier ni son
+   secteur, et tu NE RÉCITES PAS son jargon interne (noms de produits, process, sigles métier) pour prouver
+   que tu as fait tes recherches — ça sonne « consultant qui performe », pas humain. Un humain qui écrit vite
+   effleure le contexte en quelques mots, puis passe à lui. En cas de doute, ouvre plutôt sur TOI (ton
+   travail) que sur un diagnostic de leur activité. INTERDIT, en ouverture ET n'importe où dans le §1 : « je me permets »,
+   « je vous adresse ma candidature », « je vous soumets (ma candidature) », « candidature (spontanée)
+   pour le poste de », « actuellement en poste/en reconversion/en recherche… je recherche ». INTERDIT
+   ABSOLU, quelle que soit la ponctuation (deux-points OU virgule), le pivot miroir « [fait sur
+   l'entreprise] , / : c'est exactement / précisément ce que je fais / ce sur quoi je travaille / ce
+   terrain que je cherche à rejoindre / que je couvre / là que je me positionne » — cette bascule qui
+   renvoie le fait entreprise à toi est LE tic n°1 à éviter, même reformulée. Enchaîne par une phrase
+   d'ACTION ou de preuve, pas par une formule miroir.
+§2 PREUVE (Moi, ≤ ~55 MOTS — UNE preuve DÉVELOPPÉE, jamais une phrase-fleuve qui empile tout) : mène avec
+   UNE SEULE réalisation/facette, CHOISIE pour CETTE cible. Si le CV n'offre qu'un projet (même décliné en
+   2 livrables), NE RÉCITE PAS les deux en entier pour remplir : prends LE livrable/la facette qui parle à
+   la cible, développe-le, LAISSE TOMBER l'autre. N'ajoute une 2e réalisation QUE si elle ouvre un angle
+   VRAIMENT complémentaire ET que le §2 reste sous ~55 mots (sinon UNE seule). Chiffrée, moyens réels,
+   employeur EXACT ; des faits, pas d'adjectifs (« dynamique », « motivé », « rigoureux »). INTERDIT ABSOLU :
+   fusionner deux missions en une phrase (ne mêle jamais leurs chiffres/livrables/architectures) ; chaque
+   réalisation citée reste dans sa PROPRE phrase.
+   MAPPING facette → cible : infra/monitoring/temps réel → l'automatisation d'un reporting temps réel (fin
+   de la saisie manuelle, adopté chaque jour) ; conformité/secteur réglementé → la centralisation de données
+   éparses comblant un manque de conformité ; produit/agence/data → l'adoption (conçu AVEC les utilisateurs,
+   réellement utilisé). Deux cibles différentes ne reçoivent JAMAIS le même §2.
+   ATTAQUE VARIÉE : n'ouvre pas systématiquement par « Depuis [date], en alternance chez [employeur], j'ai… ».
+   Attaque parfois par le RÉSULTAT, parfois par le besoin comblé, parfois par la techno clé.
+§3 PROJECTION + CLÔTURE (2-3 phrases, applique la PROJECTION tirée au sort) :
+   ${i.projection}
+   Ancre-la dans l'activité réelle de l'entreprise (aucune invention) ; c'est cette phrase qui déclenche
+   les réponses, ne l'omets jamais. Puis : disponibilité
    (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint. NE MENTIONNE PAS de niveau
    de langue ni de certification façon CV (« anglais C1 », « (immersion d'un an au Canada) », « B2 »…) :
    ça reste sur le CV. N'évoque une langue QUE si le poste/l'entreprise est manifestement international,
@@ -190,8 +210,10 @@ STRUCTURE — 3 paragraphes, vouvoiement. Logique VOUS → MOI → NOUS. LONGUEU
    emphase ni cliché. PARLE DE TOI À LA PREMIÈRE PERSONNE : proscris ABSOLUMENT de te désigner à la 3e
    personne — « ce profil », « ce parcours », « comment ce profil pourrait s'intégrer/répondre/s'articuler »,
    « la façon dont mon profil pourrait s'intégrer », « mettre mes compétences au service » (ça sonne détaché,
-   comme si tu parlais d'un dossier). Dis « je » / « ce que je pourrais vous apporter » / « comment je
-   pourrais contribuer ». JAMAIS de nom de métier/jargon en dur — déduis le domaine du poste/CV ; (b) une salutation
+   comme si tu parlais d'un dossier). Dis « je » / « comment je pourrais contribuer ». NE termine JAMAIS par
+   « … en savoir plus sur ce que je pourrais vous apporter » ni aucune variante de « ce que je pourrais vous
+   apporter » (tic de clôture usé) : propose l'entretien simplement (« Je reste disponible pour en échanger. »).
+   JAMAIS de nom de métier/jargon en dur — déduis le domaine du poste/CV ; (b) une salutation
    sur sa propre ligne (« Cordialement, » ou « Bien cordialement, »), avant la signature. JAMAIS de question
    décontractée (« Un échange pour en discuter ? ») ni de fin abrupte. Varie la formulation d'un email à
    l'autre — ne recopie pas l'exemple mot pour mot. NE CONVERGE PAS sur une clôture-type : évite de
@@ -213,6 +235,11 @@ RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
   mon expertise pourrait contribuer », « je serais honoré/ravi de mettre mes compétences au service de »,
   « apporter une contribution précieuse », « embrasser cette nouvelle voie », « dynamique et motivé »,
   « n'hésitez pas à me contacter ».
+- SURVENTE « TERRAIN CONNU » BANNIE : n'écris JAMAIS « un terrain que je connais bien / que je connais par
+  la pratique / que je maîtrise » à propos du SECTEUR ou de l'ACTIVITÉ de la cible (édition logicielle,
+  cloud, web, secteur public…). Affirmer connaître un métier qu'on ne connaît pas se retourne en entretien.
+  Tu peux revendiquer une COMPÉTENCE (reporting, automatisation d'un process manuel) et la PROUVER par un
+  fait ; jamais une familiarité avec le secteur de l'entreprise que le CV ne justifie pas.
 - PONTS/MÉTAPHORES RÉPÉTÉS (sonnent « gabarit » à force) — proscris ces formules toutes faites et reformule
   l'idée avec tes mots : « ce projet illustre (assez bien) ce qui me différencie d'un profil purement/
   simplement académique » (et toute variante « profil académique ») ; « ce projet dit (assez bien) comment
@@ -226,6 +253,9 @@ RÈGLES DE QUALITÉ (impératives — un email raté est inutilisable) :
   un rapport (technique) de plus », « pas un rapport que personne ne lit/n'ouvre », « un livrable que
   personne n'ouvre ». Si tu veux dire qu'un outil est réellement utilisé, montre-le par un fait (qui s'en
   sert, à quelle fréquence), pas par cette antithèse devenue cliché.
+- PROCÉDÉ « X PLUTÔT QUE Y » BANNI comme effet de style : proscris « construits avec les équipes plutôt que
+  pour elles », « un outil adopté, pas livré puis oublié », « pensé pour l'adoption plutôt que pour la
+  démonstration » et toute opposition rhétorique du même moule. Dis la chose directement, sans la contraster.
 - BUZZWORDS : au plus UN, rattaché à un fait concret (pas d'empilement RSE / impact / durable / licorne).
 - CONTRAT : annonce uniquement le(s) type(s) fourni(s). N'invente ni dispositif de financement ni
   « expérience » liée à un organisme (ex. pas de fausse « expérience OPCO »).
@@ -255,7 +285,8 @@ STYLE — VOIX HUMAINE (anti-signature IA). Un mail trop « ciselé » se repèr
   « en effet » et « par ailleurs » : AU PLUS UNE fois sur tout le mail, et seulement si ça coule vraiment
   (sinon coupe). AU PLUS UNE fois sur tout le mail, jamais en ouverture de phrase :
   « concrètement », « optimiser », « valoriser », « s'inscrire dans », « tirer parti », « actionnable »,
-  « robuste », « écosystème ». INTERDIT : « je suis convaincu que », « il ne fait aucun doute que ».
+  « robuste », « écosystème », « structurer », « fiabiliser »/« fiable », « lisible », « adopté »/« adoption »,
+  « flux de données ». INTERDIT : « je suis convaincu que », « il ne fait aucun doute que ».
 - SPÉCIFICITÉ > LISSAGE : un détail concret, presque trop précis, sonne plus humain qu'une généralité
   élégante. Une micro-remarque d'intérêt sincère (« ce qui m'a accroché, c'est… », « j'ai vu que… »)
   vaut mieux qu'une formule de politesse.
@@ -292,6 +323,38 @@ export interface CoverLetterPromptInput {
   dispoInstr: string;
   contactSection: string;   // coordonnées candidat (signature)
   cvJson: string;
+  opening: string;          // ANTI-CLONE : directive d'ouverture tirée au sort (cf. pickCoverLetterVariation)
+  projection: string;       // ANTI-CLONE : forme de la projection §3 tirée au sort
+}
+
+/**
+ * ANTI-CLONE — casse le « 10 fois la même lettre ». Un seul appel LLM ne voit jamais les
+ * autres lettres, donc « varie d'une lettre à l'autre » est un ordre creux : la variation
+ * doit être INJECTÉE. On tire au sort, à CHAQUE lettre, une OUVERTURE et une forme de
+ * PROJECTION parmi des mécaniques rhétoriques distinctes. Le fond (accroche → preuve →
+ * projection, zéro invention) reste identique ; seul le squelette tourne. Même patron que
+ * `pickCampaignPrompt` (Math.random assumé côté runtime app, pas un script Workflow).
+ * Wording NEUTRE : « cible » = fiche entreprise (pitch spontané) OU annonce (lettre annonce)
+ * → un seul sélecteur pour les deux prompts.
+ */
+const LETTER_OPENINGS = [
+  'OUVERTURE — attaque par un fait CONCRET de la cible (chiffre, activité réelle, actualité, mission) puis enchaîne aussitôt sur ta preuve la plus proche. N\'annonce PAS que tu candidates dans la 1re phrase. INTERDIT de relier le fait entreprise à toi par une bascule miroir « …, c\'est exactement / précisément ce que je fais / ce terrain / là que je… » : enchaîne par une phrase d\'ACTION ou de preuve, jamais par une formule qui renvoie le fait à toi.',
+  'OUVERTURE — pars d\'un fait de TON parcours (une chose que tu as faite, un résultat) et relie-le en une phrase au besoin de la cible. Le candidat vient AVANT l\'entreprise, pas l\'inverse.',
+  'OUVERTURE — pose en une phrase la TENSION métier réelle (le problème concret à résoudre côté cible), puis montre que tu l\'as déjà traité. Aucune flatterie sur l\'entreprise.',
+  'OUVERTURE — commence par le POSTE ou la mission et ce qu\'il exige, puis bascule immédiatement sur une preuve du CV. Direct, sans préambule sur le contexte de la boîte. INTERDIT la bascule miroir « …, c\'est exactement / précisément ce que je fais / ce terrain que je cherche… ».',
+];
+const LETTER_PROJECTIONS = [
+  'PROJECTION — dis en UNE phrase, à la 1re personne, ce que tu ferais concrètement à ce poste. INTERDIT la tournure « je pourrais aider [entreprise] à… » et INTERDIT la liste de trois : une seule action précise.',
+  'PROJECTION — projette-toi sur UN chantier précis (tiré de la cible) et le résultat que tu y viserais. Pas de liste énumérative, pas de « je pourrais aider… ».',
+  'PROJECTION — relie ta preuve principale au besoin de la cible en montrant le résultat visé, une phrase sobre. INTERDIT : « je pourrais aider [entreprise] à A, à B et à C ».',
+];
+
+/** ANTI-CLONE : tire une ouverture + une forme de projection au hasard (12 combinaisons). */
+export function pickLetterVariation(): { opening: string; projection: string } {
+  return {
+    opening: LETTER_OPENINGS[Math.floor(Math.random() * LETTER_OPENINGS.length)],
+    projection: LETTER_PROJECTIONS[Math.floor(Math.random() * LETTER_PROJECTIONS.length)],
+  };
 }
 
 /**
@@ -344,12 +407,18 @@ SALUTATION : si un destinataire est fourni ET que son genre est ÉVIDENT d'aprè
 « Bonjour Monsieur [Nom], » ou « Bonjour Madame [Nom], ». Au moindre doute ou sans destinataire →
 « Bonjour, » seul. N'invente JAMAIS de nom et n'écris JAMAIS « Madame, Monsieur ».
 
-STRUCTURE — 3 paragraphes, vouvoiement, 150 à 200 mots (jamais plus de ~210). Logique VOUS → MOI → NOUS.
-§1 ACCROCHE : ouvre sur un lien CONCRET entre l'annonce/l'entreprise et le candidat (une mission, un
-   enjeu réel tiré de l'annonce). Tu PEUX nommer le poste visé (c'est une réponse à une offre), mais
-   PAS par une formule plate. INTERDIT d'ouvrir par : « je me permets », « je vous adresse/soumets ma
-   candidature », « suite à votre annonce, je », « candidature pour le poste de ». On accroche sur le
-   FOND (ce que fait l'entreprise / ce que demande le poste), pas sur l'acte de candidater.
+STRUCTURE — 3 paragraphes, vouvoiement, 150 à 200 mots (jamais plus de ~210). L'ORDRE interne suit
+l'OUVERTURE tirée au sort ci-dessous (ne force PAS systématiquement « l'entreprise d'abord, moi ensuite »).
+${i.opening}
+§1 ACCROCHE (applique l'OUVERTURE ci-dessus) : crée un lien CONCRET entre le poste et le candidat (une
+   mission, un chiffre, un outil réel). Tu PEUX nommer le poste, jamais par une formule plate. INTERDIT,
+   en ouverture ET n'importe où dans le §1 : « je me permets », « je vous adresse ma candidature »,
+   « je vous soumets (ma candidature) », « suite à votre annonce », « candidature (spontanée) pour le
+   poste de ». INTERDIT ABSOLU, quelle que soit la ponctuation (deux-points OU virgule), le pivot miroir
+   « [fait sur l'entreprise] , / : c'est exactement / précisément ce que je fais / le terrain / ce terrain
+   que je cherche / là que je… » — cette bascule qui renvoie le fait entreprise à toi est LE tic n°1 à
+   éviter, même reformulée. Enchaîne par une phrase d'ACTION ou de preuve. Accroche sur le FOND, pas sur
+   l'acte de candidater.
 §2 PREUVE : 1 réalisation par défaut, 2 au MAXIMUM, CHACUNE dans sa PROPRE phrase, chiffrée si possible,
    moyens réels (outils, méthodes), rattachée à son employeur EXACT — choisies pour leur PERTINENCE
    face aux exigences de l'annonce. Ne FUSIONNE jamais deux missions dans une phrase. Des FAITS, pas
@@ -359,15 +428,17 @@ STRUCTURE — 3 paragraphes, vouvoiement, 150 à 200 mots (jamais plus de ~210).
    le volume, le gain, la méthode, ce qui a été amélioré). Remplace tout terme technique propre au métier
    de départ par une formulation neutre, compréhensible par un recruteur du secteur visé, sans en changer
    le sens. Si la cible est du MÊME secteur, garde le vocabulaire métier d'origine, il est pertinent.
-§3 PROJECTION + CLÔTURE : UNE phrase de projection « je pourrais aider ${i.safeCompany} à [2-3 actions
-   concrètes tirées de l'annonce et alignées au poste] » (sans l'amorce « concrètement »). Puis :
-   disponibilité (${i.dispoInstr}) ; l'anglais ou une langue UNIQUEMENT si l'annonce/l'entreprise est
+§3 PROJECTION + CLÔTURE (applique la PROJECTION tirée au sort) :
+   ${i.projection}
+   Puis : disponibilité (${i.dispoInstr}) ; l'anglais ou une langue UNIQUEMENT si l'annonce/l'entreprise est
    manifestement internationale, et alors en langage naturel (« je travaille sans difficulté en anglais »),
    JAMAIS sous forme de niveau (C1/B2) ; mention « CV joint » (+ « portfolio » si une URL portfolio/GitHub
    est fournie), en toutes lettres SANS coller d'URL dans le corps. TERMINE par une phrase SOBRE proposant
    un entretien (registre posé, AUCUN marqueur d'enthousiasme : proscris « ravi », « heureux »,
-   « enchanté », « avec plaisir », « hâte ») + une salutation sur sa propre ligne (« Cordialement, » /
-   « Bien cordialement, »), puis la signature.
+   « enchanté », « avec plaisir », « hâte »). NE termine JAMAIS par « … en savoir plus sur ce que je
+   pourrais vous apporter » ni aucune variante de « ce que je pourrais vous apporter » (tic de clôture) :
+   propose l'entretien simplement (« Je reste disponible pour en échanger. »). Salutation sur sa propre
+   ligne (« Cordialement, » / « Bien cordialement, »), puis la signature.
 
 RÈGLES DE QUALITÉ (impératives) :
 - Français NATIF, fluide, grammaticalement irréprochable. Zéro faute.
@@ -389,10 +460,17 @@ RÈGLES DE QUALITÉ (impératives) :
   contacter ». NE CONVERGE PAS vers des clôtures-types — proscris « si vous souhaitez voir comment je
   pourrais contribuer à vos projets/équipes » et « approfondir ce que je pourrais vous apporter » et leurs
   variantes. Varie la formulation d'une lettre à l'autre.
+- SURVENTE « TERRAIN CONNU » BANNIE : n'écris JAMAIS « un terrain que je connais bien / que je connais par
+  la pratique / que je maîtrise » à propos du SECTEUR ou de l'ACTIVITÉ de la cible. Revendique une
+  COMPÉTENCE et prouve-la par un fait ; jamais une familiarité avec le métier de l'entreprise que le CV ne
+  justifie pas.
 - ANTITHÈSE « rapport inutile » BANNIE : proscris « des rapports que personne ne lit », « un rapport
   de plus », « pas juste alimenter des rapports », « un livrable que personne n'ouvre » et leurs variantes.
   Pour dire qu'un outil sert vraiment, montre-le par un fait (qui s'en sert, à quelle fréquence), pas
   par cette opposition devenue cliché.
+- PROCÉDÉ « X PLUTÔT QUE Y » BANNI comme effet de style : proscris « pensé pour l'adoption plutôt que
+  pour la démonstration », « un outil adopté, pas livré puis oublié », « construire plutôt que subir »
+  et toute opposition rhétorique du même moule. Dis la chose directement, sans la mettre en contraste.
 - SOBRIÉTÉ : aucun emoji. URL/téléphone EXCLUSIVEMENT dans la signature, jamais dans le corps.
 - Pas de variables type [Votre Nom]. Signature = prénom nom + coordonnées fournies.
 
@@ -414,7 +492,8 @@ STYLE — VOIX HUMAINE (anti-signature IA). Une lettre trop « ciselée » se re
   « en effet » et « par ailleurs » : AU PLUS UNE fois sur toute la lettre, et seulement si ça coule vraiment
   (sinon coupe). AU PLUS UNE fois sur toute la lettre, jamais en ouverture de phrase :
   « concrètement », « optimiser », « valoriser », « s'inscrire dans », « tirer parti », « actionnable »,
-  « robuste », « écosystème ». INTERDIT : « je suis convaincu que », « il ne fait aucun doute que ».
+  « robuste », « écosystème », « structurer », « fiabiliser »/« fiable », « lisible », « adopté »/« adoption »,
+  « flux de données ». INTERDIT : « je suis convaincu que », « il ne fait aucun doute que ».
 - SPÉCIFICITÉ > LISSAGE : un détail concret, presque trop précis, sonne plus humain qu'une généralité
   élégante. Mais N'OUVRE PAS par une formule d'intérêt toute faite (« Ce qui m'a accroché, c'est… »,
   « J'ai vu que… ») : c'est devenu un tic d'IA. Montre l'intérêt par un fait précis, pas en l'annonçant.

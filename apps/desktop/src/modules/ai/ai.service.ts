@@ -2,7 +2,9 @@ import OpenAI from 'openai';
 import type { CvParsed, Profile } from '@candio/shared';
 import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiModel, getAiProvider, getOllamaModel, getOllamaHost } from '../../lib/secrets';
 // PROMPT-EXTRACT (P2) : les prompts (chaînes) vivent dans campaign-prompt.ts (fonctions pures, testables).
-import { buildCampaignPromptsMessage, buildPitchPrompt, buildCoverLetterPrompt } from '../../lib/campaign-prompt';
+import { buildCampaignPromptsMessage, buildPitchPrompt, buildCoverLetterPrompt, pickLetterVariation } from '../../lib/campaign-prompt';
+// COST-01 : journalisation du coût des appels IA (best-effort, non bloquant).
+import { recordAiUsage } from '../../lib/ai-cost';
 
 /**
  * Interface avec l'API OpenAI (GPT-4o), pour deux usages :
@@ -176,6 +178,7 @@ ${pdfText}
 
   // B9 : guard après le catch (handleOpenAIError throw toujours, mais TypeScript ne le sait pas).
   if (!completion) return EMPTY_CV;
+  void recordAiUsage('cv', getActiveModel(), completion.usage); // COST-01
 
   try {
     const raw = completion.choices[0]?.message?.content || '{}';
@@ -297,6 +300,18 @@ function sanitizeForPrompt(s: string): string {
 }
 
 /**
+ * Formate un numéro FR en signature ("0617152186" → "06 17 15 21 86") : sans ce
+ * formatage déterministe, le LLM le recopiait tel quel une fois sur deux et espacé
+ * l'autre fois — un simple copié-collé à source non normalisée n'est pas fiable.
+ * Ne touche pas aux numéros non-FR (10 chiffres commençant par 0) : renvoyés tels quels.
+ */
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!/^0\d{9}$/.test(digits)) return raw.trim();
+  return digits.match(/.{2}/g)!.join(' ');
+}
+
+/**
  * Génère l'objet et le corps d'un email de candidature spontanée,
  * personnalisés à partir du poste, de l'entreprise et du CV.
  * Renvoie un email de repli générique si la réponse de l'IA est illisible.
@@ -333,7 +348,10 @@ export async function generatePitch(
   profile?: Pick<Profile, 'phone' | 'linkedin' | 'portfolio' | 'github'> | null,
   companyInfo?: CompanyContext | null,
   contractTypes?: string[] | null,
-  availability?: string | null
+  availability?: string | null,
+  // COST-02 : contexte de facturation IA — kind ('email' initial | 'followup' relance) et
+  // campagne d'origine (regroupement du coût). Par défaut : mail de candidature.
+  usageCtx?: { kind?: string; campaignId?: string | null }
 ): Promise<GeneratedEmail> {
   // SEC-1 : sanitiser les valeurs utilisateur directement interpolées.
   const safeJob     = sanitizeForPrompt(jobTitle);
@@ -376,7 +394,7 @@ export async function generatePitch(
   if (profile?.linkedin) contactLines.push(`LinkedIn: ${sanitizeForPrompt(profile.linkedin)}`);
   if (profile?.github) contactLines.push(`GitHub (projets / preuve de travail): ${sanitizeForPrompt(profile.github)}`);
   if (profile?.portfolio) contactLines.push(`Portfolio: ${sanitizeForPrompt(profile.portfolio)}`);
-  if (profile?.phone) contactLines.push(`Téléphone: ${sanitizeForPrompt(profile.phone)}`);
+  if (profile?.phone) contactLines.push(`Téléphone: ${formatPhone(sanitizeForPrompt(profile.phone))}`);
   const contactSection = contactLines.length > 0
     ? `\nInformations de contact du candidat : ${contactLines.join(', ')}`
     : '';
@@ -389,10 +407,15 @@ export async function generatePitch(
     ? `recopie EXACTEMENT « ${safeAvailability} »`
     : '« disponible rapidement », sans inventer de date';
 
+  // ANTI-CLONE : ouverture + projection tirées au sort à CHAQUE email → casse le squelette
+  // identique quand on envoie beaucoup de candidatures spontanées (le modèle ne voit pas les autres).
+  const variation = pickLetterVariation();
   const prompt = buildPitchPrompt({
     safeJob, contractsLine, dispoLine, safeCompany, contactLine,
     companySection, contactSection, dispoInstr, safePrompt,
     cvJson: JSON.stringify(cvParsed),
+    opening: variation.opening,
+    projection: variation.projection,
   });
 
 
@@ -424,6 +447,8 @@ export async function generatePitch(
 
   // B9 : guard après le catch (handleOpenAIError throw toujours, mais TypeScript ne le sait pas).
   if (!completion) return fallback;
+  // COST-01/02 : kind ('email' | 'followup') + campagne fournis par l'appelant (défaut 'email').
+  void recordAiUsage(usageCtx?.kind ?? 'email', getActiveModel(), completion.usage, { campaignId: usageCtx?.campaignId });
 
   try {
     const raw = completion.choices[0]?.message?.content || '{}';
@@ -482,6 +507,7 @@ async function completePitch(prompt: string, jobTitle: string, fallbackSubject: 
 
   // B9 : guard après le catch (handleOpenAIError throw toujours, mais TypeScript ne le sait pas).
   if (!completion) return fallback;
+  void recordAiUsage('coverletter', getActiveModel(), completion.usage); // COST-01
 
   try {
     const raw = completion.choices[0]?.message?.content || '{}';
@@ -535,7 +561,7 @@ export async function generateCoverLetter(
   if (profile?.linkedin) contactLines.push(`LinkedIn: ${sanitizeForPrompt(profile.linkedin)}`);
   if (profile?.github) contactLines.push(`GitHub (projets / preuve de travail): ${sanitizeForPrompt(profile.github)}`);
   if (profile?.portfolio) contactLines.push(`Portfolio: ${sanitizeForPrompt(profile.portfolio)}`);
-  if (profile?.phone) contactLines.push(`Téléphone: ${sanitizeForPrompt(profile.phone)}`);
+  if (profile?.phone) contactLines.push(`Téléphone: ${formatPhone(sanitizeForPrompt(profile.phone))}`);
   const contactSection = contactLines.length > 0
     ? `\n- Informations de contact du candidat (signature) : ${contactLines.join(', ')}`
     : '';
@@ -545,11 +571,16 @@ export async function generateCoverLetter(
     ? `reprends « ${safeAvailability} » (corrige seulement l'orthographe et les accents, ex. « a partir » → « à partir » ; ne change NI la date NI le sens)`
     : '« disponible rapidement », sans inventer de date';
 
+  // ANTI-CLONE : ouverture + projection tirées au sort à CHAQUE lettre → casse le squelette
+  // identique quand on envoie beaucoup de candidatures (le modèle ne voit pas les autres lettres).
+  const variation = pickLetterVariation();
   const prompt = buildCoverLetterPrompt({
     safeJob, safeCompany,
     contactLine: safeContact || '(non fourni)',
     annonceBlock, dispoLine, dispoInstr, contactSection,
     cvJson: JSON.stringify(cvParsed),
+    opening: variation.opening,
+    projection: variation.projection,
   });
 
   const email = await completePitch(prompt, jobTitle, `Candidature – ${jobTitle}`);
@@ -596,6 +627,10 @@ const CLICHE_REPLACEMENTS: [RegExp, string][] = [
   [/embrasser\s+cette\s+nouvelle\s+voie/gi, 'réussir ma reconversion'],
   [/fort\s+de\s+mon\s+expérience/gi, 'avec mon expérience'],
   [/dynamiques?\s+et\s+motivée?s?/gi, 'motivé'],
+  // 3e personne détachée « Ce profil (…) pourrait être utile » → « je pourrais être utile » (la casse
+  // en début de phrase est rétablie ensuite par fixCapitalization). Absorbe une clause insérée entre
+  // virgules (« Ce profil, ancré dans l'industrie, pourrait être utile » → « je pourrais être utile »).
+  [/\bce profil(?:,[^,.]*,)?\s+pourrait\s+être\s+utile/gi, 'je pourrais être utile'],
   // « …ou toute formule équivalente / ou tout contrat équivalent » = effet menu McDo → on coupe.
   [/,?\s*ou\s+(?:tout\s+contrat\s+équivalent|toute\s+formule\s+équivalente)/gi, ''],
 ];

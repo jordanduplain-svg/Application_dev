@@ -7,6 +7,8 @@ import {
   listSentForReplyMatching,
   markReplied,
   markBounced,
+  recordInboundMessage,
+  touchLatestReply,
 } from '../modules/application/application.service';
 import { logger } from '../lib/logger';
 import { matchReply, matchBounce, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
@@ -66,7 +68,18 @@ export function enqueuePollReplies(): void {
           usedInboxKeys.add(inboxKey(reply));
 
           const MAX_REPLY_LENGTH = 50_000;
-          const { marked } = await markReplied(app.id, reply.text.slice(0, MAX_REPLY_LENGTH));
+          const body = reply.text.slice(0, MAX_REPLY_LENGTH);
+          // REPLY-IN : on transmet l'adresse réelle de l'expéditeur (reply.from) → « Répondre
+          // au recruteur » visera cette boîte, pas forcément l'email scrapé d'origine.
+          const { marked } = await markReplied(app.id, body, reply.from || undefined);
+          // THREAD-01 : consigner le message entrant dans le fil (dédupliqué par Message-ID).
+          const isNewInbound = await recordInboundMessage(app.id, body, reply.from || null, reply.messageId);
+          // B3 : une 2ᵉ réponse (candidature déjà REPLIED) doit quand même faire remonter le
+          // fil et rebasculer le badge → on bump repliedAt/replyFrom sur tout NOUVEAU entrant.
+          if (isNewInbound && !marked) {
+            await touchLatestReply(app.id, reply.date ?? new Date(), reply.from || null);
+            touchedCampaigns.add(app.campaignId);
+          }
           if (marked) {
             touchedCampaigns.add(app.campaignId);
             if (profile) {
@@ -100,6 +113,9 @@ export function enqueuePollReplies(): void {
       // BOUNCE-01 : détecter les NDR (Non-Delivery Reports) dans la boîte.
       // Un NDR = le serveur destinataire a rejeté l'email → on marque la candidature
       // comme rebondie et on notifie l'UI pour proposer un email alternatif.
+      // B2 : on compte les NDR NON attribués (adresse ambiguë, ou NDR sans Message-ID ni
+      // adresse) pour les rendre visibles dans les logs plutôt que de les ignorer en silence.
+      let unmatchedBounces = 0;
       for (const msg of inbox) {
         if (!msg.isBounce) continue;
 
@@ -109,7 +125,20 @@ export function enqueuePollReplies(): void {
         // ne recopiant souvent PAS le Message-ID original, ces bounces étaient jusque-là
         // silencieusement ignorés.
         const bouncedApp = matchBounce(msg, sent);
-        if (!bouncedApp) continue;
+        if (!bouncedApp) {
+          unmatchedBounces++;
+          // B10 : NDR non attribué mais avec une adresse en clair → on PRÉVIENT l'utilisateur
+          // (toast) pour vérif manuelle, sans marquer à tort une candidature (l'adresse est
+          // portée par ≥2 candidatures, on ne sait pas laquelle a rebondi).
+          const ambiguous = msg.bouncedCandidateEmails[0];
+          if (ambiguous) {
+            taskRunner.emitEvent('bounce:detected', {
+              companyName: `${ambiguous} (adresse ambiguë — à vérifier)`,
+              nextEmailAvailable: false,
+            });
+          }
+          continue;
+        }
 
         const { marked } = await markBounced(bouncedApp.id);
         if (marked) {
@@ -138,6 +167,11 @@ export function enqueuePollReplies(): void {
         } catch (err) {
           logger.warn('[BOUNCE] Propagation vers le master de leads échouée (non bloquant).', err);
         }
+      }
+      // B2 : NDR non attribués (adresse portée par ≥2 candidatures, ou NDR sans Message-ID
+      // ni adresse en clair) → visibles dans les logs au lieu d'être ignorés en silence.
+      if (unmatchedBounces > 0) {
+        logger.info(`[BOUNCE] ${unmatchedBounces} NDR non attribué(s) ce relevé (adresse ambiguë ou sans identifiant) — à vérifier manuellement.`);
       }
 
       for (const campaignId of touchedCampaigns) {

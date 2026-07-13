@@ -63,6 +63,9 @@ function friendlyMailError(raw: string | undefined): string {
 // (`testSmtp`/`testImap`) valident sans rien stocker ; le polling IMAP se hot-reload au changement.
 export default function SettingsPage() {
   const [status, setStatus] = useState<SettingsStatus | null>(null);
+  // FM-02 : plafond manuel d'envois/jour (redescendre après des bounces). '' = auto (ramp-up).
+  const [manualSendLimit, setManualSendLimit] = useState('');
+  const [savingSendLimit, setSavingSendLimit] = useState(false);
   const [openaiKey, setOpenaiKey] = useState('');
   // Claude : clé Anthropic (saisie, jamais relue côté UI).
   const [anthropicKey, setAnthropicKey] = useState('');
@@ -1323,34 +1326,89 @@ export default function SettingsPage() {
         <h3 style={shStyle}><Gauge size={17} color="#BA7517" />Limite quotidienne d'envois — automatique</h3>
         <p style={{ fontSize: '13px', color: '#555', marginBottom: '10px', lineHeight: 1.5 }}>
           Gmail suspend les comptes qui envoient trop d'emails d'un coup. L'app gère
-          ça <strong>automatiquement</strong> avec un volume qui varie chaque jour pour rester
-          discret et sous le plafond de 50/jour.
+          ça <strong>automatiquement</strong> : montée progressive sur ~2 semaines
+          jusqu'à 100/jour, puis un volume qui varie chaque jour (85–100) pour rester discret.
           {status && (
             <strong style={{ color: status.dailySendCount >= status.dailySendLimit ? '#ff453a' : '#34c759', marginLeft: '6px' }}>
               {status.dailySendCount} / {status.dailySendLimit} envoyé(s) aujourd'hui
             </strong>
           )}
         </p>
-        {/* Visualisation du cycle 10 → 20 → 30 → 40 → 49 → recommence */}
+        {/* Visualisation de la montée 10 → 50 → … → 100 (paliers clés) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
-          {[10, 20, 30, 40, 49].map((n, i) => (
+          {[10, 30, 50, 70, 100].map((n, i, arr) => (
             <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <span style={{
                 fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '14px',
-                background: status?.dailySendLimit === n ? '#007aff' : '#eef',
-                color: status?.dailySendLimit === n ? '#fff' : '#556',
+                background: (status?.dailySendLimit ?? 0) >= n ? '#007aff' : '#eef',
+                color: (status?.dailySendLimit ?? 0) >= n ? '#fff' : '#556',
               }}>
-                J{i + 1} : {n}
+                {n}
               </span>
-              {i < 4 && <span style={{ color: '#bbb' }}>→</span>}
+              {i < arr.length - 1 && <span style={{ color: '#bbb' }}>→</span>}
             </span>
           ))}
-          <span style={{ color: '#bbb' }}>↻</span>
         </div>
         <small style={{ color: '#888', display: 'block' }}>
-          Jour 1 : 10 emails · Jour 2 : 20 · … · Jour 5 : 49, puis le cycle redémarre à 10.
-          Le pastille bleue indique le palier d'aujourd'hui. Aucun réglage nécessaire.
+          +10 puis +5/jour jusqu'à 100/jour au ~14ᵉ jour, ensuite variation 85–100.
+          ⚠️ Sur un Gmail gratuit, 100/jour est ambitieux : surveille tes bounces et
+          redescends si des envois échouent. Les paliers bleus sont déjà atteints.
         </small>
+
+        {/* Plafond manuel — redescendre si des bounces apparaissent. Vide = auto. */}
+        <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #eee',
+          display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#444' }}>
+              Forcer un plafond plus bas (optionnel)
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={manualSendLimit}
+              onChange={(e) => setManualSendLimit(e.target.value)}
+              placeholder="Auto"
+              style={{ width: '110px', padding: '7px 10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '13px' }}
+            />
+          </label>
+          <button
+            disabled={savingSendLimit}
+            onClick={async () => {
+              setSavingSendLimit(true);
+              try {
+                const n = manualSendLimit.trim() === '' ? null : Number(manualSendLimit);
+                await api.invoke('settings:setDailySendLimit', { limit: n });
+                await load();
+              } finally {
+                setSavingSendLimit(false);
+              }
+            }}
+            style={{ padding: '7px 14px', fontSize: '13px' }}
+          >
+            {savingSendLimit ? 'Enregistrement…' : 'Appliquer'}
+          </button>
+          <button
+            disabled={savingSendLimit}
+            onClick={async () => {
+              setSavingSendLimit(true);
+              try {
+                setManualSendLimit('');
+                await api.invoke('settings:setDailySendLimit', { limit: null });
+                await load();
+              } finally {
+                setSavingSendLimit(false);
+              }
+            }}
+            style={{ padding: '7px 14px', fontSize: '13px', background: '#eee', color: '#444' }}
+          >
+            Revenir à l'auto
+          </button>
+          <span style={{ fontSize: '11px', color: '#888', flexBasis: '100%' }}>
+            Un chiffre plus bas que le palier automatique reste actif tant que tu ne cliques pas
+            « Revenir à l'auto ». Utile en cas de bounces : redescends puis remonte progressivement.
+          </span>
+        </div>
       </div>
 
       {/* F9 + SEC-1 : sauvegarde et restauration. */}
@@ -1416,13 +1474,13 @@ export default function SettingsPage() {
                  checked={status?.autoFollowUpEnabled ?? false}
                  onChange={toggleAutoFollowUp}
                  disabled={togglingAutoFollowUp} />
-          {' '}{togglingAutoFollowUp ? 'Mise à jour…' : 'Relancer automatiquement les candidatures sans réponse (> 7 jours)'}
+          {' '}{togglingAutoFollowUp ? 'Mise à jour…' : 'Relancer automatiquement les candidatures sans réponse (> 10 jours)'}
         </label>
         <small style={{ display: 'block', marginTop: '8px', color: '#888', lineHeight: 1.5 }}>
           Chaque jour (et au démarrage), l'app envoie une relance aux candidatures éligibles,
           dans la <strong>limite de ton quota d'envoi du jour</strong> et avec les mêmes garde-fous que
-          la relance manuelle (liste « ne pas contacter », anti-doublon). Jusqu'à <strong>2 relances</strong>
-          espacées de 7 jours par candidature. ⚠️ <strong>L'app doit rester ouverte</strong> pour que la
+          la relance manuelle (liste « ne pas contacter », anti-doublon). <strong>1 relance</strong> maximum,
+          à 10 jours par candidature. ⚠️ <strong>L'app doit rester ouverte</strong> pour que la
           planification se déclenche.
         </small>
         <label style={{ display: 'block', marginTop: '12px' }}>

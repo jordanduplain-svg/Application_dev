@@ -70,6 +70,12 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
 }) {
   const [cvs, setCvs] = useState<Cv[]>([]);
   const [list, setList] = useState<Campaign[]>([]);
+  // DEDUP-01 : entreprises présentes dans plusieurs campagnes actives.
+  const [dupes, setDupes] = useState<{ key: string; label: string; campaigns: { id: string; name: string }[] }[]>([]);
+  const [dupesDismissed, setDupesDismissed] = useState(false);
+  useEffect(() => {
+    api.invoke('company:crossCampaignDuplicates').then(setDupes).catch(() => {});
+  }, []);
   // UX-1v2 : liste des campagnes archivées.
   const [archivedList, setArchivedList] = useState<Campaign[]>([]);
   // UX-1v2 : afficher/masquer la section archivées.
@@ -187,14 +193,14 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
     try {
       const created = await api.invoke('campaign:create', form);
       // SECTOR-AUTO : pré-remplit la campagne avec les leads du master (secteur +
-      // lieu), en excluant ceux déjà utilisés ailleurs, plafonné à 150. Non bloquant :
+      // lieu), en excluant ceux déjà utilisés ailleurs, plafonné à 400. Non bloquant :
       // si le master est absent, la campagne reste vide et l'utilisateur importe à la main.
       try {
         await api.invoke('scraping:importLeadsToCampaign', {
           campaignId: created.id,
           sectors: form.preferredSectors ?? [],
           location: form.location,
-          limit: 150,
+          limit: 400,
         });
       } catch { /* import auto non bloquant — la campagne est créée quand même */ }
       // Efface le brouillon et ouvre directement la campagne créée.
@@ -265,6 +271,32 @@ export default function CampaignsPage({ onOpen, onGoToSettings, onGoToCv }: {
         <div className="page-sub">Vos campagnes de candidatures spontanées — cliquez pour ouvrir, ou créez-en une ci-dessous.</div>
       </div>
       {/* Le choix du moteur IA est centralisé sur la page Accueil. */}
+
+      {/* DEDUP-01 : alerte entreprises présentes dans plusieurs campagnes actives. */}
+      {dupes.length > 0 && !dupesDismissed && (
+        <div style={{ margin: '0 0 14px', padding: '10px 14px', borderRadius: '10px',
+          background: '#fff7e6', border: '1px solid #ffd591', fontSize: '13px', color: '#7a4f00' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <strong>⚠️ {dupes.length} entreprise(s) ciblée(s) dans plusieurs campagnes</strong>
+            <span style={{ color: '#a06a1a' }}>— risque de contacter deux fois la même boîte.</span>
+            <button onClick={() => setDupesDismissed(true)} style={{ marginLeft: 'auto', fontSize: '12px', background: 'transparent', border: 'none', color: '#a06a1a', cursor: 'pointer' }}>Ignorer</button>
+          </div>
+          <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+            {dupes.slice(0, 6).map((d) => (
+              <li key={d.key} style={{ marginBottom: '2px' }}>
+                <strong>{d.label}</strong> :{' '}
+                {d.campaigns.map((c, i) => (
+                  <span key={c.id}>
+                    {i > 0 && ', '}
+                    <a href="#" onClick={(e) => { e.preventDefault(); onOpen(c.id); }} style={{ color: '#0a84ff' }}>{c.name}</a>
+                  </span>
+                ))}
+              </li>
+            ))}
+            {dupes.length > 6 && <li>… et {dupes.length - 6} autre(s)</li>}
+          </ul>
+        </div>
+      )}
 
       {/* FM-02 : quota d'envoi du jour, visible avant de générer/envoyer. */}
       {sendQuota && (

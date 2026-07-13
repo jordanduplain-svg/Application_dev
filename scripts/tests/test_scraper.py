@@ -29,7 +29,7 @@ from candio_scraper.models import Company, _domain
 from candio_scraper.enrich import (
     _is_junk_email, _rank_email, _domain_matches_name, _domain_core,
     _tld_plausible, _name_similarity,
-    fuzzy_dedup,
+    fuzzy_dedup, _looks_like_person_name,
 )
 from candio_scraper.io_csv import merge_into_master, load_companies_from_csv, CSV_FIELDNAMES
 from candio_scraper.crawl_ledger import CrawlLedger
@@ -37,6 +37,127 @@ from candio_scraper.classification import parse_location
 
 # B2-5 : plus de liste dupliquée — importée depuis io_csv (source unique)
 _FIELDNAMES = CSV_FIELDNAMES
+
+
+class TestChooseContact(unittest.TestCase):
+    """Phase 5 : choose_contact privilégie le contact FRANCE (titre FR) sur le siège d'un groupe."""
+    @staticmethod
+    def _e(pos, val, conf=50):
+        return {"position": pos, "value": val, "confidence": conf}
+
+    def test_prefers_french_title_over_hq(self):
+        from candio_scraper.enrich_apis import choose_contact
+        # Groupe international : le siège (HR Director, forte confiance) vient AVANT la RH France.
+        emails = [
+            self._e("HR Director", "hq@hardis.com", conf=99),
+            self._e("Responsable RH", "rh.france@hardis.fr", conf=60),
+        ]
+        self.assertEqual(choose_contact(emails)["value"], "rh.france@hardis.fr")
+
+    def test_falls_back_to_confidence(self):
+        from candio_scraper.enrich_apis import choose_contact
+        emails = [self._e("Sales", "a@x.com", conf=30), self._e("Engineer", "b@x.com", conf=80)]
+        self.assertEqual(choose_contact(emails)["value"], "b@x.com")
+
+    def test_empty(self):
+        from candio_scraper.enrich_apis import choose_contact
+        self.assertIsNone(choose_contact([]))
+
+
+class TestRecruiterNameGuard(unittest.TestCase):
+    """Phase 4c : _looks_like_person_name rejette les faux noms (intitulés / nom de boîte)."""
+    @staticmethod
+    def _co(name="", website=""):
+        from types import SimpleNamespace
+        return SimpleNamespace(name=name, website=website)
+
+    def test_rejects_section_headings(self):
+        # Faux positifs réels observés en prod (mots-clés de titre pris pour des noms).
+        self.assertFalse(_looks_like_person_name("Recrutement Travailler", self._co("Psypro Paris", "https://psypro-paris.fr")))
+        self.assertFalse(_looks_like_person_name("Fondateurs Directeur", self._co("Neobiosys", "https://neobiosys.com")))
+
+    def test_rejects_company_name(self):
+        self.assertFalse(_looks_like_person_name("Ambulances Jassans", self._co("AMBULANCES DE JASSANS", "https://ambulancesdejassans.fr")))
+
+    def test_accepts_real_names(self):
+        self.assertTrue(_looks_like_person_name("Marie Dupont", self._co("Acme", "https://acme.fr")))
+        self.assertTrue(_looks_like_person_name("Jean-Pierre Martin", self._co("Acme", "https://acme.fr")))
+        # Un vrai nom qui partage UN token avec la boîte reste accepté (pas tous les tokens).
+        self.assertTrue(_looks_like_person_name("Paul Jassans", self._co("AMBULANCES DE JASSANS", "https://ambulancesdejassans.fr")))
+
+    def test_rejects_single_word(self):
+        self.assertFalse(_looks_like_person_name("Dupont", self._co("Acme", "https://acme.fr")))
+
+    def test_rejects_nav_cta_garbage(self):
+        # Faux positifs réels observés en prod (leads « pattern_nominative » bidons) :
+        # texte de nav/CTA capturé près d'un mot-clé de titre, pris pour un prénom+nom.
+        self.assertFalse(_looks_like_person_name("Youtube Votre", self._co("Spaciotempo", "https://spaciotempo.fr")))
+        self.assertFalse(_looks_like_person_name("Talial Decouvrir", self._co("Horizal", "https://horizal.com")))
+        self.assertFalse(_looks_like_person_name("Autres Ecroutage", self._co("ALR", "https://alr.fr")))
+
+
+class TestWTTJLocationFilter(unittest.TestCase):
+    """WTTJ (API) : _match_office garde/écarte selon la zone demandée."""
+    @staticmethod
+    def _targets(loc_str):
+        from candio_scraper.classification import parse_location
+        d = parse_location(loc_str)
+        return (d.get("city", "").lower(), d.get("dept", ""), (d.get("region") or "").lower())
+
+    def test_keeps_office_in_region(self):
+        from candio_scraper.sources import WTTJScraper
+        from candio_scraper.classification import parse_location
+        tc, td, tr = self._targets("Auvergne-Rhône-Alpes")
+        offices = [{"city": "Lyon", "zip_code": "69002", "country_code": "FR", "is_headquarter": True}]
+        loc = WTTJScraper._match_office(offices, tc, td, tr, parse_location)
+        self.assertIsNotNone(loc)
+        self.assertEqual(loc["region"].lower(), "auvergne-rhône-alpes")
+
+    def test_drops_paris_for_ara(self):
+        from candio_scraper.sources import WTTJScraper
+        from candio_scraper.classification import parse_location
+        tc, td, tr = self._targets("Auvergne-Rhône-Alpes")
+        offices = [{"city": "Paris", "zip_code": "75001", "country_code": "FR", "is_headquarter": True}]
+        self.assertIsNone(WTTJScraper._match_office(offices, tc, td, tr, parse_location))
+
+    def test_keeps_multisite_company(self):
+        from candio_scraper.sources import WTTJScraper
+        from candio_scraper.classification import parse_location
+        tc, td, tr = self._targets("Auvergne-Rhône-Alpes")
+        offices = [
+            {"city": "Lille", "zip_code": "59000", "country_code": "FR", "is_headquarter": True},
+            {"city": "Lyon", "zip_code": "69003", "country_code": "FR"},
+        ]
+        loc = WTTJScraper._match_office(offices, tc, td, tr, parse_location)
+        self.assertIsNotNone(loc)
+        self.assertEqual(loc["city"], "Lyon")
+
+    def test_no_zone_returns_hq_fr(self):
+        from candio_scraper.sources import WTTJScraper
+        from candio_scraper.classification import parse_location
+        offices = [{"city": "Paris", "zip_code": "75001", "country_code": "FR", "is_headquarter": True}]
+        loc = WTTJScraper._match_office(offices, "", "", "", parse_location)
+        self.assertEqual(loc["city"], "Paris")
+
+
+class TestAPECLocationParse(unittest.TestCase):
+    """APEC (API) : _loc_from_lieu parse 'Ville - DD' et _loc_matches filtre la zone."""
+    def test_parses_lieu_texte(self):
+        from candio_scraper.sources import APECScraper
+        from candio_scraper.classification import parse_location
+        loc = APECScraper._loc_from_lieu("Lyon 01 - 69", parse_location)
+        self.assertEqual(loc["dept"], "69")
+        self.assertEqual(loc["region"].lower(), "auvergne-rhône-alpes")
+        self.assertIn("lyon", loc["city"].lower())
+
+    def test_zone_filter(self):
+        from candio_scraper.sources import APECScraper
+        from candio_scraper.classification import parse_location
+        tr = (parse_location("Auvergne-Rhône-Alpes").get("region") or "").lower()
+        lyon  = APECScraper._loc_from_lieu("Lyon 01 - 69", parse_location)
+        paris = APECScraper._loc_from_lieu("Paris 01 - 75", parse_location)
+        self.assertTrue(APECScraper._loc_matches(lyon, "", "", tr))
+        self.assertFalse(APECScraper._loc_matches(paris, "", "", tr))
 
 
 class TestDomainHelpers(unittest.TestCase):
@@ -270,6 +391,47 @@ class TestMergeMaster(unittest.TestCase):
         self.assertEqual(added, 0)              # même domaine → pas d'ajout
         self.assertEqual(updated, 1)            # meilleur email → mise à jour
         self.assertEqual(merged[0].contact_email, "claire.martin@acme.fr")
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+    @staticmethod
+    def _write_master(path: Path, name: str, website: str, email: str, source: str) -> None:
+        """Écrit un master CSV minimal à 1 ligne (merge_into_master ne persiste pas seul)."""
+        import csv
+        with path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=_FIELDNAMES); w.writeheader()
+            w.writerow({**{k: "" for k in _FIELDNAMES}, "name": name,
+                        "website": website, "contactEmail": email, "emailSource": source})
+
+    def test_unreliable_email_wiped_when_nothing_better_found(self):
+        # LEADS-UPDATE : un email pattern_nominative bidon (nom bidon désormais rejeté par
+        # le garde-fou) ne doit PAS survivre indéfiniment juste parce que le ré-enrichissement
+        # ne trouve rien de mieux — il doit être effacé, pas conservé tel quel.
+        path = self._tmp()
+        self._write_master(path, "ALR", "https://alr.fr", "autres.ecroutage@alr.fr", "pattern_nominative")
+        # Re-fusion : rien trouvé cette fois (email/source vides en mémoire, cf. reset enrich_only).
+        c2 = Company(name="ALR", website="https://alr.fr", contact_email="", email_source="")
+        merged, added, updated = merge_into_master(path, [c2], _FIELDNAMES)
+        self.assertEqual(added, 0)
+        self.assertEqual(updated, 1)
+        self.assertEqual(merged[0].contact_email, "")
+        self.assertEqual(merged[0].email_source, "no_email")
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+    def test_real_email_never_wiped_by_empty_reenrich(self):
+        # Contrepreuve : un email RÉEL (hunter/web_crawl) n'est jamais effacé par un
+        # ré-enrichissement qui ne trouve rien — seule une source déjà non fiable l'est.
+        path = self._tmp()
+        self._write_master(path, "Acme2", "https://acme2.fr", "claire.martin@acme2.fr", "hunter_verified")
+        c2 = Company(name="Acme2", website="https://acme2.fr", contact_email="", email_source="")
+        merged, added, updated = merge_into_master(path, [c2], _FIELDNAMES)
+        self.assertEqual(merged[0].contact_email, "claire.martin@acme2.fr")
+        self.assertEqual(merged[0].email_source, "hunter_verified")
         try:
             path.unlink()
         except OSError:
@@ -1082,6 +1244,29 @@ class TestDebtCleanup(unittest.TestCase):
         for s in _REAL_EMAIL_SOURCES:
             self.assertIn(s, EmailSource.ALL_SOURCES,
                           f"'{s}' dans _REAL_EMAIL_SOURCES mais absent de EmailSource.ALL_SOURCES")
+
+
+class TestSkipNoEmailEnrichOnly(unittest.TestCase):
+    """LEADS-UPDATE : skip_no_email n'exclut plus les entreprises en mode enrich_only
+    (« Mettre à jour le CSV ») — sinon elles restent invisibles à merge_into_master et
+    un ancien email non fiable ne peut jamais être effacé (cf. io_csv._maybe_update)."""
+
+    @staticmethod
+    def _run(enrich_only: bool):
+        from candio_scraper.pipeline import _run_email_enrich, EmailEnrichConfig
+        companies = [Company(name="ALR", website="https://alr.fr", contact_email="", email_source="")]
+        cfg = EmailEnrichConfig(
+            use_web_crawl=False, use_hunter=False, use_linkedin=False, use_pattern=False,
+            use_github=False, use_smtp_batch=False, skip_no_email=True, enrich_only=enrich_only,
+        )
+        _run_email_enrich(companies=companies, fetcher=None, cfg=cfg, hunter=None, delay=0, cache=None)
+        return companies
+
+    def test_fresh_scrape_still_excludes(self):
+        self.assertEqual(len(self._run(enrich_only=False)), 0)
+
+    def test_enrich_only_keeps_company(self):
+        self.assertEqual(len(self._run(enrich_only=True)), 1)
 
 
 if __name__ == "__main__":

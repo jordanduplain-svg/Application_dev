@@ -13,6 +13,7 @@ import smtplib
 import socket
 import threading
 import time
+import unicodedata
 from datetime import datetime
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING
@@ -35,7 +36,7 @@ from .constants import (
     HR_KEYWORDS, HR_EMAIL_RE, CONTACT_PATHS, ATS_DOMAINS, OBFUSCATION_RE,
     GENERIC_PREFIXES, RECRUITER_NAME_RE, HR_TITLES, HR_TITLE_ROLE,
     CONTACT_LINK_KEYWORDS, CEO_TITLES, CEO_TITLE_ROLE, TARGET_JOB_MANAGER_TITLES,
-    ANTISPAM_TOKEN_RE,
+    ANTISPAM_TOKEN_RE, UNVERIFIED_EMAIL_SOURCES,
     WHOIS_IGNORE_RE as _WHOIS_IGNORE_RE,    # B2-1 : déplacé dans constants.py
     WHOIS_EMAIL_RE  as _WHOIS_EMAIL_RE,     # B2-1 : déplacé dans constants.py
 )
@@ -481,7 +482,7 @@ _JUNK_LOCAL_PARTS = frozenset([
     "xxx", "xxxx", "abc", "aaa", "nobody", "someone", "anyone",
     # Fragments de TLD/protocole ramassés par erreur dans du texte/HTML
     # (ex : "…site.com@autre.eu" → local-part "com"). Jamais un vrai contact.
-    "com", "www", "http", "https", "fr", "en", "net", "org", "html",
+    "com", "www", "website", "site", "http", "https", "fr", "en", "net", "org", "html",
     # Noms de démo classiques (templates, captures d'écran) — ex : john@studiobinder.com
     "john", "jane", "johndoe", "janedoe", "jdoe", "joe", "doe", "foo", "bar", "baz",
     # Mailboxes techniques / registrar / domaine — souvent issues du WHOIS.
@@ -653,6 +654,10 @@ def _sanitize_email_tld(email: str) -> str:
     if "@" not in email:
         return email
     local, domain = email.rsplit("@", 1)
+    # Aucun domaine d'email ne commence par "www." : c'est un artefact de parsing
+    # (ex : "website@www.quantiota.ai" ramassé dans du texte). On le retire.
+    domain = domain[4:] if domain.startswith("www.") else domain
+    email = f"{local}@{domain}"
     parts = domain.split(".")
     # TLD final plausible → rien à faire.
     from .domain_resolve import _tld_plausible
@@ -1227,6 +1232,65 @@ def _build_priority_titles(target_job: str = "") -> list[tuple[list[str], dict]]
     return groups
 
 
+# Phase 4c : mots qui ne sont JAMAIS un prénom/nom (intitulés de section, rôles,
+# rubriques de menu). Le regex de nom capture « deux mots capitalisés » près d'un titre ;
+# sur une page maigre ça attrape « Recrutement Travailler », « Fondateurs Directeur »…
+# Normalisés sans accent, en minuscules.
+_NAME_STOPWORDS = frozenset({
+    "recrutement", "recrutements", "recruteur", "recruteuse", "recrute", "recrutez",
+    "travailler", "travaillez", "rejoindre", "rejoignez", "postuler", "postulez",
+    "candidature", "candidatures", "carriere", "carrieres", "emploi", "emplois", "job", "jobs",
+    "fondateur", "fondateurs", "fondatrice", "cofondateur", "cofondateurs", "founder", "founders",
+    "directeur", "directrice", "directeurs", "direction", "president", "presidente", "pdg",
+    "gerant", "gerante", "responsable", "manager", "management", "leadership",
+    "ressources", "humaines", "talent", "talents", "people", "equipe", "equipes",
+    "contact", "contacts", "accueil", "propos", "apropos", "mentions", "legales",
+    "services", "service", "societe", "entreprise", "entreprises", "groupe", "group",
+    "notre", "nos", "nous", "qui", "sommes", "histoire", "actualites", "actualite",
+    "news", "blog", "presse", "partenaires", "clients",
+    # BUG (leads réels vus en prod) : mots de navigation/CTA capturés à côté d'un
+    # mot-clé de titre et pris pour un prénom+nom → email nominatif fantaisiste
+    # (ex. « Youtube Votre » → youtube.votre@…, « Talial Découvrir » → …decouvrir@…,
+    # « Autres Écroutage » → autres.ecroutage@…).
+    "votre", "vos", "voir", "decouvrir", "decouvrez", "autres", "autre", "plus",
+    "menu", "toutes", "toute", "tous", "tout", "ici", "suivre", "abonnez",
+})
+
+
+def _strip_accents(s: str) -> str:
+    """Minuscule sans accents — pour comparer noms et mots-clés de façon robuste."""
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def _looks_like_person_name(name: str, company: "Company") -> bool:
+    """
+    Garde-fou Phase 4c : vrai SEULEMENT si `name` ressemble à un vrai prénom + nom,
+    et pas à un intitulé de section (« Recrutement Travailler ») ni au nom de
+    l'entreprise (« Ambulances Jassans »). Filtre les faux positifs AVANT de
+    construire un email nominatif (sinon adresses bidon → rebonds garantis).
+    """
+    toks = [_strip_accents(t) for t in name.split() if t]
+    if len(toks) < 2:
+        return False
+    # (a) un mot générique / rôle / rubrique → ce n'est pas un nom de personne.
+    if any(t in _NAME_STOPWORDS for t in toks):
+        return False
+    # (b) TOUS les mots significatifs = nom de l'entreprise / label du domaine → rejet.
+    #     (on garde « Jean Jassans » si « jean » n'est pas une marque ; on rejette
+    #      « Ambulances Jassans » dont les deux mots viennent du nom/domaine.)
+    brand = {_strip_accents(t) for t in (company.name or "").split() if len(t) > 2}
+    label = _domain(company.website or "").split(".")[0]
+    if label:
+        brand.add(_strip_accents(label))
+    sig = [t for t in toks if len(t) > 2]
+    if sig and all(t in brand for t in sig):
+        return False
+    return True
+
+
 def find_recruiter_name(
     company: Company,
     fetcher: StealthyFetcher,
@@ -1285,6 +1349,8 @@ def find_recruiter_name(
                 if not m:
                     continue
                 found_name = f"{m.group(1)} {m.group(2)}".strip()
+                if not _looks_like_person_name(found_name, company):
+                    continue   # faux positif (intitulé / nom de boîte) → on cherche ailleurs
                 found_role = role_map.get(title_kw, "")
                 if not found_role:
                     for kw, r in role_map.items():
@@ -1606,14 +1672,23 @@ def enrich_web_crawl(
             # B1-28 : dict {id(c) → c} pour lookup O(1) au lieu de O(n) par résultat.
             _id_to_company = {id(c): c for c in need_recruiter}
             _rec_workers = min(6, len(need_recruiter))
+            _rec_total = len(need_recruiter)
+            _rec_done = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=_rec_workers) as ex:
-                for cid, rname, rrole in ex.map(_do_recruiter, need_recruiter):
+                # as_completed (pas ex.map) : le compteur avance dès qu'UNE entreprise
+                # finit, sans attendre que tout le lot soumis dans l'ordre soit traité.
+                futures = [ex.submit(_do_recruiter, c) for c in need_recruiter]
+                for future in concurrent.futures.as_completed(futures):
+                    cid, rname, rrole = future.result()
+                    _rec_done += 1
                     if rname:
                         _c = _id_to_company.get(cid)
                         if _c is not None:
                             _c.contact_name = rname
                             _c.contact_role = rrole
                             recruiter_found += 1
+                    if _rec_done % 10 == 0 or _rec_done == _rec_total:
+                        print(f"      … {_rec_done}/{_rec_total} traités")
 
     # ── Phase 4d : emails NOMINATIFS ──────────────────────────────────────────
     # B1-8 : si email_pattern est vide mais qu'on a un nom de contact, on essaie
@@ -1623,6 +1698,11 @@ def enrich_web_crawl(
     _FALLBACK_PATTERN = KNOWN_PATTERNS[0]   # "{first}.{last}" (B2-2 : import promu module-level)
     for c in to_crawl:
         if (c.contact_name and c.email_source in ("", "pattern", "no_email")):
+            # Garde-fou : ne construit un nominatif que si le nom est plausible. Un nom
+            # bidon (faux positif 4c, ou cache antérieur au correctif) produirait une
+            # adresse fantaisiste → rebond. Cf. _looks_like_person_name.
+            if not _looks_like_person_name(c.contact_name, c):
+                continue
             first, last = split_name(c.contact_name)
             if first and last:
                 # Utilise le pattern détecté ou le fallback standard si aucun
@@ -1937,8 +2017,8 @@ def fuzzy_dedup(
         return bool(ga) and bool(gb) and ga != gb
 
     def _has_real_email(c: Company) -> bool:
-        """True si l'entreprise a un email RÉEL (pas un pattern générique)."""
-        return bool(c.contact_email) and c.email_source not in ("", "pattern", "no_email")
+        """True si l'entreprise a un email RÉEL (pas un pattern/catch-all/linkedin deviné)."""
+        return bool(c.contact_email) and c.email_source not in UNVERIFIED_EMAIL_SOURCES and c.email_source != "no_email"
 
     def _is_better(candidate: Company, current: Company) -> bool:
         """

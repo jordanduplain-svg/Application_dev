@@ -9,7 +9,7 @@ import { logger } from '../lib/logger';
  *
  * Pour l'instant : relance automatique quotidienne. Chaque jour (et au démarrage
  * de l'app), si l'option est activée, on enfile une relance pour les candidatures
- * éligibles (SENT depuis +7 j, sans réponse ni relance), bornée au quota d'envoi
+ * éligibles (SENT depuis +10 j, sans réponse ni relance), bornée au quota d'envoi
  * RESTANT du jour pour ne pas dépasser le plafond anti-suspension Gmail.
  *
  * Tout passe par enqueueFollowUp → mêmes garde-fous que la relance manuelle

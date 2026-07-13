@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, Search, Reply, MessageSquare } from 'lucide-react';
 import DOMPurify from 'dompurify';
-import type { Application } from '@candio/shared';
+import type { Application, ThreadMessage } from '@candio/shared';
 import { api } from '../lib/api';
+import { MANUAL_STATUS_OPTIONS } from '../lib/campaignDetail';
 import { stripQuotedReply, classifyReplySentiment } from '../../src/tasks/reply-matching';
 
 // Pastille de sentiment de la réponse (heuristique, sans IA).
@@ -14,6 +15,13 @@ const SENTIMENT = {
 
 // PERF-1 : pagination côté client.
 const PAGE_SIZE = 20;
+
+// CANNED-01 : modèles de réponse rapide (répondre en 1 clic, éditables ensuite).
+const CANNED_REPLIES: { label: string; body: string }[] = [
+  { label: 'Dispo entretien', body: 'Bonjour,\n\nMerci pour votre retour. Je suis disponible pour un entretien à votre convenance — n\'hésitez pas à me proposer un créneau, en visio ou sur place.\n\nBien cordialement,' },
+  { label: 'Demander des précisions', body: 'Bonjour,\n\nMerci pour votre message. Pourriez-vous me préciser les prochaines étapes du processus ainsi que le détail du poste ?\n\nBien cordialement,' },
+  { label: 'Remercier / rester en contact', body: 'Bonjour,\n\nMerci pour votre retour. Je reste à votre disposition et à l\'écoute de toute opportunité future au sein de votre équipe.\n\nBien cordialement,' },
+];
 
 // Page Réponses : liste des candidatures dont une réponse a été détectée par IMAP.
 //
@@ -115,6 +123,41 @@ export default function RepliesPage() {
     }
   };
 
+  // REMIND-01 : pose/efface un rappel (« me rappeler de répondre dans X jours »). Optimiste.
+  const setRemind = async (id: string, days: number | null) => {
+    const iso = days === null ? null : new Date(Date.now() + days * 864e5).toISOString();
+    setReplies((prev) => prev.map((r) => r.id === id ? { ...r, remindAt: iso } : r));
+    try {
+      await api.invoke('application:setRemindAt', { id, remindAt: iso });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du rappel');
+      await load();
+    }
+  };
+
+  // THREAD-01 : fil de conversation complet, chargé à la demande par candidature.
+  const [threads, setThreads] = useState<Record<string, ThreadMessage[]>>({});
+  const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
+  const toggleThread = async (id: string) => {
+    setOpenThreads((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    if (!threads[id]) {
+      try { const t = await api.invoke('application:getThread', { id }); setThreads((p) => ({ ...p, [id]: t })); }
+      catch (e) { setError(e instanceof Error ? e.message : 'Erreur lors du chargement du fil'); }
+    }
+  };
+
+  // Qualification directe de la réponse (manualStatus) depuis cette page — même liste
+  // et même canal que la page Détail de campagne. Optimiste : maj locale immédiate.
+  const setManualStatus = async (id: string, manualStatus: string) => {
+    setReplies((prev) => prev.map((r) => r.id === id ? { ...r, manualStatus: manualStatus || null } : r));
+    try {
+      await api.invoke('application:setManualStatus', { id, manualStatus: manualStatus || null });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du changement de statut');
+      await load(); // rollback via rechargement si l'écriture a échoué
+    }
+  };
+
   // UX-S9 : réponse rapide au recruteur.
   const [replyingId, setReplyingId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
@@ -127,6 +170,7 @@ export default function RepliesPage() {
       await api.invoke('application:replyToRecruiter', { id: applicationId, body: replyBody });
       setReplyingId(null);
       setReplyBody('');
+      await load(); // REPLY-OUT : recharge pour afficher ma réponse + basculer le badge
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur lors de l\'envoi');
     } finally {
@@ -193,13 +237,17 @@ export default function RepliesPage() {
   }
 
   // FM6 + F4 : filtre plein-texte (entreprise, objet ET contenu de la réponse) + tri.
+  // Dernière activité du fil = max(réponse recruteur, ma réponse) → un fil que je viens
+  // de répondre OU qui vient de recevoir une réponse remonte en haut.
+  const lastActivity = (r: Application) =>
+    Math.max(new Date(r.repliedAt ?? 0).getTime(), new Date(r.myRepliedAt ?? 0).getTime());
   const q = search.toLowerCase();
   const filteredReplies = replies
     .filter((r) => !q || [r.companyName, r.subject, r.replyContent]
       .some((v) => (v ?? '').toLowerCase().includes(q)))
     .sort((a, b) => {
-      if (sortBy === 'date_asc') return new Date(a.repliedAt ?? 0).getTime() - new Date(b.repliedAt ?? 0).getTime();
-      if (sortBy === 'date_desc') return new Date(b.repliedAt ?? 0).getTime() - new Date(a.repliedAt ?? 0).getTime();
+      if (sortBy === 'date_asc') return lastActivity(a) - lastActivity(b);
+      if (sortBy === 'date_desc') return lastActivity(b) - lastActivity(a);
       if (sortBy === 'company') return a.companyName.localeCompare(b.companyName);
       if (sortBy === 'status') return (a.manualStatus ?? '').localeCompare(b.manualStatus ?? '');
       return 0;
@@ -252,6 +300,16 @@ export default function RepliesPage() {
       <ul>
         {paginatedReplies.map((a) => {
           const sent = SENTIMENT[classifyReplySentiment(stripQuotedReply(a.replyContent))];
+          // REPLY-OUT : « Répondu » si j'ai répondu APRÈS le dernier message reçu ;
+          // sinon « En attente de réponse » (le fil attend mon retour).
+          // ponytail: repliedAt n'est posé qu'à la 1ʳᵉ réponse recruteur → une 2ᵉ réponse
+          // ne rebascule pas le badge tant que le polling ne met pas repliedAt à jour.
+          const myAt = a.myRepliedAt ? new Date(a.myRepliedAt).getTime() : 0;
+          const recAt = a.repliedAt ? new Date(a.repliedAt).getTime() : 0;
+          const iReplied = myAt > 0 && myAt >= recAt;
+          const replyBadge = iReplied
+            ? { label: '✓ Répondu', color: '#1D9E75', bg: '#e8f8ee' }
+            : { label: '⏳ En attente de réponse', color: '#b26a00', bg: '#fff4e0' };
           return (
           <li key={a.id} style={{ flexDirection: 'column', alignItems: 'stretch', borderLeft: `4px solid ${sent.color}`, gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -260,14 +318,86 @@ export default function RepliesPage() {
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: sent.bg, color: sent.color }}>
                 {sent.label}
               </span>
+              {/* REPLY-OUT : badge d'état de MA réponse (se met à jour après envoi/retour). */}
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: replyBadge.bg, color: replyBadge.color }}>
+                {replyBadge.label}
+              </span>
               <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--text-sub)' }}>
                 {a.repliedAt ? new Date(a.repliedAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
               </span>
+              {/* Qualification de la réponse (Entretien, Offre reçue, Refusé, Accepté) — en haut à droite. */}
+              <select value={a.manualStatus ?? ''} onChange={(e) => void setManualStatus(a.id, e.target.value)}
+                title="Statut de cette réponse" style={{ fontSize: '12px', padding: '3px 6px' }}>
+                {MANUAL_STATUS_OPTIONS.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              </select>
             </div>
             <div style={{ fontSize: '12.5px', color: 'var(--text-sub)', marginTop: '-2px' }}>{a.subject}</div>
 
             {/* UX-10 : rendu intelligent du contenu (HTML ou texte brut). */}
             {renderContent(a.replyContent, a.id)}
+
+            {/* REPLY-OUT : ma réponse au recruteur, affichée dans le fil (alignée à droite). */}
+            {a.myReplyContent && (
+              <div style={{ marginTop: '8px', marginLeft: 'auto', maxWidth: '85%' }}>
+                <div style={{ fontSize: '11px', color: '#5856d6', fontWeight: 600, textAlign: 'right', marginBottom: '3px' }}>
+                  <Reply size={12} style={{ verticalAlign: '-1px' }} /> Votre réponse
+                  {a.myRepliedAt && ` · ${new Date(a.myRepliedAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+                </div>
+                <div style={{
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  background: '#eef0ff', border: '1px solid #dcdfff', borderRadius: '10px',
+                  padding: '10px 12px', fontSize: '13.5px', lineHeight: 1.55, color: '#1d1d1f',
+                  maxHeight: '220px', overflow: 'auto',
+                }}>
+                  {a.myReplyContent}
+                </div>
+              </div>
+            )}
+
+            {/* REMIND-01 : rappel / snooze — « me rappeler de répondre ». */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+              {a.remindAt ? (
+                <span style={{ fontSize: '12px', color: '#b26a00', background: '#fff4e0', border: '1px solid #ffd591',
+                  borderRadius: '999px', padding: '2px 10px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  ⏰ Rappel le {new Date(a.remindAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
+                  <button onClick={() => void setRemind(a.id, null)} title="Effacer le rappel"
+                    style={{ background: 'none', border: 'none', color: '#b26a00', cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: 0 }}>✕</button>
+                </span>
+              ) : (
+                <>
+                  <span style={{ fontSize: '11px', color: 'var(--text-sub)' }}>⏰ Me rappeler :</span>
+                  <button onClick={() => void setRemind(a.id, 2)} className="btn-secondary" style={{ fontSize: '11px', padding: '2px 8px' }}>dans 2 j</button>
+                  <button onClick={() => void setRemind(a.id, 7)} className="btn-secondary" style={{ fontSize: '11px', padding: '2px 8px' }}>1 semaine</button>
+                </>
+              )}
+            </div>
+
+            {/* THREAD-01 : fil de conversation complet (candidature → réponses → mes réponses). */}
+            <button onClick={() => void toggleThread(a.id)} className="btn-secondary"
+              style={{ fontSize: '11px', marginTop: '8px', padding: '3px 8px', alignSelf: 'flex-start' }}>
+              {openThreads.has(a.id) ? '▲ Masquer le fil' : '💬 Voir le fil complet'}
+            </button>
+            {openThreads.has(a.id) && threads[a.id] && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                {threads[a.id].map((m) => {
+                  const out = m.direction === 'OUT';
+                  return (
+                    <div key={m.id} style={{ alignSelf: out ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+                      <div style={{ fontSize: '10.5px', color: out ? '#5856d6' : '#555', marginBottom: '2px', textAlign: out ? 'right' : 'left' }}>
+                        {out ? 'Vous' : (m.fromEmail || 'Recruteur')} · {new Date(m.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <div style={{
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '13px', lineHeight: 1.5,
+                        background: out ? '#eef0ff' : '#f6f7f9', border: `1px solid ${out ? '#dcdfff' : '#ececf0'}`,
+                        borderRadius: '10px', padding: '9px 12px', maxHeight: '220px', overflow: 'auto',
+                      }}>
+                        {stripQuotedReply(m.body)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* UX-10 : note de suivi. */}
             <div style={{ marginTop: '8px' }}>
@@ -346,6 +476,16 @@ export default function RepliesPage() {
             {/* UX-S9 : répondre au recruteur. */}
             {replyingId === a.id ? (
               <div style={{ marginTop: '8px' }}>
+                {/* CANNED-01 : modèles de réponse rapide — insèrent un texte éditable. */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-sub)', alignSelf: 'center' }}>Modèle :</span>
+                  {CANNED_REPLIES.map((t) => (
+                    <button key={t.label} onClick={() => setReplyBody(t.body)} className="btn-secondary"
+                      title="Insère ce modèle (modifiable)" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
                 <textarea
                   rows={3}
                   placeholder="Votre réponse…"

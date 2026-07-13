@@ -33,6 +33,11 @@ export default function CampaignDetailPage({
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [apps, setApps] = useState<Application[]>([]);
+  // COST-EST : coût IA moyen par mail (historique) → estimation avant génération/envoi.
+  const [aiAvgUsd, setAiAvgUsd] = useState(0);
+  useEffect(() => {
+    api.invoke('stats:getAiCost').then((c) => setAiAvgUsd(c.avgUsdPerEmail)).catch(() => {});
+  }, []);
   // FM4 : adresse d'envoi du profil — affichée dans le modal de prévisualisation.
   const [senderEmail, setSenderEmail] = useState<string | null>(null);
 
@@ -60,6 +65,8 @@ export default function CampaignDetailPage({
   const draftBodyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Message d'info neutre (pas une erreur) — ex. entreprises sautées à la génération.
+  const [notice, setNotice] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSendingAll, setIsSendingAll] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -557,7 +564,13 @@ export default function CampaignDetailPage({
 
   const generate = async () => {
     setIsGenerating(true);
-    await safe(() => api.invoke('application:generate', { campaignId: id }));
+    setNotice(null);
+    await safe(async () => {
+      const r = await api.invoke('application:generate', { campaignId: id });
+      if (r.skippedUnverified > 0 && isMounted.current) {
+        setNotice(`⚠ ${r.skippedUnverified} entreprise(s) ignorée(s) — email à vérifier (aucun token dépensé). Corrige-les dans Leads (filtre « ⚠ Emails à vérifier » + « Mettre à jour le CSV »), ré-importe-les, puis reclique Générer.`);
+      }
+    });
     if (isMounted.current) setIsGenerating(false);
   };
 
@@ -565,15 +578,23 @@ export default function CampaignDetailPage({
   // réappliquer le prompt courant. Ne touche jamais aux candidatures envoyées.
   const regenerateAll = async () => {
     const drafts = apps.filter((a) => a.status === 'DRAFT' || a.status === 'FAILED');
+    // COST-EST : estimation du coût IA de (re)génération (coût moyen/mail × nombre).
+    const est = (drafts.length * (aiAvgUsd > 0 ? aiAvgUsd : 0.01));
+    const costLine = `\n\n💡 Coût IA de génération estimé : ~$${est.toFixed(est < 1 ? 3 : 2)}${aiAvgUsd > 0 ? '' : ' (estimation par défaut — aucun historique)'}.`;
     const ok = await api.invoke('dialog:confirm', {
       title: 'Régénérer toutes les lettres',
-      message: `Régénérer (écraser) ${drafts.length} brouillon(s)/échec(s) + générer les manquantes avec le prompt actuel ? Les candidatures déjà envoyées ne sont pas touchées.`,
+      message: `Régénérer (écraser) ${drafts.length} brouillon(s)/échec(s) + générer les manquantes avec le prompt actuel ? Les candidatures déjà envoyées ne sont pas touchées.${costLine}`,
     });
     if (!ok) return;
     setIsGenerating(true);
+    setNotice(null);
     try {
       const r = await api.invoke('application:regenerateAll', { campaignId: id });
-      if (r.enqueued === 0) setError('Aucune lettre à régénérer (toutes déjà envoyées ?).');
+      if (r.enqueued === 0 && r.skippedUnverified === 0) {
+        setError('Aucune lettre à régénérer (toutes déjà envoyées ?).');
+      } else if (r.skippedUnverified > 0) {
+        setNotice(`⚠ ${r.skippedUnverified} entreprise(s) ignorée(s) — email à vérifier (aucun token dépensé). Corrige-les dans Leads (filtre « ⚠ Emails à vérifier » + « Mettre à jour le CSV »), ré-importe-les, puis regénère.`);
+      }
     } catch (e) {
       setError(friendlyError(e instanceof Error ? e.message : 'Erreur lors de la régénération'));
     } finally {
@@ -969,6 +990,8 @@ export default function CampaignDetailPage({
       )}
 
       {error && <p className="error">{error}</p>}
+      {notice && <p style={{ color: '#7a4f00', background: '#fff7e6', border: '1px solid #ffd591',
+        borderRadius: '8px', padding: '8px 12px', fontSize: '13px', margin: '0 0 12px' }}>{notice}</p>}
 
       {/* FM7 : toast d'annulation après suppression d'entreprise. */}
       {deletedCompany && (

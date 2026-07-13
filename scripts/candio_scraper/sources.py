@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import time
 from abc import ABC, abstractmethod
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 
 import requests
 
@@ -120,6 +120,32 @@ class BaseScraper(ABC):
                 _pool.rotate(reason="exception")
             raise
 
+    def _api_post(self, url: str, json_body: "dict | None" = None, timeout: int = 12,
+                  headers: "dict | None" = None,
+                  proxy_pool: "ProxyPool | None" = None) -> "requests.Response":
+        """
+        Appel REST POST JSON avec rate limiting (miroir de _api_get). Pour les sources
+        dont l'API de recherche est en POST (ex : APEC rechercheOffre).
+        """
+        if self.rate_limiter:
+            self.rate_limiter.wait()
+        self.pages_scanned += 1
+        _pool = proxy_pool or self._proxy_pool
+        proxies = _pool.requests_dict() if _pool else {}
+        hdrs = {"Content-Type": "application/json", "Accept": "application/json"}
+        if headers:
+            hdrs.update(headers)
+        try:
+            resp = self._session.post(url, json=json_body, headers=hdrs, timeout=timeout, proxies=proxies)
+            if _pool and _pool.should_rotate(resp.status_code):
+                _pool.rotate(reason=f"HTTP {resp.status_code}")
+                resp = self._session.post(url, json=json_body, headers=hdrs, timeout=timeout, proxies=proxies)
+            return resp
+        except Exception:
+            if _pool:
+                _pool.rotate(reason="exception")
+            raise
+
     def _sleep(self):
         """
         Pause inter-pages — respecte le RateLimiter ET le délai utilisateur.
@@ -140,137 +166,117 @@ class BaseScraper(ABC):
 
 class WTTJScraper(BaseScraper):
     name = "wttj"
-    PAGES_PER_RUN = 10   # fenêtre de 10 pages ; le curseur avance de 10/run en explore
-    BASE   = "https://www.welcometothejungle.com"
-    SEARCH = "https://www.welcometothejungle.com/fr/companies"
-
-    # Point 3 (audit) : la page profil est chargée en HEADLESS (~3 s) — c'est le
-    # plus gros poste de temps. On borne le nombre de profils chargés : au-delà,
-    # on garde le nom (lu sur le listing) et on laisse la Phase 3b résoudre le
-    # domaine (rapide, avec cache + registre de crawl). Budget large → comportement
-    # identique pour des runs normaux ; ne protège que les très gros volumes.
-    PROFILE_BUDGET: int = 35
+    PAGES_PER_RUN = 10   # fenêtre de 10 pages d'API ; le curseur avance de 10/run en explore
+    API = "https://api.welcometothejungle.com/api/v1"
 
     def search(self, sector: str, city: str, max_results: int) -> list[Company]:
         """
-        Parcourt les pages de résultats WTTJ (jusqu'à 10 pages).
-        Pour chaque entreprise listée, charge la page profil (site web, taille,
-        fraîcheur) DANS LA LIMITE de PROFILE_BUDGET ; au-delà, on conserve le nom
-        seul (domaine résolu en Phase 3b). Retourne au plus ``max_results``.
+        WTTJ via son API REST publique (api.welcometothejungle.com/api/v1/organizations).
+        L'ancien scraping du listing HTML renvoyait 0 : le site est une SPA React dont la
+        recherche (Algolia) est rendue en JS → aucune ancre dans le HTML headless. L'API
+        renvoie du JSON fiable, sans anti-bot.
+
+        Elle n'expose PAS de filtre géographique → on filtre la localisation CÔTÉ CLIENT
+        sur les `offices`, à la granularité demandée (ville > département > région), en
+        gardant les entreprises multi-sites dont AU MOINS un bureau est dans la zone. Le
+        site web externe n'est pas fourni par l'API → résolu en Phase 3b (comme ailleurs).
         """
+        from .classification import parse_location
+
+        target   = parse_location(city) if city else {}
+        t_city   = (target.get("city") or "").lower()
+        t_dept   = target.get("dept") or ""
+        t_region = (target.get("region") or "").lower()
+
         companies: list[Company] = []
-        seen_href: set[str] = set()
-        profiles_fetched = 0
-        params: dict = {}
-        if sector:
-            params["query"] = sector
-        if city:
-            params["aroundQuery"] = city
-            params["refinementList[office.country_code][0]"] = "FR"
-
+        seen: set[str] = set()
         for page_num in range(1 + self.page_offset, 1 + self.page_offset + self.PAGES_PER_RUN):
-            if page_num > 1:
-                params["page"] = page_num
-            url = f"{self.SEARCH}?{urlencode(params)}"
-            print(f"   [{self.name}] p{page_num} → {url}")
-            page = self._get(url)
-            if page is None:
+            params = {"query": sector, "page": page_num}
+            print(f"   [{self.name}] p{page_num} (API) → {self.API}/organizations?query={sector}&page={page_num}")
+            try:
+                resp = self._api_get(f"{self.API}/organizations", params=params, timeout=12)
+                if resp.status_code != 200:
+                    print(f"   ⚠  [{self.name}] HTTP {resp.status_code} — arrêt.")
+                    break
+                orgs = resp.json().get("organizations", [])
+            except Exception as e:
+                print(f"   ⚠  [{self.name}] {e}")
                 break
+            if not orgs:
+                break   # plus de résultats
 
-            found = 0
-            for a in page.css("a[href*='/fr/companies/']"):
-                href = a.attrib.get("href", "")
-                if not href or "/jobs" in href or href in seen_href:
+            for org in orgs:
+                name = (org.get("name") or "").strip()
+                if not name or name.lower() in seen:
                     continue
-                seen_href.add(href)
-                anchor_name = (a.text or "").strip()
-
-                if profiles_fetched < self.PROFILE_BUDGET:
-                    c = self._profile(urljoin(self.BASE, href))
-                    profiles_fetched += 1
-                    if c:
-                        companies.append(c)
-                        found += 1
-                        self._sleep()
-                elif anchor_name:
-                    # Budget profil épuisé → nom seul, domaine résolu en Phase 3b.
-                    companies.append(Company(name=anchor_name, source=self.name))
-                    found += 1
-
+                loc = self._match_office(org.get("offices") or [], t_city, t_dept, t_region, parse_location)
+                if loc is None:
+                    continue   # aucun bureau dans la zone demandée (ou hors France)
+                seen.add(name.lower())
+                sectors = org.get("sectors") or []
+                sec = (sectors[0].get("parent_name") or sectors[0].get("name") or "").strip() if sectors else ""
+                companies.append(Company(
+                    name=name, source=self.name, sector=sec,
+                    country=loc.get("country", ""), region_admin=loc.get("region", ""),
+                    dept=loc.get("dept", ""), dept_name=loc.get("dept_name", ""),
+                    city=loc.get("city", ""),
+                ))
                 if len(companies) >= max_results:
                     return companies
-            if found == 0:
-                break
             self._sleep()
         return companies
 
-    def _profile(self, url: str) -> Company | None:
+    @staticmethod
+    def _match_office(offices: list, t_city: str, t_dept: str, t_region: str, parse_location) -> "dict | None":
         """
-        Charge la page profil d'une entreprise WTTJ et en extrait les métadonnées.
-        Retourne un Company avec nom, site web, contact RH affiché, secteur, taille,
-        région et fraîcheur — ou None si la page est vide ou inaccessible.
+        Localisation structurée d'un bureau correspondant à la zone demandée, ou None si
+        aucun ne correspond. Sans zone demandée → le siège (ou le 1er bureau), France
+        uniquement. Une entreprise multi-sites est conservée si l'UN de ses bureaux est
+        dans la zone (ex : siège à Lille mais agence à Lyon → gardée pour Auvergne-Rhône-Alpes).
         """
-        page = self._get(url)
-        if page is None:
-            return None
-        h1 = page.css_first("h1")
-        name = h1.text.strip() if h1 else ""
-        if not name:
-            return None
+        want_zone = bool(t_city or t_dept or t_region)
 
-        website = ""
-        for a in page.css("a[href]"):
-            href = a.attrib.get("href", "")
-            if href.startswith("http") and "welcometothejungle" not in href:
-                website = href
-                break
+        def _loc(off: dict) -> dict:
+            zip_code = str(off.get("zip_code") or "").strip()
+            cc = (off.get("country_code") or "").upper()
+            dept = ""
+            if cc == "FR" and len(zip_code) >= 2:
+                dept = zip_code[:3] if zip_code.startswith(("97", "98")) else zip_code[:2]
+            parsed = parse_location((off.get("city") or ""), explicit_dept=dept)
+            return {
+                "country":   "France" if cc == "FR" else (cc or parsed.get("country", "")),
+                "region":    parsed.get("region", ""),
+                "dept":      dept or parsed.get("dept", ""),
+                "dept_name": parsed.get("dept_name", ""),
+                "city":      (off.get("city") or parsed.get("city", "")).strip(),
+            }
 
-        contact = ""
-        el = page.css_first("[data-testid='recruiter-name']")
-        if el:
-            contact = el.text.strip()
+        def _matches(loc: dict) -> bool:
+            if loc.get("country") and loc["country"] != "France":
+                return False
+            if t_city:
+                return t_city in (loc.get("city") or "").lower()
+            if t_dept:
+                return (loc.get("dept") or "") == t_dept
+            if t_region:
+                return (loc.get("region") or "").lower() == t_region
+            return True
 
-        # Secteur d'activité
-        activity = ""
-        for tag in page.css("[data-testid='tag'], [class*='industry'], [class*='sector']"):
-            t = tag.text.strip()
-            if t and len(t) < 40:
-                activity = t
-                break
+        if not offices:
+            # Pas de bureau listé → impossible de filtrer. Si une zone est demandée, on
+            # écarte (ne pas polluer la région avec des boîtes de lieu inconnu).
+            return None if want_zone else {}
 
-        # Taille
-        size = ""
-        for el in page.css("[data-testid='employees'], [class*='employee'], [class*='size']"):
-            t = el.text.strip()
-            if re.search(r'\d', t):
-                size = t[:20]
-                break
+        if not want_zone:
+            hq = next((o for o in offices if o.get("is_headquarter")), offices[0])
+            loc = _loc(hq)
+            return loc if loc.get("country", "France") == "France" else None
 
-        # Région
-        region = ""
-        for el in page.css("[data-testid='office-location'], [class*='location']"):
-            t = el.text.strip()
-            if t and len(t) < 60:
-                region = t
-                break
-
-        # Fraîcheur — WTTJ affiche "X offres" ou "Publiée il y a X jours"
-        freshness = 0
-        for el in page.css("[class*='published'], [class*='date'], [class*='ago']"):
-            t = el.text.lower()
-            if "aujourd" in t or "heure" in t:
-                freshness = 100
-            elif "hier" in t or "1 jour" in t:
-                freshness = 90
-            elif re.search(r'(\d+)\s*jour', t):
-                days = int(re.search(r'(\d+)\s*jour', t).group(1))
-                freshness = max(0, 100 - days * 3)
-
-        return Company(
-            name=name, website=website, contact_name=contact,
-            activity_domain=activity, company_size=size, region=region,
-            freshness_score=freshness, source=self.name,
-        )
+        for off in offices:
+            loc = _loc(off)
+            if _matches(loc):
+                return loc
+        return None
 
 
 # ── Indeed France ──────────────────────────────────────────────────────────────
@@ -368,67 +374,95 @@ class IndeedScraper(BaseScraper):
 
 class APECScraper(BaseScraper):
     """
-    APEC — emploi cadre. Excellent pour data analyst, finance, ingénierie.
-    Scrape les offres d'emploi et extrait les entreprises qui recrutent.
+    APEC — emploi cadre (data, finance, ingénierie). Via son API REST de recherche
+    d'offres (POST /cms/webservices/rechercheOffre) : JSON fiable, sans headless.
+    L'ancien scraping HTML (cartes .card-offer rendues en JS) renvoyait 0.
     """
     name = "apec"
-    SEARCH = "https://www.apec.fr/candidat/recherche-emploi.html/emploi"
+    API = "https://www.apec.fr/cms/webservices/rechercheOffre"
+    PAGE_SIZE = 50   # offres par page d'API
 
     def search(self, sector: str, city: str, max_results: int) -> list[Company]:
         """
-        Scrape les résultats APEC (offres cadres — data analyst, finance, ingénierie).
-        Structure HTML actuelle : cartes .card.card-offer avec p.card-offer__company.
-        Pagine sur 2 pages (APEC charge ~20 résultats par page via JS).
-        Déduplique par nom d'entreprise.
+        Interroge l'API APEC. Chaque offre porte `nomCommercial` (entreprise),
+        `lieuTexte` ("Lyon 01 - 69" → ville + dépt) et `offreConfidentielle`. On filtre
+        la zone CÔTÉ CLIENT (région > dépt > ville) et on ÉCARTE les offres confidentielles
+        (pas d'entreprise réelle à qui candidater). Site web non fourni → Phase 3b.
         """
+        from .classification import parse_location
+
+        target   = parse_location(city) if city else {}
+        t_city   = (target.get("city") or "").lower()
+        t_dept   = target.get("dept") or ""
+        t_region = (target.get("region") or "").lower()
+        want_zone = bool(t_city or t_dept or t_region)
+        referer = {"Referer": "https://www.apec.fr/candidat/recherche-emploi.html"}
+
         companies: list[Company] = []
         seen: set[str] = set()
-
-        for page_num in range(self.page_offset, self.page_offset + self.PAGES_PER_RUN):
-            params = {
+        for page in range(self.page_offset, self.page_offset + self.PAGES_PER_RUN):
+            payload = {
                 "motsCles": sector,
-                "lieuTravail": city,
-                "typeContrat": "",
-                "page": page_num,
+                "pagination": {"startIndex": page * self.PAGE_SIZE, "range": self.PAGE_SIZE},
+                "sorts": [{"type": "DATE", "direction": "DESCENDING"}],
             }
-            url = f"{self.SEARCH}?{urlencode(params)}"
-            print(f"   [{self.name}] p{page_num + 1} → {url}")
-            page = self._get(url)
-            if page is None:
+            print(f"   [{self.name}] p{page + 1} (API) → rechercheOffre startIndex={page * self.PAGE_SIZE}")
+            try:
+                resp = self._api_post(self.API, json_body=payload, headers=referer)
+                if resp.status_code != 200:
+                    print(f"   ⚠  [{self.name}] HTTP {resp.status_code} — arrêt.")
+                    break
+                offres = resp.json().get("resultats", [])
+            except Exception as e:
+                print(f"   ⚠  [{self.name}] {e}")
+                break
+            if not offres:
                 break
 
-            found = 0
-            # Sélecteur validé sur le HTML rendu par Playwright (mai 2026)
-            for company_el in page.css("p.card-offer__company"):
-                name = company_el.text.strip()
-                if not name or name in seen:
+            for o in offres:
+                name = (o.get("nomCommercial") or "").strip()
+                if not name or o.get("offreConfidentielle") or name.lower() in seen:
                     continue
-                seen.add(name)
-
-                # Site web rarement présent dans les listings APEC
-                website = ""
-                card = company_el.parent
-                while card and "card-offer" not in card.attrib.get("class", ""):
-                    card = card.parent
-                if card:
-                    for a in card.css("a[href*='http']"):
-                        href = a.attrib.get("href", "")
-                        if "apec" not in href:
-                            website = href
-                            break
-
+                loc = self._loc_from_lieu(o.get("lieuTexte") or "", parse_location)
+                if want_zone and not self._loc_matches(loc, t_city, t_dept, t_region):
+                    continue
+                seen.add(name.lower())
+                # secteurActivite d'APEC = ID numérique (pas un libellé) → on laisse
+                # sector vide, le pipeline le normalisera via classify_sector.
                 companies.append(Company(
-                    name=name, website=website, region=city,
-                    freshness_score=70, source=self.name,
+                    name=name, source=self.name,
+                    country="France", region_admin=loc.get("region", ""),
+                    dept=loc.get("dept", ""), dept_name=loc.get("dept_name", ""),
+                    city=loc.get("city", ""), freshness_score=70,
                 ))
-                found += 1
                 if len(companies) >= max_results:
                     return companies
-
-            if found == 0:
-                break
             self._sleep()
         return companies
+
+    @staticmethod
+    def _loc_from_lieu(lieu: str, parse_location) -> dict:
+        """Parse le lieuTexte APEC ("Lyon 01 - 69") → {region, dept, dept_name, city}."""
+        m = re.search(r'-\s*(\d{2,3}[AB]?)\s*$', lieu)
+        dept = m.group(1) if m else ""
+        city = re.sub(r'\s*-\s*\d{2,3}[AB]?\s*$', '', lieu).strip()
+        parsed = parse_location(city, explicit_dept=dept) if (city or dept) else {}
+        return {
+            "region":    parsed.get("region", ""),
+            "dept":      dept or parsed.get("dept", ""),
+            "dept_name": parsed.get("dept_name", ""),
+            "city":      city or parsed.get("city", ""),
+        }
+
+    @staticmethod
+    def _loc_matches(loc: dict, t_city: str, t_dept: str, t_region: str) -> bool:
+        if t_city:
+            return t_city in (loc.get("city") or "").lower()
+        if t_dept:
+            return (loc.get("dept") or "") == t_dept
+        if t_region:
+            return (loc.get("region") or "").lower() == t_region
+        return True
 
 
 # ── Cadremploi ─────────────────────────────────────────────────────────────────

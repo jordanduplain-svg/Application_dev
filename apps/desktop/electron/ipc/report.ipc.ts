@@ -208,7 +208,7 @@ export function registerReportHandlers(): void {
   // ── Agenda : prochaines relances dues + entretiens à venir ─────────────────
   handle('report:agenda', async () => {
     // Relances à venir : SENT/FOLLOWED_UP sans réponse, sous le plafond. dueDate =
-    // (dernière relance ou envoi initial) + 7 j. Inclut les retards (dueDate passée).
+    // (dernière relance ou envoi initial) + 10 j. Inclut les retards (dueDate passée).
     const apps = await prisma.application.findMany({
       where: { repliedAt: null, followUpCount: { lt: MAX_FOLLOWUPS }, status: { in: ['SENT', 'FOLLOWED_UP'] } },
       include: { company: { select: { name: true } }, campaign: { select: { jobTitle: true } } },
@@ -216,7 +216,7 @@ export function registerReportHandlers(): void {
     const followUps = apps.flatMap((a) => {
       const base = a.followUpSentAt ?? a.sentAt;
       if (!base) return [];
-      const due = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const due = new Date(base.getTime() + 10 * 24 * 60 * 60 * 1000);
       return [{ id: a.id, companyName: a.company.name, jobTitle: a.campaign.jobTitle, dueDate: due.toISOString() }];
     }).sort((x, y) => x.dueDate.localeCompare(y.dueDate));
 

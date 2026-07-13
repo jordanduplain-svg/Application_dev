@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { matchReply, matchBounce, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply } from '../reply-matching';
+import { matchReply, matchBounce, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply, classifyReplySentiment } from '../reply-matching';
 
 // Pas de dépendances Electron/Prisma — fonctions pures, aucun mock nécessaire.
 
@@ -12,6 +12,108 @@ const app = (contactEmail: string, messageId = '<msg-123@smtp>', followUpMessage
 
 const msg = (from: string, inReplyTo: string | null, references: string | null = null) =>
   ({ from, inReplyTo, references, date: new Date() });
+
+describe('classifyReplySentiment (paliers ordonnés)', () => {
+  test('barrière linguistique EN (« don\'t speak French ») → neutre, PAS intérêt', () => {
+    // Même en citant ta candidature (pleine de « entretien / disponible »), ça ne doit pas
+    // devenir « intérêt ».
+    const t = 'Hello, we do not speak French, could you please write in English?\n\nLe 9 juil. a écrit : je reste disponible pour un entretien.';
+    expect(classifyReplySentiment(t)).toBe('neutral');
+  });
+
+  test('refus fort FR même en citant ton pitch → refus (pas intérêt)', () => {
+    const t = 'Bonjour, nous ne donnons pas suite à votre candidature.\n\nLe 9 juil. a écrit : disponible pour un entretien.';
+    expect(classifyReplySentiment(t)).toBe('rejection');
+  });
+
+  test('« bonne continuation » et « unfortunately … not moving forward » → refus', () => {
+    expect(classifyReplySentiment('Nous vous souhaitons une bonne continuation.')).toBe('rejection');
+    expect(classifyReplySentiment('Unfortunately, we are not moving forward with your application.')).toBe('rejection');
+  });
+
+  test('intérêt : entretien / profil intéresse / a retenu notre attention → positif', () => {
+    expect(classifyReplySentiment('Votre profil nous intéresse, seriez-vous disponible pour un entretien ?')).toBe('positive');
+    expect(classifyReplySentiment('Votre candidature a retenu notre attention.')).toBe('positive');
+  });
+
+  test('un vrai entretien qui contient « malheureusement » reste positif', () => {
+    expect(classifyReplySentiment('Malheureusement le poste A est pourvu, mais nous aimerions vous proposer un entretien pour un autre poste.')).toBe('positive');
+  });
+
+  test('voix recruteur « nous aimerions échanger avec vous » → positif (cas SDMS réel)', () => {
+    const t = 'Bonjour\nNous avons bien reçu votre candidature et nous aimerions échanger avec vous.\n'
+      + 'Seriez-vous disposé çà échanger avec le directeur de production sur les prochaines semaines ?\n'
+      + 'Quelles sont disponibilités ?\nCordialement\nFanny PEREZ\nResponsable RH';
+    expect(classifyReplySentiment(t)).toBe('positive');
+  });
+
+  test('refus faible (poste ne correspond pas) → refus, plus juste « neutre »', () => {
+    expect(classifyReplySentiment('Le poste ne correspond pas à votre profil actuellement.')).toBe('rejection');
+  });
+
+  test('refus poli FLATTEUR (cas CAPTIVEA réel) → refus, pas intérêt', () => {
+    const t = 'Bonjour Jordan,\nNous vous remercions sincèrement pour l\'intérêt que vous portez à Captivea.\n'
+      + 'Après une analyse attentive de votre profil, bien que votre parcours présente de réelles qualités et des '
+      + 'compétences intéressantes, nous n\'avons pas encore de poste adéquat à votre profil à pourvoir actuellement.\n'
+      + 'Cela étant, votre profil a retenu toute notre attention. Avec votre accord, nous souhaiterions conserver '
+      + 'votre CV afin de pouvoir revenir vers vous si une opportunité se présente.\n'
+      + 'Nous vous souhaitons pleine réussite dans la suite de votre parcours professionnel.';
+    expect(classifyReplySentiment(t)).toBe('rejection');
+  });
+
+  test('petite structure sans recrutement (cas FONCIPROM réel) → refus', () => {
+    const t = 'Bonjour\nPour faire suite à votre mail, nous sommes une petite structure d\'uniquement 3 associés '
+      + '(sans salariés) et n\'envisageons aucun recrutement.\nBonne chance dans votre recherche';
+    expect(classifyReplySentiment(t)).toBe('rejection');
+  });
+
+  test('refus avec adverbes intercalés (« ne recrute toutefois pas », cas J.V. GROUP) → refus', () => {
+    const t = 'Bonjour M. Duplain,\nMerci pour l\'intérêt que vous portez à notre entreprise. PTV Mobility France '
+      + 'ne recrute toutefois pas actuellement.\nJe vous souhaite le meilleur pour la suite de votre carrière,\nBien cordialement';
+    expect(classifyReplySentiment(t)).toBe('rejection');
+  });
+
+  test('« pas aujourd\'hui de besoins » + « bon courage » (cas ECEDI) → refus', () => {
+    const t = 'Bonjour Jordan,\nnotre agence n\'a pas aujourd\'hui de besoins pour des postes de Data Analyst, '
+      + 'je vous laisse quand même contacter l\'adresse suivante au cas où.\nBonne journée et bon courage';
+    expect(classifyReplySentiment(t)).toBe('rejection');
+  });
+
+  test('renvoi vers le site pour postuler (cas SCI LA ROSE) → neutre (ni intérêt ni refus)', () => {
+    const t = 'Bonjour Jordan,\nMerci beaucoup pour votre message et votre intérêt pour La Rosée.\n'
+      + 'Pour découvrir toutes nos offres d\'emplois, n\'hésitez pas à vous rendre directement sur notre page. '
+      + 'Vous pourrez également postuler directement par l\'intermédiaire de cette plateforme et en candidature spontanée.';
+    expect(classifyReplySentiment(t)).toBe('neutral');
+  });
+
+  test('citation Gmail « On … wrote: » repliée sur 2 lignes → coupée, verdict = neutre (cas SCI LA ROSE complet)', () => {
+    // La candidature citée (avec « entretien / discuter ») ne doit PAS fuir : l'attribution
+    // « On <date>, <nom> <email>\nwrote: » a le « wrote: » à la ligne → doit être reconnue.
+    const full = [
+      'Bonjour Jordan,',
+      'Merci beaucoup pour votre message et votre intérêt pour La Rosée.',
+      "Pour découvrir toutes nos offres d'emplois, n'hésitez pas à vous rendre sur notre page Welcome to the Jungle.",
+      'Vous pourrez également postuler directement et en candidature spontanée.',
+      'À bientôt',
+      '--',
+      'Mathilde',
+      '',
+      'On Tue, Jul 07 2026, at 07:35 AM, Jordan Duplain <jordan.duplain@gmail.com>',
+      'wrote:',
+      '',
+      'Bonjour,',
+      "Je vous contacte pour un poste de Data Analyst, en CDI ou en CDD.",
+      'Je reste disponible pour un entretien si vous souhaitez en discuter',
+    ].join('\n');
+    const stripped = stripQuotedReply(full);
+    expect(stripped).not.toMatch(/entretien/i);           // la citation est bien coupée
+    expect(classifyReplySentiment(stripped)).toBe('neutral');
+  });
+
+  test('simple accusé → neutre', () => {
+    expect(classifyReplySentiment('Bonjour, bien reçu, merci.')).toBe('neutral');
+  });
+});
 
 describe('matchReply', () => {
   // Test 6 : matching par Message-ID
