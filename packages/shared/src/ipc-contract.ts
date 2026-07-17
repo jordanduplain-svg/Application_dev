@@ -351,6 +351,8 @@ export interface Application {
   followUpSentAt: string | null;
   // UX-4v3 : statut manuel post-réponse (INTERVIEWED/OFFER/REJECTED/ACCEPTED).
   manualStatus: string | null;
+  // SENTIMENT-OVR : correction manuelle du sentiment (positive/rejection/neutral). null = heuristique.
+  sentimentOverride: string | null;
   // BUG-04 : Message-ID de l'email de candidature initial — nécessaire pour le threading email.
   messageId: string | null;
   // B2 : Message-ID de la relance — distinct de messageId pour ne pas casser le matching IMAP de l'email initial.
@@ -485,10 +487,18 @@ export interface CampaignInput {
 export const SECTOR_KEY_TO_LABELS: Record<string, string[]> = {
   tech:        ['Tech / IT', 'Télécoms', 'Électronique'],
   data:        ['Tech / IT'],
-  logiciel:    ['Tech / IT'],
+  // « Logiciel / SaaS » = label distinct depuis le correctif classification (NAF 58.29/58.21,
+  // éditeurs de logiciels). Ne PLUS pointer vers « Tech / IT » (services info 62.xx) — c'était
+  // la cause d'une campagne « Logiciel » remplie de prestataires IT génériques.
+  logiciel:    ['Logiciel / SaaS'],
+  rd:          ['R&D', 'Ingénierie / R&D'],
   finance:     ['Finance / Banque'],
   assurance:   ['Assurance'],
-  conseil:     ['Conseil', 'Conseil / Juridique', 'Services pro', 'Services aux entreprises'],
+  // Resserré : « Conseil / Consulting » = conseil de gestion/stratégie (NAF 70 → « Conseil »).
+  // On retire les fourre-tout « Services pro » (design/photo/traduction/réparation) et
+  // « Services aux entreprises » (intérim/nettoyage/secrétariat) qui n'ont rien du conseil.
+  // Le juridique/compta reste couvert par la case « Audit / Expertise » (→ Conseil / Juridique).
+  conseil:     ['Conseil'],
   audit:       ['Conseil / Juridique', 'Conseil'],
   industrie:   ['Industrie', 'Automobile', 'Chimie', 'Textile / Mode', 'Électronique'],
   energie:     ['Énergie', 'Environnement'],
@@ -776,6 +786,8 @@ export interface IpcRequests {
   'application:sendTestAll': { req: { campaignId: string }; res: { sent: number; total: number } };
   // UX-4v3 : définit le statut manuel post-réponse.
   'application:setManualStatus': { req: { id: string; manualStatus: string | null }; res: void };
+  // SENTIMENT-OVR : corrige le sentiment détecté (positive/rejection/neutral). null = ré-auto.
+  'application:setSentiment': { req: { id: string; sentiment: string | null }; res: void };
   // REMIND-01 : pose/efface un rappel (« me rappeler le … »). null = effacer.
   'application:setRemindAt': { req: { id: string; remindAt: string | null }; res: void };
   // DEDUP-01 : entreprises présentes dans PLUSIEURS campagnes actives (même domaine/email).

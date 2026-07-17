@@ -524,13 +524,13 @@ function filterBySectors(rows: ParsedCompanyRow[], prefKeys: string[]): { rows: 
   const wanted = new Set(
     keys.flatMap((k) => SECTOR_KEY_TO_LABELS[k] ?? []).map((l) => l.toLowerCase()),
   );
-  const inPref = (r: ParsedCompanyRow) => wanted.has(String(r.sector ?? '').trim().toLowerCase());
-  const preferred = rows.filter(inPref);
-  const others = rows.filter((r) => !inPref(r));
-  const MIN_PREFERRED = 25;
-  if (preferred.length >= MIN_PREFERRED) return { rows: preferred, widened: false };
-  // Trop peu dans les secteurs voulus → on élargit (préférés d'abord, puis les autres).
-  return { rows: [...preferred, ...others], widened: others.length > 0 };
+  const preferred = rows.filter((r) => wanted.has(String(r.sector ?? '').trim().toLowerCase()));
+  // DURCISSEMENT : filtre STRICT. Quand l'utilisateur a choisi des secteurs, on ne rajoute
+  // JAMAIS d'entreprises hors secteur. L'ancien repli « < 25 → on ajoute TOUS les secteurs »
+  // remplissait silencieusement la campagne de Tech/IT & co. Une campagne peut donc être
+  // petite/vide → c'est le résultat honnête des critères choisis ; à l'utilisateur d'élargir
+  // explicitement (retirer un secteur, changer de lieu) s'il le souhaite.
+  return { rows: preferred, widened: false };
 }
 
 /**

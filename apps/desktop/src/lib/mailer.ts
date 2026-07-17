@@ -40,6 +40,26 @@ interface SendParams {
 // B5 : délai minimum entre deux envois pour éviter le ban SMTP (Gmail ~100/h).
 const SMTP_THROTTLE_MS = 3_000;
 let lastSmtpSendAt = 0;
+// SÉRIALISATION du throttle : lire lastSmtpSendAt puis l'écrire n'est PAS atomique.
+// Avec CONCURRENCY=2 (task-runner), deux envois simultanés — dont les relances qui
+// appellent sendApplicationEmail SANS passer par throttleSend — pouvaient contourner
+// le délai. Une chaîne de promesses garantit qu'un seul envoi traverse la fenêtre à la fois.
+let throttleChain: Promise<void> = Promise.resolve();
+
+async function throttleSmtp(): Promise<void> {
+  let release!: () => void;
+  const slot = new Promise<void>((r) => (release = r));
+  const previous = throttleChain;
+  throttleChain = slot;
+  await previous;
+  try {
+    const wait = SMTP_THROTTLE_MS - (Date.now() - lastSmtpSendAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastSmtpSendAt = Date.now();
+  } finally {
+    release();
+  }
+}
 
 /**
  * sendApplicationEmail — ROUAGE de l'envoi. Renvoie le `Message-ID` généré : c'est la
@@ -78,13 +98,8 @@ export async function sendApplicationEmail(params: SendParams): Promise<string> 
     }
   }
 
-  // B5 : appliquer le throttle avant l'envoi pour éviter le ban SMTP.
-  const now = Date.now();
-  const elapsed = now - lastSmtpSendAt;
-  if (elapsed < SMTP_THROTTLE_MS) {
-    await new Promise<void>((r) => setTimeout(r, SMTP_THROTTLE_MS - elapsed));
-  }
-  lastSmtpSendAt = Date.now();
+  // B5 : appliquer le throttle (sérialisé) avant l'envoi pour éviter le ban SMTP.
+  await throttleSmtp();
 
   const safeSubject = params.subject.replace(/[\r\n]/g, '');
   const safeTo = params.to.replace(/[\r\n]/g, '');

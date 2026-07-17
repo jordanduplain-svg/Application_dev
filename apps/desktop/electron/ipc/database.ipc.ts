@@ -1,5 +1,5 @@
 import { app, dialog } from 'electron';
-import { copyFile, unlink, writeFile, readFile } from 'fs/promises';
+import { copyFile, unlink, writeFile, readFile, rename } from 'fs/promises';
 import { existsSync, readdirSync } from 'fs';
 import { resolve, join } from 'path';
 import { encryptBuffer, decryptBuffer } from '../../src/lib/db-crypto';
@@ -132,8 +132,9 @@ export function registerDatabaseHandlers(): void {
       // N1 : purger les journaux WAL/SHM de l'ANCIENNE base avant de la remplacer —
       // sinon SQLite réapplique l'ancien WAL par-dessus la base restaurée (corruption).
       await removeWalShm(dbPath);
-      await copyFile(tmpPath, dbPath);
-      await unlink(tmpPath).catch(() => {});
+      // Bascule ATOMIQUE : le temp validé est sur le même dossier que dbPath → rename
+      // atomique. Un échec ne peut pas laisser une base à moitié écrite (vs copyFile).
+      await rename(tmpPath, dbPath);
       await prisma.$connect();
 
       logger.info('[restore] Base restaurée depuis une sauvegarde chiffrée.');
@@ -177,8 +178,13 @@ export function registerDatabaseHandlers(): void {
       return { success: false, error: 'Le fichier sélectionné est déjà la base active.' };
     }
 
+    // Bascule ATOMIQUE : on copie d'abord la sauvegarde (potentiellement sur un autre
+    // volume : USB…) dans un temp SUR LE MÊME dossier que dbPath, puis on rename par-dessus.
+    // copyFile direct vers dbPath n'est pas atomique → un échec en cours tronquait la base.
+    const tmpIncoming = dbPath + '.incoming.tmp';
     try {
       await assertValidSqliteFile(srcBackup);
+      await copyFile(srcBackup, tmpIncoming);
 
       await Promise.race([
         prisma.$disconnect(),
@@ -187,7 +193,7 @@ export function registerDatabaseHandlers(): void {
 
       // N1 : purger les journaux WAL/SHM de l'ANCIENNE base avant de la remplacer.
       await removeWalShm(dbPath);
-      await copyFile(srcBackup, dbPath);
+      await rename(tmpIncoming, dbPath);
       await prisma.$connect();
 
       logger.info(`[restore] Base restaurée depuis : ${srcBackup}`);
@@ -204,7 +210,9 @@ export function registerDatabaseHandlers(): void {
 
       return { success: true };
     } catch (err) {
-      // BUG-01 : après prisma.$disconnect(), si copyFile échoue Prisma reste
+      // Nettoyage du temp si la bascule n'a pas abouti.
+      await unlink(tmpIncoming).catch(() => {});
+      // BUG-01 : après prisma.$disconnect(), si la restauration échoue Prisma reste
       // déconnecté. On force une reconnexion pour que l'app reste utilisable.
       await prisma.$connect().catch(() => {});
       const message = err instanceof Error ? err.message : String(err);

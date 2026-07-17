@@ -44,6 +44,12 @@ export const ManualStatusSchema = z.object({
     .nullable(),
 });
 
+// SENTIMENT-OVR : correction manuelle du sentiment. null = revenir à l'heuristique.
+export const SentimentSchema = z.object({
+  id: z.string().min(1),
+  sentiment: z.enum(['positive', 'rejection', 'neutral']).nullable(),
+});
+
 export const FollowUpNoteSchema = z.object({
   id: z.string().min(1),
   note: z.string().max(10000, 'La note est trop longue (max 10 000 car.)'),

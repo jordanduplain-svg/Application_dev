@@ -4,6 +4,7 @@ import {
   ApplicationSendSchema,
   ApplicationUpdateDraftSchema,
   ManualStatusSchema,
+  SentimentSchema,
   FollowUpNoteSchema,
   IdSchema,
   CampaignIdSchema,
@@ -290,6 +291,11 @@ export function registerApplicationHandlers(): void {
   handle('application:setManualStatus', async (payload) => {
     const data = validate(ManualStatusSchema, payload);
     await appService.setManualStatus(data.id, data.manualStatus);
+  });
+
+  handle('application:setSentiment', async (payload) => {
+    const data = validate(SentimentSchema, payload);
+    await appService.setSentiment(data.id, data.sentiment);
   });
 
   handle('application:listActionRequired', () => appService.listActionRequired());

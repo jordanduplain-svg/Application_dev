@@ -8,6 +8,7 @@ import { prisma } from '../../src/lib/prisma';
 import { getProfile } from '../../src/modules/profile/profile.service';
 import { MAX_FOLLOWUPS } from '../../src/modules/application/application.service';
 import { logger } from '../../src/lib/logger';
+import { csvCell } from '@candio/shared';
 
 /**
  * Justificatif de recherche d'emploi pour France Travail.
@@ -269,10 +270,6 @@ export function registerReportHandlers(): void {
 }
 
 // Échappe un champ CSV (RFC 4180 : guillemets si , " ou saut de ligne).
-function csvCell(v: string): string {
-  const s = v ?? '';
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 // Date au format iCalendar UTC : YYYYMMDDTHHMMSSZ.
 function icsDate(d: Date): string {

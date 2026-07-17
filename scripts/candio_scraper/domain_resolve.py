@@ -180,6 +180,50 @@ _GENERIC_GEO_WORDS = frozenset({
 # Union pour la logique existante (compat descendante — utilisée dans _domain_matches_name).
 _GENERIC_DOMAIN_CORES = _GENERIC_TECH_WORDS | _GENERIC_GEO_WORDS
 
+# Tokens SECTORIELS / juridiques / de liaison qui ne doivent JAMAIS, à eux seuls, valider un
+# domaine. Étend les mots génériques de domaine (media, group, france, conseil…) avec les
+# suffixes de secteur (sante, pharma…) et de forme juridique (sas, sarl…). Sert à comparer la
+# partie DISTINCTIVE des noms : « CEGI-SANTE » et « media-sante » ne partagent que « sante » —
+# une fois ce token retiré, « cegi » ≠ « media » → homonyme sectoriel, à rejeter.
+_GENERIC_NAME_TOKENS = _GENERIC_DOMAIN_CORES | frozenset({
+    "sante", "pharma", "pharmacie", "medical", "medicale", "bio", "tech",
+    "consulting", "sas", "sasu", "sarl", "eurl", "sa", "scop", "sci",
+    "compagnie", "societe", "et", "de", "du", "des", "la", "le", "les", "the",
+})
+
+
+def _distinctive(s: str) -> str:
+    """Réduit un nom à sa partie DISTINCTIVE (tokens sectoriels/juridiques/liaison retirés)."""
+    toks = [t for t in re.split(r"[^a-z0-9]+", s.lower()) if t and t not in _GENERIC_NAME_TOKENS]
+    return "".join(toks)
+
+
+def _distinctive_match(name: str, core: str) -> bool:
+    """
+    APPROCHE HYBRIDE — cœur de la validation anti-homonyme-sectoriel, DÉDIÉE au matching
+    nom↔domaine (on ne touche PAS à la primitive globale `_name_similarity`, réutilisée par
+    _homepage_title_confirms, le seuil collision 0.9 et enrich.py → zéro effet de bord).
+
+    La partie DISTINCTIVE du nom (tokens sectoriels/génériques retirés : sante, tech, france…)
+    doit réellement se retrouver dans le cœur du domaine. On teste par CONTAINMENT (et non par
+    score) car c'est robuste au COLLAGE : « cegi » ⊂ « cegisante » ✔ mais « cegi » ⊄ « mediasante » ✘
+    — là où un score serait asymétrique (« cegi » vs « cegisante » ≈ 0.6).
+
+    Renvoie True (match plausible) si :
+      - le nom n'a pas de partie distinctive (entièrement générique) → indécidable, on n'oppose
+        pas de veto (mieux vaut comparer trop que sur-rejeter) ; OU
+      - la partie distinctive est contenue dans le cœur (ou l'inverse), OU concorde par
+        similarité distinctive (≥ 0.5) pour les variantes orthographiques.
+    """
+    dn = _distinctive(name)
+    if not dn:
+        return True
+    core_norm = re.sub(r"[^a-z0-9]", "", core.lower())
+    if dn in core_norm or core_norm in dn:
+        return True
+    dc = _distinctive(core)
+    return bool(dc and _name_similarity(dn, dc) >= 0.5)
+
 
 def _domain_core(domain: str) -> str:
     """Étiquette principale du domaine : 'mentions.acme.fr' → 'acme', 'as.com' → 'as'."""
@@ -234,6 +278,16 @@ def _domain_matches_name(name: str, domain: str, cand_name: str = "",
         if len(nn) >= 4 and cn.startswith(nn):
             return True
         return sim >= 0.9
+    # HYBRIDE anti-homonyme-sectoriel : la partie distinctive du nom doit se retrouver dans le
+    # domaine (containment, cf. _distinctive_match) — SAUF si la similarité complète est déjà
+    # forte (≥ 0.85) ou si un cand_name Clearbit confirme (≥ 0.85). Ce garde-fou n'est PAS un
+    # angle mort : un homonyme porté par un seul token sectoriel plafonne bien plus bas
+    # (CEGI-SANTE/media-sante 0.74 ; HUNTX PHARMA/sunpharma 0.80), tandis que les vrais matches
+    # très proches passent. On reste LOCALISÉ au matching de domaine → la primitive globale
+    # `_name_similarity` (0.9 collision, 0.55 homepage-confirm, enrich.py) reste intacte.
+    strong = sim >= 0.85 or bool(cand_name and _name_similarity(name, cand_name) >= 0.85)
+    if not strong and not _distinctive_match(name, core):
+        return False
     return sim >= 0.62
 
 

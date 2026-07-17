@@ -457,9 +457,13 @@ _DEPT_TO_REGION: dict[str, str] = {
     "44": "Pays de la Loire", "49": "Pays de la Loire",
     "53": "Pays de la Loire", "72": "Pays de la Loire",
     "85": "Pays de la Loire",
-    # Provence-Alpes-Côte d'Azur
-    "04": "PACA", "05": "PACA", "06": "PACA",
-    "13": "PACA", "83": "PACA", "84": "PACA",
+    # Provence-Alpes-Côte d'Azur — NOM COMPLET (pas « PACA ») pour coller EXACTEMENT au libellé
+    # de l'UI (geo.ts FR_REGIONS) : le filtre localisation des campagnes / de la page Leads fait
+    # un match de chaîne exact sur regionAdmin. « PACA » ne matchait jamais « Provence-Alpes-Côte
+    # d'Azur » → campagnes PACA vides. Tous les autres régions utilisent déjà leur nom complet.
+    "04": "Provence-Alpes-Côte d'Azur", "05": "Provence-Alpes-Côte d'Azur",
+    "06": "Provence-Alpes-Côte d'Azur", "13": "Provence-Alpes-Côte d'Azur",
+    "83": "Provence-Alpes-Côte d'Azur", "84": "Provence-Alpes-Côte d'Azur",
     # DROM (départements et régions d'outre-mer)
     "971": "Guadeloupe", "972": "Martinique", "973": "Guyane",
     "974": "La Réunion", "976": "Mayotte",
@@ -593,26 +597,40 @@ def parse_location(raw_location: str = "", explicit_dept: str = "") -> dict:
     return out
 
 
+# Sous-classes NAF PLUS spécifiques que la division 2 chiffres (vérifiées AVANT elle).
+# 58.29 (édition de logiciels applicatifs/système) et 58.21 (jeux) = éditeurs de LOGICIELS
+# → « Logiciel / SaaS ». Sans ce cas, la division 58 les classait « Imprimerie / Édition »
+# (édition de livres/presse) — un éditeur SaaS étiqueté imprimeur. Clés en chiffres seuls.
+_NAF_SUBCLASS_TO_SECTOR: dict[str, str] = {
+    "5829": "Logiciel / SaaS",
+    "5821": "Logiciel / SaaS",
+}
+
+
 def classify_sector(naf_code: str = "", label: str = "") -> str:
     """
     Classe une entreprise dans un secteur d'activité large.
 
     Stratégie en cascade :
-      1. Si `naf_code` est fourni (ex : "62.01Z", "62.01", "62"), on prend les 2 premiers
-         chiffres et on cherche dans le mapping officiel NAF.
+      1. Si `naf_code` est fourni (ex : "62.01Z", "62.01", "62"), on teste d'abord la
+         sous-classe (4 chiffres, ex. "58.29") puis la division (2 chiffres).
       2. Sinon (ou si le code NAF n'est pas reconnu), on cherche dans le libellé `label`
          par mots-clés.
       3. Sinon → "" (inconnu).
 
     Retourne une chaîne lisible : "Tech / IT", "Pharmacie", "Conseil", "BTP / Construction"…
     """
-    # 1. Tentative par code NAF
+    # 1. Tentative par code NAF — chiffres seuls : "58.29C" → "5829", "62.01Z" → "6201".
     if naf_code:
-        # Nettoyage : "62.01Z" → "62", "62.01" → "62", "62Z" → "62"
-        m = re.match(r"\s*(\d{2})", str(naf_code))
-        if m:
-            division = m.group(1)
-            sector = _NAF_TO_SECTOR.get(division)
+        digits = re.sub(r"\D", "", str(naf_code))
+        # 1a. Sous-classe spécifique (4 chiffres) d'abord — prime sur la division.
+        if len(digits) >= 4:
+            sub = _NAF_SUBCLASS_TO_SECTOR.get(digits[:4])
+            if sub:
+                return sub
+        # 1b. Division (2 chiffres).
+        if len(digits) >= 2:
+            sector = _NAF_TO_SECTOR.get(digits[:2])
             if sector:
                 return sector
 

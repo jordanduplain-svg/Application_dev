@@ -7,6 +7,7 @@ export const INDUSTRY_GROUPS: { group: string; items: { value: string; label: st
     { value: 'tech',      label: '💻 IT / Tech' },
     { value: 'data',      label: '📊 Data / IA' },
     { value: 'logiciel',  label: '🖥️ Logiciel / SaaS' },
+    { value: 'rd',        label: '🔬 R&D / Ingénierie' },
   ]},
   { group: '💰 Finance & Conseil', items: [
     { value: 'finance',   label: '💰 Finance / Banque' },

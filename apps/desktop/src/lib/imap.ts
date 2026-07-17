@@ -66,6 +66,33 @@ function extractCandidateEmails(text: string): string[] {
   return [...new Set(matches.map((e) => e.toLowerCase()))];
 }
 
+/**
+ * Corps texte d'un email. simpleParser ne remplit `parsed.text` que depuis la partie
+ * text/plain ; beaucoup d'emails de recruteurs/ATS sont HTML-only → `text` vide, ce qui
+ * cassait la classification du sentiment, la détection d'opt-out et le contenu affiché.
+ * On replie donc sur le HTML converti en texte (dé-balisé, entités courantes décodées).
+ */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')  // vire script/style et leur contenu
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')                          // toutes les autres balises
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
+    .trim();
+}
+
+function bodyText(parsed: ParsedMail): string {
+  const plain = (parsed.text ?? '').trim();
+  if (plain) return parsed.text as string;
+  if (parsed.html) return htmlToText(parsed.html);
+  return '';
+}
+
 // BOUNCE-01 : exporté pour test unitaire (soft vs hard). Pas d'effet de bord.
 export function classifyBounce(
   from: string,
@@ -231,7 +258,8 @@ export async function fetchInboxSince(since: Date): Promise<InboxMessage[]> {
               const parsed: ParsedMail = await simpleParser(msg.source);
               const from    = parsed.from?.value?.[0]?.address ?? '';
               const subject = parsed.subject ?? '';
-              const text    = parsed.text ?? '';
+              // HTML-ONLY fix : replie sur le HTML dé-balisé quand text/plain est absent.
+              const text    = bodyText(parsed);
               const { isBounce, bouncedMessageId, bouncedCandidateEmails } = classifyBounce(from, subject, text);
               // AUTO-REPLY : en-têtes RFC 3834 (simpleParser met les clés en minuscules).
               const headerStr = (name: string): string | null => {

@@ -1,6 +1,6 @@
 import { safeStorage } from 'electron';
 import { readFileSync, existsSync, renameSync } from 'fs';
-import { writeFile as writeFileAsync } from 'fs/promises';
+import { writeFile as writeFileAsync, rename as renameAsync } from 'fs/promises';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import type { SmtpInput, ImapInput, DkimInput } from '@candio/shared';
 import { getSecretsPath } from './paths';
@@ -98,14 +98,25 @@ function readFile(): SecretsFile {
 
 /**
  * F3 : écriture asynchrone — ne bloque plus l'event loop du process principal.
- * L'ancienne writeFileSync pouvait geler l'UI ~2 ms à chaque sauvegarde de réglage.
+ *
+ * ÉCRITURE ATOMIQUE (temp + rename) : sans elle, un crash/coupure pendant l'écriture
+ * tronquait secrets.json ; or readFile() traite un JSON illisible en le renommant
+ * `.corrupted` ET en réinitialisant à `{}` → perte silencieuse de TOUS les secrets
+ * (SMTP, IMAP, clés API, PIN, quota). On écrit donc un fichier temporaire sur le même
+ * dossier (donc même volume → rename atomique) puis on bascule : soit l'ancien fichier
+ * intact, soit le nouveau complet — jamais un fichier à moitié écrit. Même stratégie
+ * que leadsMaster.ts et db-crypto.
  */
 async function writeFile(data: SecretsFile): Promise<void> {
+  const path = getSecretsPath();
+  const tmp = `${path}.tmp-${process.pid}`;
   try {
-    await writeFileAsync(getSecretsPath(), JSON.stringify(data, null, 2), 'utf8');
+    await writeFileAsync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    await renameAsync(tmp, path);
     // M4 : met à jour le cache après chaque écriture réussie.
     cache = data;
   } catch (err) {
+    // Un éventuel temp résiduel est inoffensif (écrasé au prochain write, même nom par pid).
     throw new Error(
       `Impossible d'écrire les secrets (disque plein ?) : ${err instanceof Error ? err.message : String(err)}`
     );

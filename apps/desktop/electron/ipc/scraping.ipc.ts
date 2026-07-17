@@ -18,6 +18,7 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import { app, BrowserWindow } from 'electron';
 import type { ScrapingConfig, ScrapingJobStatus, ScrapingLastRun } from '@candio/shared';
+import { csvLine } from '@candio/shared';
 import { DEFAULT_SCORING_WEIGHTS } from '@candio/shared';
 import { handle } from './registry';
 import { logger } from '../../src/lib/logger';
@@ -910,7 +911,9 @@ export function registerScrapingHandlers(): void {
     });
     if (result.canceled || !result.filePath) return null;
 
-    await writeFile(result.filePath, [header, ...out].map(toCsvLine).join('\n'), 'utf8');
+    // Export ouvert dans un tableur → csvLine partagé (garde anti-injection de formule).
+    // Le master (writeMasterAtomic + toCsvLine local) reste en clair car relu par le scraper.
+    await writeFile(result.filePath, [header, ...out].map(csvLine).join('\n'), 'utf8');
     logger.info(`[exportLeadsCsv] ${out.length} lead(s) exporté(s) : ${result.filePath}`);
     return { path: result.filePath, count: out.length };
   });

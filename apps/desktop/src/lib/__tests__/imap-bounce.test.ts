@@ -9,7 +9,7 @@ import { describe, test, expect, vi } from 'vitest';
 
 vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }));
 
-import { classifyBounce } from '../imap';
+import { classifyBounce, htmlToText } from '../imap';
 
 describe('classifyBounce (soft vs hard)', () => {
   test('échec DÉFINITIF (Status 5.1.1) → rebond', () => {
@@ -43,5 +43,18 @@ describe('classifyBounce (soft vs hard)', () => {
   test('vraie réponse d\'un recruteur → PAS un rebond', () => {
     const r = classifyBounce('rh@acme.com', 'Re: Candidature spontanée', 'Bonjour, merci pour votre message…');
     expect(r.isBounce).toBe(false);
+  });
+});
+
+describe('htmlToText (fallback emails HTML-only)', () => {
+  test('dé-balise, préserve les sauts de ligne et décode les entités', () => {
+    const html = '<div><p>Bonjour,</p><p>Nous ne donnons pas suite &agrave; votre candidature.</p>'
+      + '<br>Cordialement&nbsp;&amp; bonne continuation</div><style>.x{color:red}</style>';
+    const t = htmlToText(html);
+    expect(t).toContain('Bonjour,');
+    expect(t).toContain('ne donnons pas suite');   // → classifiable en refus
+    expect(t).toContain('&');                       // &amp; décodé
+    expect(t).not.toMatch(/<[^>]+>/);               // plus aucune balise
+    expect(t).not.toContain('color:red');           // contenu <style> supprimé
   });
 });

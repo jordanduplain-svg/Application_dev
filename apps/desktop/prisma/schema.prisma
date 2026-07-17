@@ -178,6 +178,10 @@ model Application {
   followUpMessageId String?
   // UX-4v3 : statut manuel post-réponse (INTERVIEWED/OFFER/REJECTED/ACCEPTED).
   manualStatus String?
+  // SENTIMENT-OVR : correction manuelle du sentiment détecté (positive/rejection/neutral).
+  // null = on fait confiance à l'heuristique classifyReplySentiment. Sert à récupérer une
+  // vraie piste que l'heuristique aurait mal classée (sinon masquée du pipeline).
+  sentimentOverride String?
   // FM-02 : variante de prompt A/B utilisée lors de la génération ('A' ou 'B').
   promptVariant String?
   // FM-08 : suivi d'entretien.

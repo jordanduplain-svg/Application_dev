@@ -558,9 +558,17 @@ class SocieteScraper(BaseScraper):
         "banque":        ["64.11Z","64.19Z","64.92Z","64.99Z"],
         "assurance":     ["65.11Z","65.12Z","65.20Z","66.22Z"],
         "tech":          ["62.01Z","62.02A","63.11Z","63.12Z","62.09Z","63.99Z"],
-        "saas":          ["62.01Z","62.02A","63.11Z","63.12Z"],
-        "logiciel":      ["62.01Z","62.02A","62.03Z","62.09Z"],
+        # ÉDITEURS DE LOGICIELS/SaaS : 58.29C (édition de logiciels applicatifs), 58.29A
+        # (systèmes/réseaux), 58.21Z (jeux) = le cœur « produit logiciel », distinct des
+        # SSII/prestataires en 62.xx. Sans eux, « Logiciel/SaaS » ne ramenait que des
+        # prestataires IT génériques (mêmes codes que « tech »).
+        "saas":          ["58.29C","58.29A","62.01Z","62.02A","63.11Z","63.12Z"],
+        "logiciel":      ["58.29C","58.29A","58.21Z","62.01Z","62.02A","62.03Z","62.09Z"],
         "data":          ["63.11Z","63.12Z","62.01Z","72.11Z"],
+        # R&D / Ingénierie : recherche (72.11Z biotech, 72.19Z autres sciences) et
+        # ingénierie/études techniques (71.12B, 71.20B). Le classifieur les étiquette
+        # « R&D » (division 72) et « Ingénierie / R&D » (division 71).
+        "rd":            ["72.11Z","72.19Z","71.12B","71.20B"],
         "conseil":       ["70.22Z","70.21Z","70.10Z","69.20Z"],
         "consulting":    ["70.22Z","70.21Z","70.10Z"],
         "audit":         ["69.20Z","71.12B","70.22Z"],
@@ -714,6 +722,14 @@ class SocieteScraper(BaseScraper):
         sector_lower = sector.lower().strip()
         geo = self._geo_params(city)  # {'region': …} | {'departement': …} | {}
 
+        # Garde-fou : une ville saisie mais NON résolue → recherche nationale silencieuse
+        # (cause classique d'un « run qui ne récolte rien » : SIRENE renvoie la France
+        # entière, puis skip-no-email + dédup vident le résultat). On le signale fort.
+        if city and city.strip() and not geo:
+            print(f"   ⚠  [{self.name}] ville « {city} » non résolue en département/région "
+                  f"→ recherche NATIONALE (résultats hors zone, souvent ~0 après filtrage). "
+                  f"Essaie le département (« Haute-Savoie ») ou la région (« Auvergne-Rhône-Alpes »).")
+
         # Résoudre les codes NAF correspondant au secteur.
         # sector_lower peut être une liste CSV ("industrie,energie,btp") quand
         # l'utilisateur a sélectionné plusieurs secteurs dans l'UI — on collecte
@@ -748,6 +764,41 @@ class SocieteScraper(BaseScraper):
 
         return companies[:max_results]
 
+    # Cache commune normalisée → code département (résolu via geo.api.gouv.fr).
+    # "" mémorise aussi un échec pour ne pas re-tenter le réseau à chaque code NAF.
+    _COMMUNE_DEPT_CACHE: "dict[str, str]" = {}
+    GEO_API = "https://geo.api.gouv.fr/communes"
+
+    def _commune_to_dept(self, city: str) -> str:
+        """
+        Résout N'IMPORTE quelle commune française → code département via l'API géo
+        officielle (gratuite, sans clé). Remplace la dépendance à DEPT_MAP (table figée
+        d'une trentaine de villes) qui faisait silencieusement retomber toute ville non
+        listée (Annecy→74, Chambéry→73, Valence→26…) sur une recherche NATIONALE.
+        Résultat caché (succès ET échec). Best-effort : jamais d'exception propagée.
+        """
+        norm = self._norm_geo(city)
+        if not norm:
+            return ""
+        if norm in self._COMMUNE_DEPT_CACHE:
+            return self._COMMUNE_DEPT_CACHE[norm]
+        dept = ""
+        try:
+            resp = self._api_get(
+                self.GEO_API,
+                params={"nom": city, "fields": "codeDepartement",
+                        "limit": 1, "boost": "population"},
+                timeout=8,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data:
+                    dept = (data[0].get("codeDepartement") or "").strip()
+        except Exception as e:
+            print(f"   ⚠  [{self.name}] résolution géo « {city} » échouée : {e}")
+        self._COMMUNE_DEPT_CACHE[norm] = dept
+        return dept
+
     def _city_to_dept(self, city: str) -> str:
         city_lower = city.lower().strip()
         for key, dept in self.DEPT_MAP.items():
@@ -755,7 +806,10 @@ class SocieteScraper(BaseScraper):
                 return dept
         # Essaie le code postal si présent dans city
         m = re.search(r'\b(0[1-9]|[1-9]\d)\d{3}\b', city)
-        return m.group(0)[:2] if m else ""
+        if m:
+            return m.group(0)[:2]
+        # Repli robuste : toute commune FR via l'API géo (Annecy, Chambéry, Valence…).
+        return self._commune_to_dept(city)
 
     def _fetch_naf(self, naf: str, geo: dict, limit: int) -> list[Company]:
         """Interroge SIRENE pour un code NAF sur PAGES_PER_RUN pages consécutives.
@@ -800,9 +854,32 @@ class SocieteScraper(BaseScraper):
             params["tranche_effectif_salarie"] = ",".join(self.size_codes)
         return self._do_request(params, "")
 
+    # SIRENE (recherche-entreprises.api.gouv.fr) limite le débit et renvoie 429 sous charge
+    # (surtout avec plusieurs codes NAF par run). On réessaie alors, en respectant l'en-tête
+    # Retry-After quand il est fourni, avec un back-off croissant plafonné. Sans ce retry, un
+    # code NAF 429 était simplement SAUTÉ → des leads (ex. pharma) manquaient silencieusement.
+    _MAX_429_RETRIES = 3
+
     def _do_request(self, params: dict, naf_hint: str) -> list[Company]:
-        try:
-            resp = self._api_get(self.API, params=params)
+        for attempt in range(self._MAX_429_RETRIES + 1):
+            try:
+                resp = self._api_get(self.API, params=params)
+            except Exception as e:
+                print(f"   ⚠  [{self.name}] {e}")
+                return []
+
+            if resp.status_code == 429 and attempt < self._MAX_429_RETRIES:
+                try:
+                    wait = float(resp.headers.get("Retry-After", ""))
+                except (TypeError, ValueError):
+                    wait = 0.0
+                # Borne : au moins un back-off croissant, au plus 10 s (jamais de gel long).
+                wait = min(max(wait, 1.5 * (attempt + 1)), 10.0)
+                print(f"   ⏳  [{self.name}] HTTP 429 (NAF {naf_hint}) — nouvelle tentative "
+                      f"dans {wait:.0f}s ({attempt + 1}/{self._MAX_429_RETRIES})")
+                time.sleep(wait)
+                continue
+
             if resp.status_code != 200:
                 # Affiche le motif renvoyé par l'API (ex. « code NAF non valide ») —
                 # diagnostic indispensable : un simple « HTTP 400 » masquait la cause.
@@ -813,20 +890,28 @@ class SocieteScraper(BaseScraper):
                     detail = resp.text[:160]
                 print(f"   ⚠  [{self.name}] HTTP {resp.status_code} (NAF {naf_hint}) : {detail}")
                 return []
+
             # On écarte les PERSONNES PHYSIQUES (nature_juridique 1000 = entrepreneur
             # individuel). Leur « nom » est un nom de personne (ex. STEPHANE LOTITO) :
             # aucun site corporate → la résolution de domaine fabrique des faux
             # dangereux (auger.com, woodmancastingx.com…) et on ne peut pas y postuler.
+            try:
+                results = resp.json().get("results", [])
+            except Exception as e:
+                print(f"   ⚠  [{self.name}] réponse illisible (NAF {naf_hint}) : {e}")
+                return []
             companies = []
-            for r in resp.json().get("results", []):
+            for r in results:
                 if (r.get("nature_juridique") or "").strip() == "1000":
                     self._dropped_pp += 1
                     continue
                 companies.append(self._to_company(r, naf_hint))
             return companies
-        except Exception as e:
-            print(f"   ⚠  [{self.name}] {e}")
-            return []
+
+        # Épuisé les tentatives sur 429 → on abandonne ce code NAF proprement (sera réessayé
+        # au prochain run par le curseur de pagination).
+        print(f"   ⚠  [{self.name}] HTTP 429 persistant (NAF {naf_hint}) — code sauté ce run.")
+        return []
 
     @staticmethod
     def _cp_to_dept(code_postal: str) -> str:

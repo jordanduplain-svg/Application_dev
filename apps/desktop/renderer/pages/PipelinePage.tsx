@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Application } from '@candio/shared';
 import { api } from '../lib/api';
 import { MANUAL_STATUS_OPTIONS, manualStatusColor } from '../lib/campaignDetail';
+import { effectiveSentiment } from '@candio/shared';
 
 /**
  * PIPELINE-01 : vue Kanban des réponses reçues, par statut manuel. Colonnes :
@@ -45,7 +46,19 @@ export default function PipelinePage() {
     }
   };
 
-  const byColumn = (value: string) => replies.filter((r) => (r.manualStatus ?? '') === value);
+  // PIPELINE-FILTER : « À qualifier » ne montre que les réponses d'INTÉRÊT (heuristique).
+  // Refus/neutres restent visibles avec leur pastille sur la page Réponses, mais n'encombrent
+  // pas le pipeline, qui suit les pistes d'entreprise. Aucun statut écrit en base (pas de faux
+  // REJECTED qui fausserait les stats) : simple filtre d'affichage.
+  const byColumn = (value: string) => replies.filter((r) => {
+    if ((r.manualStatus ?? '') !== value) return false;
+    if (value === '') return effectiveSentiment(r) === 'positive';
+    // « Refusé » : n'affiche QUE les pistes qui avaient un INTÉRÊT (sentiment positif) et que
+    // tu as rejetées — celles qui faisaient partie de ton pipeline. Les anciens refus en masse
+    // (réponses de refus/neutres) restent cachés : ils n'ont jamais été des pistes à suivre.
+    if (value === 'REJECTED') return effectiveSentiment(r) === 'positive';
+    return true;
+  });
 
   // Dépôt sur une colonne : déplace la carte glissée si elle change d'étape.
   const dropOn = (colValue: string, e: React.DragEvent) => {
@@ -61,7 +74,7 @@ export default function PipelinePage() {
     <section>
       <div className="page-head">
         <h2>Pipeline</h2>
-        <div className="page-sub">Vos réponses par étape — <strong>glissez-déposez</strong> une carte d'une colonne à l'autre (ou utilisez le sélecteur).</div>
+        <div className="page-sub">Vos <strong>pistes d'intérêt</strong> par étape — <strong>glissez-déposez</strong> une carte d'une colonne à l'autre (ou utilisez le sélecteur). Les refus et réponses neutres restent sur la page <strong>Réponses</strong> et n'apparaissent pas ici.</div>
       </div>
       {error && <p className="error">{error}</p>}
       {replies.length === 0 ? (

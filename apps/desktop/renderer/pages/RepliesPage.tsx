@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import type { Application, ThreadMessage } from '@candio/shared';
 import { api } from '../lib/api';
 import { MANUAL_STATUS_OPTIONS } from '../lib/campaignDetail';
-import { stripQuotedReply, classifyReplySentiment } from '../../src/tasks/reply-matching';
+import { stripQuotedReply, effectiveSentiment } from '@candio/shared';
 
 // Pastille de sentiment de la réponse (heuristique, sans IA).
 const SENTIMENT = {
@@ -158,6 +158,18 @@ export default function RepliesPage() {
     }
   };
 
+  // SENTIMENT-OVR : corrige le sentiment détecté (Intérêt/Refus/Neutre) au cas où
+  // l'heuristique se trompe — sinon une vraie piste mal classée disparaît du pipeline.
+  const setSentiment = async (id: string, sentiment: string) => {
+    setReplies((prev) => prev.map((r) => r.id === id ? { ...r, sentimentOverride: sentiment || null } : r));
+    try {
+      await api.invoke('application:setSentiment', { id, sentiment: (sentiment || null) as 'positive' | 'rejection' | 'neutral' | null });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur lors du changement de sentiment');
+      await load();
+    }
+  };
+
   // UX-S9 : réponse rapide au recruteur.
   const [replyingId, setReplyingId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
@@ -299,7 +311,8 @@ export default function RepliesPage() {
       )}
       <ul>
         {paginatedReplies.map((a) => {
-          const sent = SENTIMENT[classifyReplySentiment(stripQuotedReply(a.replyContent))];
+          const sentKey = effectiveSentiment(a);
+          const sent = SENTIMENT[sentKey];
           // REPLY-OUT : « Répondu » si j'ai répondu APRÈS le dernier message reçu ;
           // sinon « En attente de réponse » (le fil attend mon retour).
           // ponytail: repliedAt n'est posé qu'à la 1ʳᵉ réponse recruteur → une 2ᵉ réponse
@@ -315,9 +328,17 @@ export default function RepliesPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <MessageSquare size={16} color={sent.color} />
               <strong style={{ fontSize: '15px' }}>{a.companyName}</strong>
-              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: sent.bg, color: sent.color }}>
-                {sent.label}
-              </span>
+              {/* SENTIMENT-OVR : pastille éditable — corrige si l'heuristique s'est trompée.
+                  Pilote l'affichage ici ET le filtre « À qualifier » du pipeline. */}
+              <select value={sentKey} onChange={(e) => void setSentiment(a.id, e.target.value)}
+                title="Sentiment détecté — corrigez si besoin"
+                style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px',
+                  border: 'none', background: sent.bg, color: sent.color, cursor: 'pointer',
+                  appearance: 'none', WebkitAppearance: 'none' }}>
+                <option value="positive">{SENTIMENT.positive.label}</option>
+                <option value="rejection">{SENTIMENT.rejection.label}</option>
+                <option value="neutral">{SENTIMENT.neutral.label}</option>
+              </select>
               {/* REPLY-OUT : badge d'état de MA réponse (se met à jour après envoi/retour). */}
               <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', background: replyBadge.bg, color: replyBadge.color }}>
                 {replyBadge.label}

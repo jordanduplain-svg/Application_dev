@@ -327,6 +327,22 @@ class TestDomainMatching(unittest.TestCase):
         self.assertTrue(_domain_matches_name("Orange", "orange.com"))   # marque = mot exact
         self.assertTrue(_domain_matches_name("Office", "office.com"))    # idem
 
+    def test_rejects_shared_sector_token_collision(self):
+        # Cas réel CEGI-SANTE → media-sante.com : les deux noms ne partagent que le token
+        # SECTORIEL « sante » → similarité ~0.63 (> 0.62) alors que ce sont deux sociétés
+        # distinctes. La partie distinctive « cegi » est absente de « media-sante » → rejet.
+        self.assertFalse(_domain_matches_name("CEGI-SANTE", "media-sante.com", country_hint="fr"))
+        self.assertFalse(_domain_matches_name("BIKY PHARMA", "media-sante.com", country_hint="fr"))
+        # Mais le vrai domaine de CEGI-SANTE, lui, passe (partie distinctive présente).
+        self.assertTrue(_domain_matches_name("CEGI-SANTE", "cegi-sante.com", country_hint="fr"))
+        self.assertTrue(_domain_matches_name("CEGI-SANTE", "cegisante.fr", country_hint="fr"))
+        # Et media-sante reste valide pour la VRAIE société media-sante.
+        self.assertTrue(_domain_matches_name("MEDIA SANTE", "media-sante.com", country_hint="fr"))
+        # Autres homonymes sectoriels réels (approche hybride, containment distinctif) :
+        self.assertFalse(_domain_matches_name("HUNTX PHARMA", "sunpharma.com", country_hint="fr"))
+        self.assertFalse(_domain_matches_name("OKTA FRANCE", "oxfamfrance.org", country_hint="fr"))
+        self.assertFalse(_domain_matches_name("BACK OFFICE SERVICES", "myawesomeboss.com", country_hint="fr"))
+
 
 class TestMergeMaster(unittest.TestCase):
     def _tmp(self) -> Path:

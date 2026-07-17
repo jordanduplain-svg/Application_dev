@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { matchReply, matchBounce, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply, classifyReplySentiment } from '../reply-matching';
+import { matchReply, matchBounce, inboxKey, detectOptOutRequest, isAutoReply, pollSinceDate, stripQuotedReply, classifyReplySentiment, effectiveSentiment } from '../reply-matching';
 
 // Pas de dépendances Electron/Prisma — fonctions pures, aucun mock nécessaire.
 
@@ -112,6 +112,50 @@ describe('classifyReplySentiment (paliers ordonnés)', () => {
 
   test('simple accusé → neutre', () => {
     expect(classifyReplySentiment('Bonjour, bien reçu, merci.')).toBe('neutral');
+  });
+});
+
+describe('stripTicketBoilerplate (réponse via outil de tickets)', () => {
+  // Cas réel : CELLA MSP — la réponse humaine arrive enrobée du gabarit du helpdesk.
+  const ticket = '### Hannah Crystal commented on incident Incident [#15350] ###\n\n'
+    + 'Reply above this line to add a comment\n\n\nHC\n\n\n'
+    + 'HANNAH CRYSTAL COMMENTED ON INCIDENT #15350\n\n\n'
+    + 'Hello Jordan,\n\nUnfortunately, we are not moving forward with your application.';
+
+  test('ne garde que le vrai message, sans le charabia du ticket', () => {
+    const out = stripQuotedReply(ticket);
+    expect(out.startsWith('Hello Jordan,')).toBe(true);
+    expect(out).not.toMatch(/###|Reply above this line|COMMENTED ON INCIDENT/);
+  });
+
+  test('le refus reste correctement détecté après nettoyage', () => {
+    expect(classifyReplySentiment(stripQuotedReply(ticket))).toBe('rejection');
+  });
+
+  test('un email NORMAL n\'est jamais amputé', () => {
+    const normal = 'Bonjour,\n\nNous avons bien reçu votre candidature.\n\nCordialement';
+    expect(stripQuotedReply(normal)).toBe(normal);
+  });
+
+  test('une phrase contenant « incident » en minuscules n\'est pas prise pour un entête', () => {
+    const t = 'Bonjour,\n\nSuite à un incident technique, je reviens vers vous.\n\nCordialement';
+    expect(stripQuotedReply(t)).toBe(t);
+  });
+});
+
+describe('effectiveSentiment (correction manuelle > heuristique)', () => {
+  test('sans override → heuristique sur le message dé-cité', () => {
+    expect(effectiveSentiment({ replyContent: 'Nous ne donnons pas suite.', sentimentOverride: null }))
+      .toBe('rejection');
+  });
+  test('override valide → prime sur l\'heuristique', () => {
+    // L'heuristique dirait « rejection » ; l'utilisateur corrige en « positive ».
+    expect(effectiveSentiment({ replyContent: 'Nous ne donnons pas suite.', sentimentOverride: 'positive' }))
+      .toBe('positive');
+  });
+  test('override invalide (valeur inconnue) → repli sur heuristique', () => {
+    expect(effectiveSentiment({ replyContent: 'Bien reçu, merci.', sentimentOverride: 'bogus' }))
+      .toBe('neutral');
   });
 });
 
@@ -310,11 +354,20 @@ describe('stripQuotedReply (n\'afficher que le vrai message)', () => {
 });
 
 describe('inboxKey', () => {
-  test('utilise In-Reply-To si disponible, sinon from+timestamp', () => {
+  test('utilise le Message-ID PROPRE du message, sinon from+timestamp', () => {
     const date = new Date('2025-01-01T10:00:00Z');
-    expect(inboxKey({ inReplyTo: '<ref@smtp>', from: 'a@b.com', date }))
-      .toBe('<ref@smtp>');
-    expect(inboxKey({ inReplyTo: null, from: 'a@b.com', date }))
+    expect(inboxKey({ messageId: '<own-1@smtp>', from: 'a@b.com', date }))
+      .toBe('<own-1@smtp>');
+    expect(inboxKey({ messageId: null, from: 'a@b.com', date }))
       .toBe(`a@b.com:${date.getTime()}`);
+  });
+
+  test('BUG-ÉCHANGE : 2 messages du MÊME fil ont des clés DIFFÉRENTES', () => {
+    // Deux réponses du recruteur au même mail initial → même In-Reply-To, mais ce sont
+    // bien deux emails distincts. Avec l'ancienne clé (In-Reply-To), le 2ᵉ était jeté.
+    const date = new Date('2025-01-01T10:00:00Z');
+    const a = inboxKey({ messageId: '<rh-1@corp>', from: 'rh@corp.com', date });
+    const b = inboxKey({ messageId: '<rh-2@corp>', from: 'rh@corp.com', date });
+    expect(a).not.toBe(b);
   });
 });

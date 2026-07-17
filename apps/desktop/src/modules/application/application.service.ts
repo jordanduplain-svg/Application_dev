@@ -1,5 +1,5 @@
 import type { Application, ApplicationStatus, ThreadMessage } from '@candio/shared';
-import { UNVERIFIED_EMAIL_SOURCES } from '@candio/shared';
+import { UNVERIFIED_EMAIL_SOURCES, effectiveSentiment } from '@candio/shared';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
@@ -24,19 +24,21 @@ function toDTO(a: AppWithCompany): Application {
     sentAt: a.sentAt?.toISOString() ?? null,
     repliedAt: a.repliedAt?.toISOString() ?? null,
     replyContent: a.replyContent,
-    // REPLY-IN : adresse réelle d'où le recruteur a répondu (cast défensif — champ récent).
-    replyFromEmail: (a as typeof a & { replyFromEmail?: string | null }).replyFromEmail ?? null,
-    // REPLY-OUT : ma réponse au recruteur (champs récents → cast défensif comme interview/bounce).
-    myReplyContent: (a as typeof a & { myReplyContent?: string | null }).myReplyContent ?? null,
-    myRepliedAt: (a as typeof a & { myRepliedAt?: Date | null }).myRepliedAt?.toISOString() ?? null,
+    // REPLY-IN : adresse réelle d'où le recruteur a répondu.
+    replyFromEmail: a.replyFromEmail ?? null,
+    // REPLY-OUT : ma réponse au recruteur.
+    myReplyContent: a.myReplyContent ?? null,
+    myRepliedAt: a.myRepliedAt?.toISOString() ?? null,
     // REMIND-01 : rappel/snooze.
-    remindAt: (a as typeof a & { remindAt?: Date | null }).remindAt?.toISOString() ?? null,
+    remindAt: a.remindAt?.toISOString() ?? null,
     errorMessage: a.errorMessage,
     // UX-10 : note de suivi et relance automatique.
     followUpNote: a.followUpNote ?? null,
     followUpSentAt: a.followUpSentAt?.toISOString() ?? null,
     // UX-4v3 : statut manuel post-réponse.
     manualStatus: a.manualStatus ?? null,
+    // SENTIMENT-OVR : correction manuelle du sentiment (null = heuristique).
+    sentimentOverride: a.sentimentOverride ?? null,
     // BUG-04 : exposer le Message-ID de l'email initial pour le threading.
     messageId: a.messageId ?? null,
     // B2 : Message-ID de la relance (distinct du messageId de l'email initial).
@@ -44,14 +46,14 @@ function toDTO(a: AppWithCompany): Application {
     // FM-02 : variante de prompt A/B utilisée lors de la génération.
     promptVariant: a.promptVariant ?? null,
     // FM-08 : suivi d'entretien.
-    interviewDate: (a as typeof a & { interviewDate?: Date | null }).interviewDate?.toISOString() ?? null,
-    interviewLocation: (a as typeof a & { interviewLocation?: string | null }).interviewLocation ?? null,
-    interviewNotes: (a as typeof a & { interviewNotes?: string | null }).interviewNotes ?? null,
+    interviewDate: a.interviewDate?.toISOString() ?? null,
+    interviewLocation: a.interviewLocation ?? null,
+    interviewNotes: a.interviewNotes ?? null,
     // BOUNCE-01 : bounce tracking.
-    emailBounced: (a as typeof a & { emailBounced?: boolean }).emailBounced ?? false,
-    emailBouncedAt: (a as typeof a & { emailBouncedAt?: Date | null }).emailBouncedAt?.toISOString() ?? null,
+    emailBounced: a.emailBounced ?? false,
+    emailBouncedAt: a.emailBouncedAt?.toISOString() ?? null,
     // DELIV-01 : source de l'email — sert au marquage « à vérifier » et au blocage d'envoi.
-    emailSource: ((a.company as { emailSource?: string }).emailSource ?? 'manual') as Application['emailSource'],
+    emailSource: (a.company.emailSource ?? 'manual') as Application['emailSource'],
   };
 }
 
@@ -398,6 +400,14 @@ export async function setManualStatus(
   await prisma.application.update({ where: { id }, data: { manualStatus } });
 }
 
+// SENTIMENT-OVR : corrige (ou réinitialise) le sentiment détecté d'une réponse.
+export async function setSentiment(
+  id: string,
+  sentiment: 'positive' | 'rejection' | 'neutral' | null
+): Promise<void> {
+  await prisma.application.update({ where: { id }, data: { sentimentOverride: sentiment } });
+}
+
 /**
  * FOLLOWUP-N : nombre maximum de relances automatiques par candidature (cadence 10 j).
  * Une seule relance, à J+10 de l'envoi, puis on arrête.
@@ -447,7 +457,25 @@ export async function listActionRequired(): Promise<Application[]> {
     include: includeCompany,
     orderBy: { sentAt: 'asc' },
   });
-  return rows.map(toDTO);
+
+  // « À traiter » ne doit contenir que des actions RÉELLES. Une réponse n'est à qualifier
+  // que si elle présente un INTÉRÊT : un refus ou un accusé neutre ne demande aucune action
+  // (même logique que le Pipeline, qui ne suit que les pistes vivantes). Ils restent bien sûr
+  // consultables et qualifiables à la main sur la page Réponses.
+  // Note : une candidature REPLIED ne peut pas être éligible à une relance (followUpEligible
+  // exige repliedAt: null) → seuls le « à qualifier » et un rappel échu peuvent la faire
+  // remonter ici. Un rappel explicitement posé par l'utilisateur prime toujours.
+  const now = new Date();
+  const actionable = rows.filter((a) => {
+    if (a.status !== 'REPLIED' || a.manualStatus !== null) return true;
+    if (a.remindAt && a.remindAt <= now) return true; // rappel posé à la main → on garde
+    return effectiveSentiment({
+      replyContent: a.replyContent,
+      sentimentOverride: a.sentimentOverride,
+    }) === 'positive';
+  });
+
+  return actionable.map(toDTO);
 }
 
 /**

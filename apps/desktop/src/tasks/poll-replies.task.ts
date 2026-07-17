@@ -61,12 +61,21 @@ export function enqueuePollReplies(): void {
         // de la candidature puis `continue` → la VRAIE réponse ultérieure, partageant souvent
         // le même In-Reply-To (donc le même inboxKey) ou le même expéditeur, était masquée à
         // CHAQUE relevé. En les écartant ici, ils ne prennent plus la place d'une vraie réponse.
-        const reply = inbox.find(
-          (m) => !m.isAutoReply && !usedInboxKeys.has(inboxKey(m)) && matchReply(m, app, sent)
-        );
-        if (reply) {
-          usedInboxKeys.add(inboxKey(reply));
+        // BUG-ÉCHANGE : on prend TOUS les messages du fil, pas seulement le premier.
+        // Avant (`inbox.find`), une seule réponse par candidature et par relevé était traitée :
+        // si le recruteur avait envoyé plusieurs mails depuis le dernier relevé (cas courant au
+        // 1er relevé, qui remonte jusqu'à 60 j), les suivants étaient perdus DÉFINITIVEMENT
+        // (le relevé d'après ne les refetch plus). Triés par date → le fil reste chronologique.
+        const replies = inbox
+          .filter((m) => !m.isAutoReply && !usedInboxKeys.has(inboxKey(m)) && matchReply(m, app, sent))
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+        if (replies.length === 0) continue;
+        // Réserve TOUS ces messages pour cette candidature (aucun ne doit être réattribué).
+        for (const m of replies) usedInboxKeys.add(inboxKey(m));
 
+        let markedFirst = false;
+        let newInboundCount = 0;
+        for (const reply of replies) {
           const MAX_REPLY_LENGTH = 50_000;
           const body = reply.text.slice(0, MAX_REPLY_LENGTH);
           // REPLY-IN : on transmet l'adresse réelle de l'expéditeur (reply.from) → « Répondre
@@ -74,13 +83,9 @@ export function enqueuePollReplies(): void {
           const { marked } = await markReplied(app.id, body, reply.from || undefined);
           // THREAD-01 : consigner le message entrant dans le fil (dédupliqué par Message-ID).
           const isNewInbound = await recordInboundMessage(app.id, body, reply.from || null, reply.messageId);
-          // B3 : une 2ᵉ réponse (candidature déjà REPLIED) doit quand même faire remonter le
-          // fil et rebasculer le badge → on bump repliedAt/replyFrom sur tout NOUVEAU entrant.
-          if (isNewInbound && !marked) {
-            await touchLatestReply(app.id, reply.date ?? new Date(), reply.from || null);
-            touchedCampaigns.add(app.campaignId);
-          }
+          if (isNewInbound) newInboundCount++;
           if (marked) {
+            markedFirst = true;
             touchedCampaigns.add(app.campaignId);
             if (profile) {
               taskRunner.emitEvent('reply:received', {
@@ -107,6 +112,13 @@ export function enqueuePollReplies(): void {
               }
             }
           }
+        }
+        // B3 : une réponse sur une candidature DÉJÀ REPLIED doit quand même faire remonter le
+        // fil et rebasculer le badge → on bump repliedAt/replyFrom sur le message le PLUS RÉCENT.
+        const latest = replies[replies.length - 1];
+        if (newInboundCount > 0 && !markedFirst) {
+          await touchLatestReply(app.id, latest.date ?? new Date(), latest.from || null);
+          touchedCampaigns.add(app.campaignId);
         }
       }
 
