@@ -7,10 +7,11 @@ import { logger } from '../lib/logger';
 /**
  * Scheduler d'automatisation (node-cron).
  *
- * Pour l'instant : relance automatique quotidienne. Chaque jour (et au démarrage
- * de l'app), si l'option est activée, on enfile une relance pour les candidatures
- * éligibles (SENT depuis +10 j, sans réponse ni relance), bornée au quota d'envoi
- * RESTANT du jour pour ne pas dépasser le plafond anti-suspension Gmail.
+ * Pour l'instant : relance automatique les JOURS OUVRÉS. Chaque jour de semaine (et au
+ * démarrage de l'app), si l'option est activée, on enfile une relance pour les candidatures
+ * éligibles (SENT depuis +FOLLOWUP_DELAY_DAYS j, sans réponse ni relance), bornée au quota d'envoi
+ * RESTANT du jour pour ne pas dépasser le plafond anti-suspension Gmail. Le week-end est sauté
+ * (un mail pro le dimanche agace et convertit mal) → cf. isWeekend.
  *
  * Tout passe par enqueueFollowUp → mêmes garde-fous que la relance manuelle
  * (opt-out RGPD, quota, throttle 8 s, claim atomique anti-doublon).
@@ -18,6 +19,15 @@ import { logger } from '../lib/logger';
 
 let task: ScheduledTask | null = null;
 let startupTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Samedi (6) ou dimanche (0) : pas de relance AUTOMATIQUE le week-end — un mail pro
+ * qui débarque le dimanche agace et convertit mal. Ne concerne QUE l'auto : une
+ * relance déclenchée manuellement par l'utilisateur reste possible n'importe quel jour.
+ */
+export function isWeekend(day: number): boolean {
+  return day === 0 || day === 6;
+}
 
 /**
  * runAutoFollowUps — ROUAGE de l'automatisation des relances. Le rouage tient en 2 idées :
@@ -30,6 +40,10 @@ let startupTimer: ReturnType<typeof setTimeout> | null = null;
  */
 export async function runAutoFollowUps(): Promise<number> {
   if (!getAutoFollowUpEnabled()) return 0;
+  if (isWeekend(new Date().getDay())) {
+    logger.info('[scheduler] Relance auto : week-end, reportée à lundi.');
+    return 0;
+  }
   const remaining = Math.max(0, getDailySendLimit() - getDailySendCount().count);
   if (remaining === 0) {
     logger.info('[scheduler] Relance auto : plafond du jour déjà atteint, rien à faire.');

@@ -6,7 +6,7 @@ import { handle } from './registry';
 import { validate, ReportRangeSchema } from './validation';
 import { prisma } from '../../src/lib/prisma';
 import { getProfile } from '../../src/modules/profile/profile.service';
-import { MAX_FOLLOWUPS } from '../../src/modules/application/application.service';
+import { MAX_FOLLOWUPS, FOLLOWUP_DELAY_DAYS } from '../../src/modules/application/application.service';
 import { logger } from '../../src/lib/logger';
 import { csvCell } from '@candio/shared';
 
@@ -209,7 +209,7 @@ export function registerReportHandlers(): void {
   // ── Agenda : prochaines relances dues + entretiens à venir ─────────────────
   handle('report:agenda', async () => {
     // Relances à venir : SENT/FOLLOWED_UP sans réponse, sous le plafond. dueDate =
-    // (dernière relance ou envoi initial) + 10 j. Inclut les retards (dueDate passée).
+    // (dernière relance ou envoi initial) + FOLLOWUP_DELAY_DAYS j. Inclut les retards (dueDate passée).
     const apps = await prisma.application.findMany({
       where: { repliedAt: null, followUpCount: { lt: MAX_FOLLOWUPS }, status: { in: ['SENT', 'FOLLOWED_UP'] } },
       include: { company: { select: { name: true } }, campaign: { select: { jobTitle: true } } },
@@ -217,7 +217,7 @@ export function registerReportHandlers(): void {
     const followUps = apps.flatMap((a) => {
       const base = a.followUpSentAt ?? a.sentAt;
       if (!base) return [];
-      const due = new Date(base.getTime() + 10 * 24 * 60 * 60 * 1000);
+      const due = new Date(base.getTime() + FOLLOWUP_DELAY_DAYS * 864e5);
       return [{ id: a.id, companyName: a.company.name, jobTitle: a.campaign.jobTitle, dueDate: due.toISOString() }];
     }).sort((x, y) => x.dueDate.localeCompare(y.dueDate));
 

@@ -416,6 +416,7 @@ export async function generatePitch(
     cvJson: JSON.stringify(cvParsed),
     opening: variation.opening,
     projection: variation.projection,
+    closing: variation.closing,
   });
 
 
@@ -468,8 +469,11 @@ export async function generatePitch(
     // (1er jet déjà propre) → on évite un 2e appel facturé. Échec → on garde le 1er jet.
     const revised = isOllama ? await reviseEmail({ subject, body }) : { subject, body };
     // Filet déterministe (100 % fiable) : clichés, élisions du possessif, doublons.
-    const polish = (t: string) => stripEmojis(fixCapitalization(fixEmDash(fixPossessiveElision(scrubCliches(t)))));
-    return { subject: polish(revised.subject), body: dedupeParagraphs(polish(revised.body)) };
+    const polish = (t: string) => stripEmojis(fixCapitalization(fixEmDash(fixPossessiveElision(scrubCliches(breakTemplateTics(t))))));
+    // Objet : le tiret demi-cadratin (– U+2013) reste un marqueur IA visible dans l'objet
+    // → on le ramène à un trait d'union simple (le corps le garde comme séparateur légitime).
+    const subjectOut = polish(revised.subject).replace(/[ \t]*–[ \t]*/g, ' - ');
+    return { subject: subjectOut, body: dedupeParagraphs(polish(revised.body)) };
   } catch {
     return fallback;
   }
@@ -527,8 +531,11 @@ async function completePitch(prompt: string, jobTitle: string, fallbackSubject: 
     // (1er jet déjà propre) → on évite un 2e appel facturé. Échec → on garde le 1er jet.
     const revised = isOllama ? await reviseEmail({ subject, body }) : { subject, body };
     // Filet déterministe (100 % fiable) : clichés, élisions du possessif, doublons.
-    const polish = (t: string) => stripEmojis(fixCapitalization(fixEmDash(fixPossessiveElision(scrubCliches(t)))));
-    return { subject: polish(revised.subject), body: dedupeParagraphs(polish(revised.body)) };
+    const polish = (t: string) => stripEmojis(fixCapitalization(fixEmDash(fixPossessiveElision(scrubCliches(breakTemplateTics(t))))));
+    // Objet : le tiret demi-cadratin (– U+2013) reste un marqueur IA visible dans l'objet
+    // → on le ramène à un trait d'union simple (le corps le garde comme séparateur légitime).
+    const subjectOut = polish(revised.subject).replace(/[ \t]*–[ \t]*/g, ' - ');
+    return { subject: subjectOut, body: dedupeParagraphs(polish(revised.body)) };
   } catch {
     return fallback;
   }
@@ -581,6 +588,7 @@ export async function generateCoverLetter(
     cvJson: JSON.stringify(cvParsed),
     opening: variation.opening,
     projection: variation.projection,
+    closing: variation.closing,
   });
 
   const email = await completePitch(prompt, jobTitle, `Candidature – ${jobTitle}`);
@@ -638,6 +646,20 @@ function scrubCliches(text: string): string {
   let out = text;
   for (const [re, repl] of CLICHE_REPLACEMENTS) out = out.replace(re, repl);
   return out;
+}
+
+/**
+ * ANTI-GABARIT déterministe : casse deux tics récurrents d'un mail à l'autre que le
+ * prompt seul n'élimine pas (le modèle les réémet malgré la consigne). Empilés sur
+ * beaucoup d'envois, ils forment une signature « généré ». La casse de début de phrase
+ * est rétablie ensuite par fixCapitalization (appelé APRÈS dans le pipeline de polish).
+ *   1. « Concrètement, » / « Concrètement : » en TÊTE de paragraphe (7/12 des lettres) → retiré.
+ *   2. Figure « Avant ça : [fragments] » (amorce à deux-points) → « Avant, ».
+ */
+function breakTemplateTics(text: string): string {
+  return text
+    .replace(/(^|\n)([ \t]*)Concr[èe]tement\s*[,:]\s+/g, '$1$2')
+    .replace(/\bAvant [çc]a\s*:\s*/g, 'Avant, ');
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 import { logger } from '../lib/logger';
 import { matchReply, matchBounce, inboxKey, detectOptOutRequest, pollSinceDate, stripQuotedReply } from './reply-matching';
 import { addOptOut } from '../modules/optout/optout.service';
+import { optOutTargetForReply } from '../modules/optout/optout-match';
 import { markLeadBounced } from '../lib/leadsMaster';
 
 /**
@@ -102,11 +103,14 @@ export function enqueuePollReplies(): void {
             // (« pour vous désinscrire… ») d'un recruteur intéressé le blackliste à tort.
             if (detectOptOutRequest(stripQuotedReply(reply.text))) {
               try {
+                // On bloque le DOMAINE entier pour une adresse pro (toute l'entreprise
+                // ne sera plus recontactée), l'ADRESSE seule pour un freemail.
+                const target = optOutTargetForReply(app.company.contactEmail);
                 await addOptOut(
-                  app.company.contactEmail,
+                  target,
                   `Désinscription détectée dans une réponse (${app.company.name})`,
                 );
-                logger.info(`[RGPD] Opt-out auto : ${app.company.contactEmail} (désinscription détectée dans la réponse).`);
+                logger.info(`[RGPD] Opt-out auto : ${target} (désinscription détectée dans la réponse).`);
               } catch (err) {
                 logger.warn('Impossible d\'ajouter le contact à la liste opt-out', err);
               }

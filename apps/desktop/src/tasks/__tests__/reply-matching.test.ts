@@ -249,6 +249,10 @@ describe('detectOptOutRequest (RGPD option A)', () => {
     'STOP',
     'stop.',
     'Please stop emailing me.',
+    'Stop avec vos emails',              // formule FR courante « stop … emails »
+    'Arrêtez vos emails',
+    'Arrêtez de me contacter',
+    'Cessez vos envois',
   ])('détecte la désinscription : %s', (txt) => {
     expect(detectOptOutRequest(txt)).toBe(true);
   });

@@ -85,6 +85,7 @@ export interface PitchPromptInput {
   cvJson: string;           // CV sérialisé JSON
   opening: string;          // ANTI-CLONE : directive d'ouverture tirée au sort (cf. pickLetterVariation)
   projection: string;       // ANTI-CLONE : forme de la projection §3 tirée au sort
+  closing: string;          // ANTI-CLONE : forme de la clôture (proposition d'entretien) tirée au sort
 }
 
 /**
@@ -198,7 +199,11 @@ ${i.opening}
    ${i.projection}
    Ancre-la dans l'activité réelle de l'entreprise (aucune invention) ; c'est cette phrase qui déclenche
    les réponses, ne l'omets jamais. Puis : disponibilité
-   (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint. NE MENTIONNE PAS de niveau
+   (${i.dispoInstr}), mobilité/télétravail selon les directives/CV, CV joint.
+   FORME DE LA PROPOSITION D'ENTRETIEN (tirée au sort — applique CELLE-CI, ne converge pas vers
+   « Je me tiens à votre disposition pour un entretien si vous souhaitez en discuter ») :
+   ${i.closing}
+   NE MENTIONNE PAS de niveau
    de langue ni de certification façon CV (« anglais C1 », « (immersion d'un an au Canada) », « B2 »…) :
    ça reste sur le CV. N'évoque une langue QUE si le poste/l'entreprise est manifestement international,
    et alors en langage naturel intégré à une phrase (« je travaille sans difficulté en anglais »), JAMAIS
@@ -308,7 +313,7 @@ CV du candidat (JSON — experiences/achievements, education, skills, languages)
 FORMAT DE SORTIE — JSON strict, EXACTEMENT deux clés. "body" = UNE SEULE chaîne de caractères
 (paragraphes séparés par une ligne vide), JAMAIS d'objet imbriqué ni de tableau :
 {
-  "subject": "objet court et spécifique (ex. « ${i.safeJob} – candidature spontanée », ou avec un mot de valeur métier)",
+  "subject": "objet court et spécifique (ex. « ${i.safeJob} - candidature spontanée », ou avec un mot de valeur métier)",
   "body": "corps complet avec signature, en une seule chaîne, paragraphes séparés par une ligne vide"
 }`;
 }
@@ -325,6 +330,7 @@ export interface CoverLetterPromptInput {
   cvJson: string;
   opening: string;          // ANTI-CLONE : directive d'ouverture tirée au sort (cf. pickCoverLetterVariation)
   projection: string;       // ANTI-CLONE : forme de la projection §3 tirée au sort
+  closing: string;          // ANTI-CLONE : forme de la clôture (proposition d'entretien) tirée au sort
 }
 
 /**
@@ -348,12 +354,23 @@ const LETTER_PROJECTIONS = [
   'PROJECTION — projette-toi sur UN chantier précis (tiré de la cible) et le résultat que tu y viserais. Pas de liste énumérative, pas de « je pourrais aider… ».',
   'PROJECTION — relie ta preuve principale au besoin de la cible en montrant le résultat visé, une phrase sobre. INTERDIT : « je pourrais aider [entreprise] à A, à B et à C ».',
 ];
+// ANTI-CLONE : la phrase qui PROPOSE l'entretien converge sinon vers une formule unique
+// (« Je me tiens à votre disposition pour un entretien si vous souhaitez en discuter »)
+// répétée à l'identique d'un mail à l'autre → on impose une tournure tirée au sort.
+const LETTER_CLOSINGS = [
+  'CLÔTURE — propose l\'entretien sobrement, ex. « Je reste disponible pour en échanger. » Registre posé, aucun enthousiasme.',
+  'CLÔTURE — propose une rencontre en la reliant au poste, ex. « Un échange me permettrait de vous détailler ces projets. » Sobre, factuel.',
+  'CLÔTURE — propose l\'entretien de façon directe, ex. « Je peux vous présenter ce travail de vive voix quand vous voulez. » Sans emphase.',
+  'CLÔTURE — invite au contact simplement, ex. « Si le profil vous parle, je suis joignable pour en discuter. » Mesuré, pas de cliché.',
+  'CLÔTURE — propose un entretien de façon neutre, ex. « Un entretien me permettrait d\'en dire plus. » Aucun marqueur d\'enthousiasme (« ravi », « heureux » proscrits).',
+];
 
-/** ANTI-CLONE : tire une ouverture + une forme de projection au hasard (12 combinaisons). */
-export function pickLetterVariation(): { opening: string; projection: string } {
+/** ANTI-CLONE : tire une ouverture + une projection + une clôture au hasard. */
+export function pickLetterVariation(): { opening: string; projection: string; closing: string } {
   return {
     opening: LETTER_OPENINGS[Math.floor(Math.random() * LETTER_OPENINGS.length)],
     projection: LETTER_PROJECTIONS[Math.floor(Math.random() * LETTER_PROJECTIONS.length)],
+    closing: LETTER_CLOSINGS[Math.floor(Math.random() * LETTER_CLOSINGS.length)],
   };
 }
 
@@ -436,8 +453,11 @@ ${i.opening}
    est fournie), en toutes lettres SANS coller d'URL dans le corps. TERMINE par une phrase SOBRE proposant
    un entretien (registre posé, AUCUN marqueur d'enthousiasme : proscris « ravi », « heureux »,
    « enchanté », « avec plaisir », « hâte »). NE termine JAMAIS par « … en savoir plus sur ce que je
-   pourrais vous apporter » ni aucune variante de « ce que je pourrais vous apporter » (tic de clôture) :
-   propose l'entretien simplement (« Je reste disponible pour en échanger. »). Salutation sur sa propre
+   pourrais vous apporter » ni aucune variante de « ce que je pourrais vous apporter » (tic de clôture).
+   FORME DE LA PROPOSITION D'ENTRETIEN (tirée au sort — applique CELLE-CI, ne converge pas vers
+   « Je me tiens à votre disposition pour un entretien si vous souhaitez en discuter ») :
+   ${i.closing}
+   Salutation sur sa propre
    ligne (« Cordialement, » / « Bien cordialement, »), puis la signature.
 
 RÈGLES DE QUALITÉ (impératives) :

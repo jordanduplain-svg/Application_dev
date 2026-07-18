@@ -172,7 +172,7 @@ model Application {
   followUpNote String?
   // UX-12 : date d'envoi de la DERNIÈRE relance automatique.
   followUpSentAt DateTime?
-  // FOLLOWUP-N : nombre de relances déjà envoyées (cadence 10 j, plafonné à MAX_FOLLOWUPS).
+  // FOLLOWUP-N : nombre de relances déjà envoyées (cadence FOLLOWUP_DELAY_DAYS, plafonné à MAX_FOLLOWUPS).
   followUpCount  Int       @default(0)
   // B2 : Message-ID de la relance — conserve l'original pour le matching IMAP des réponses à la candidature initiale.
   followUpMessageId String?

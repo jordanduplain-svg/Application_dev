@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleCheck, Send } from 'lucide-react';
 import type { Application } from '@candio/shared';
+import { FOLLOWUP_DELAY_DAYS } from '@candio/shared';
 import { api } from '../lib/api';
 import { statusLabel } from '../lib/status';
 
@@ -15,7 +16,7 @@ import { statusLabel } from '../lib/status';
 function actionLabel(a: Application): string {
   if (a.status === 'FAILED') return 'Renvoi requis (échec)';
   if (a.status === 'REPLIED' && !a.manualStatus) return 'Réponse à qualifier';
-  if (a.status === 'SENT') return 'Relance possible (> 10 jours)';
+  if (a.status === 'SENT') return `Relance possible (> ${FOLLOWUP_DELAY_DAYS} jours)`;
   return 'Action requise';
 }
 
@@ -130,7 +131,7 @@ export default function TodoPage({ onOpenCampaign }: { onOpenCampaign?: (id: str
           </div>
         </div>
         {followUpEligible > 0 && (
-          <button onClick={followUpAll} disabled={followingUp} title="Envoie une relance à toutes les candidatures sans réponse depuis + de 10 jours (limité au quota d'envoi du jour)">
+          <button onClick={followUpAll} disabled={followingUp} title={`Envoie une relance à toutes les candidatures sans réponse depuis + de ${FOLLOWUP_DELAY_DAYS} jours (limité au quota d'envoi du jour)`}>
             <Send size={15} className={followingUp ? 'spin' : undefined} />
             {followingUp ? 'Relance…' : `Relancer les éligibles (${followUpEligible})`}
           </button>

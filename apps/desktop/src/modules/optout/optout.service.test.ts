@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeValue, detectKind, emailDomain, matchesOptOut } from './optout-match';
+import { normalizeValue, detectKind, emailDomain, matchesOptOut, optOutTargetForReply } from './optout-match';
 
 describe('normalizeValue', () => {
   it('trim + minuscules', () => {
@@ -16,6 +16,17 @@ describe('normalizeValue', () => {
 describe('detectKind', () => {
   it('email si @ présent', () => expect(detectKind('a@b.com')).toBe('email'));
   it('domaine sinon', () => expect(detectKind('acme.com')).toBe('domain'));
+});
+
+describe('optOutTargetForReply', () => {
+  it('adresse pro → bloque le DOMAINE entier', () => {
+    expect(optOutTargetForReply('guillaume.gatheron@renov-tout.com')).toBe('renov-tout.com');
+  });
+  it('freemail → bloque seulement l\'ADRESSE (jamais tout gmail.com)', () => {
+    expect(optOutTargetForReply('Jean.Dupont@Gmail.com')).toBe('jean.dupont@gmail.com');
+    expect(optOutTargetForReply('x@orange.fr')).toBe('x@orange.fr');
+    expect(optOutTargetForReply('y@outlook.com')).toBe('y@outlook.com');
+  });
 });
 
 describe('emailDomain', () => {

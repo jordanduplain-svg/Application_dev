@@ -166,7 +166,7 @@ describe('Flux d\'envoi (intégration, SMTP mocké)', () => {
 });
 
 describe('Éligibilité relance (BOUNCE-01 : ni répondu, ni rebondi)', () => {
-  const oldSent = new Date(Date.now() - 15 * 864e5); // envoyé il y a 15 j (> seuil 10 j)
+  const oldSent = new Date(Date.now() - 20 * 864e5); // envoyé il y a 20 j (> seuil FOLLOWUP_DELAY_DAYS)
 
   // Crée une candidature SENT « ancienne » avec état de suivi paramétrable.
   async function makeSent(email: string, extra: Record<string, unknown>): Promise<string> {

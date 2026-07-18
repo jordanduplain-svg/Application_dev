@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { SettingsStatus, SmtpInput, ImapInput, DkimInput, HardwareInfo } from '@candio/shared';
+import { FOLLOWUP_DELAY_DAYS } from '@candio/shared';
 import { api } from '../lib/api';
 import { MODEL_CATALOG, qualityStars, compatLabel, type ModelSpec } from '../lib/ollamaModels';
 import OptOutManager from '../components/OptOutManager';
@@ -1474,13 +1475,13 @@ export default function SettingsPage() {
                  checked={status?.autoFollowUpEnabled ?? false}
                  onChange={toggleAutoFollowUp}
                  disabled={togglingAutoFollowUp} />
-          {' '}{togglingAutoFollowUp ? 'Mise à jour…' : 'Relancer automatiquement les candidatures sans réponse (> 10 jours)'}
+          {' '}{togglingAutoFollowUp ? 'Mise à jour…' : `Relancer automatiquement les candidatures sans réponse (> ${FOLLOWUP_DELAY_DAYS} jours)`}
         </label>
         <small style={{ display: 'block', marginTop: '8px', color: '#888', lineHeight: 1.5 }}>
           Chaque jour (et au démarrage), l'app envoie une relance aux candidatures éligibles,
           dans la <strong>limite de ton quota d'envoi du jour</strong> et avec les mêmes garde-fous que
           la relance manuelle (liste « ne pas contacter », anti-doublon). <strong>1 relance</strong> maximum,
-          à 10 jours par candidature. ⚠️ <strong>L'app doit rester ouverte</strong> pour que la
+          à {FOLLOWUP_DELAY_DAYS} jours par candidature. ⚠️ <strong>L'app doit rester ouverte</strong> pour que la
           planification se déclenche.
         </small>
         <label style={{ display: 'block', marginTop: '12px' }}>

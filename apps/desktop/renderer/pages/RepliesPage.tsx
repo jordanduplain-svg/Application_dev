@@ -44,6 +44,14 @@ export default function RepliesPage() {
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'company' | 'status'>('date_desc');
   // PERF-1 : pagination.
   const [page, setPage] = useState(0);
+  // CANNED-02 : nom du candidat, ajouté sous « Bien cordialement, » des modèles de réponse.
+  const [signatureName, setSignatureName] = useState('');
+  useEffect(() => {
+    void api.invoke('profile:get').then((p) => {
+      const name = `${p?.firstName ?? ''} ${p?.lastName ?? ''}`.trim();
+      if (name) setSignatureName(name);
+    }).catch(() => { /* profil absent → modèles sans nom, comme avant */ });
+  }, []);
 
   const load = async () => {
     try {
@@ -501,7 +509,7 @@ export default function RepliesPage() {
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-sub)', alignSelf: 'center' }}>Modèle :</span>
                   {CANNED_REPLIES.map((t) => (
-                    <button key={t.label} onClick={() => setReplyBody(t.body)} className="btn-secondary"
+                    <button key={t.label} onClick={() => setReplyBody(signatureName ? `${t.body}\n\n${signatureName}` : t.body)} className="btn-secondary"
                       title="Insère ce modèle (modifiable)" style={{ fontSize: '11px', padding: '2px 8px' }}>
                       {t.label}
                     </button>

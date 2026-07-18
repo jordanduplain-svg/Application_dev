@@ -17,6 +17,12 @@ export const PRICE_PER_APPLICATION = 2.0;
  */
 export const TOS_VERSION = '2026-05';
 
+/**
+ * FOLLOWUP-N : cadence de relance automatique, en jours. Source de vérité UNIQUE,
+ * partagée par le moteur (éligibilité + claim d'envoi) et l'UI (textes Réglages/Todo).
+ */
+export const FOLLOWUP_DELAY_DAYS = 17;
+
 /** URLs des documents légaux (affichées sur l'écran d'inscription). */
 export const LEGAL_URLS = {
   terms: 'https://candio.app/cgu',

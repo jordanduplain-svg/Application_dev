@@ -336,7 +336,7 @@ export function registerApplicationHandlers(): void {
     const { id, subject, body } = payload as { id: string; subject: string; body: string };
 
     // FOLLOWUP-N : parité avec enqueueFollowUp — capturer l'état avant le claim,
-    // accepter 1ʳᵉ relance (SENT) ET suivantes (FOLLOWED_UP > 10 j), et SURTOUT
+    // accepter 1ʳᵉ relance (SENT) ET suivantes (FOLLOWED_UP > FOLLOWUP_DELAY_DAYS j), et SURTOUT
     // incrémenter followUpCount (sinon le plafond MAX_FOLLOWUPS est contourné et la
     // candidature reçoit des relances auto supplémentaires).
     const before = await prisma.application.findUnique({
@@ -346,7 +346,7 @@ export function registerApplicationHandlers(): void {
     if (!before) throw new Error('Candidature introuvable.');
     const restore = { status: before.status, followUpSentAt: before.followUpSentAt, followUpCount: before.followUpCount };
 
-    const tenDaysAgo = new Date(Date.now() - 10 * 864e5);
+    const cutoff = appService.followUpCutoff();
     const claimed = await prisma.application.updateMany({
       where: {
         id,
@@ -355,7 +355,7 @@ export function registerApplicationHandlers(): void {
         followUpCount: { lt: appService.MAX_FOLLOWUPS },
         OR: [
           { status: 'SENT', followUpSentAt: null },
-          { status: 'FOLLOWED_UP', followUpSentAt: { lt: tenDaysAgo } },
+          { status: 'FOLLOWED_UP', followUpSentAt: { lt: cutoff } },
         ],
       },
       data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },

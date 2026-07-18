@@ -1,5 +1,8 @@
 import type { Application, ApplicationStatus, ThreadMessage } from '@candio/shared';
-import { UNVERIFIED_EMAIL_SOURCES, effectiveSentiment } from '@candio/shared';
+import { UNVERIFIED_EMAIL_SOURCES, effectiveSentiment, FOLLOWUP_DELAY_DAYS } from '@candio/shared';
+
+// Ré-exporté pour les appelants historiques (ipc, report, tasks) qui l'importent d'ici.
+export { FOLLOWUP_DELAY_DAYS };
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
@@ -409,26 +412,31 @@ export async function setSentiment(
 }
 
 /**
- * FOLLOWUP-N : nombre maximum de relances automatiques par candidature (cadence 10 j).
- * Une seule relance, à J+10 de l'envoi, puis on arrête.
+ * FOLLOWUP-N : nombre maximum de relances automatiques par candidature.
+ * Une seule relance, à J+FOLLOWUP_DELAY_DAYS de l'envoi, puis on arrête.
  */
 export const MAX_FOLLOWUPS = 1;
 
+/** Date-seuil « envoyé/relancé il y a + de FOLLOWUP_DELAY_DAYS jours ». */
+export function followUpCutoff(now = Date.now()): Date {
+  return new Date(now - FOLLOWUP_DELAY_DAYS * 864e5);
+}
+
 /**
  * FOLLOWUP-N : condition Prisma « candidature éligible à une (n-ième) relance ».
- * - 1ʳᵉ relance : SENT, envoyée il y a + de 10 j, jamais relancée.
- * - relances suivantes : FOLLOWED_UP, dernière relance il y a + de 10 j (mort code
- *   tant que MAX_FOLLOWUPS = 1, gardé si le plafond est relevé un jour).
+ * - 1ʳᵉ relance : SENT, envoyée il y a + de FOLLOWUP_DELAY_DAYS j, jamais relancée.
+ * - relances suivantes : FOLLOWED_UP, dernière relance il y a + de FOLLOWUP_DELAY_DAYS j
+ *   (mort code tant que MAX_FOLLOWUPS = 1, gardé si le plafond est relevé un jour).
  * Dans les deux cas : pas de réponse reçue et plafond de relances non atteint.
  */
-function followUpEligibleWhere(tenDaysAgo: Date): Prisma.ApplicationWhereInput {
+function followUpEligibleWhere(cutoff: Date): Prisma.ApplicationWhereInput {
   return {
     repliedAt: null,
     emailBounced: false, // BOUNCE-01 : ne jamais relancer une adresse qui a rebondi.
     followUpCount: { lt: MAX_FOLLOWUPS },
     OR: [
-      { status: 'SENT', sentAt: { lt: tenDaysAgo }, followUpSentAt: null },
-      { status: 'FOLLOWED_UP', followUpSentAt: { lt: tenDaysAgo } },
+      { status: 'SENT', sentAt: { lt: cutoff }, followUpSentAt: null },
+      { status: 'FOLLOWED_UP', followUpSentAt: { lt: cutoff } },
     ],
   };
 }
@@ -437,12 +445,12 @@ function followUpEligibleWhere(tenDaysAgo: Date): Prisma.ApplicationWhereInput {
  * UX-5v3 : liste les candidatures nécessitant une action (relance, qualification, réessai).
  */
 export async function listActionRequired(): Promise<Application[]> {
-  const tenDaysAgo = new Date(Date.now() - 10 * 864e5); // il y a 10 jours
+  const cutoff = followUpCutoff();
   const rows = await prisma.application.findMany({
     where: {
       OR: [
-        // Éligibles à une relance (1ʳᵉ ou suivante, cadence 10 j).
-        followUpEligibleWhere(tenDaysAgo),
+        // Éligibles à une relance (1ʳᵉ ou suivante, cadence FOLLOWUP_DELAY_DAYS j).
+        followUpEligibleWhere(cutoff),
         // Réponses reçues sans statut manuel (à qualifier).
         { status: 'REPLIED', manualStatus: null },
         // REMIND-01 : rappels échus (« me rappeler de répondre le … »).
@@ -479,14 +487,13 @@ export async function listActionRequired(): Promise<Application[]> {
 }
 
 /**
- * FOLLOWUP-BATCH : ids des candidatures éligibles à une relance (cadence 10 j,
+ * FOLLOWUP-BATCH : ids des candidatures éligibles à une relance (cadence FOLLOWUP_DELAY_DAYS j,
  * plafonnée à MAX_FOLLOWUPS), les plus anciennes d'abord. `limit` borne le nombre
  * retourné (quota d'envoi).
  */
 export async function listFollowUpEligibleIds(limit?: number): Promise<string[]> {
-  const tenDaysAgo = new Date(Date.now() - 10 * 864e5); // il y a 10 jours
   const rows = await prisma.application.findMany({
-    where: followUpEligibleWhere(tenDaysAgo),
+    where: followUpEligibleWhere(followUpCutoff()),
     select: { id: true },
     orderBy: { sentAt: 'asc' },
     ...(limit && limit > 0 ? { take: limit } : {}),

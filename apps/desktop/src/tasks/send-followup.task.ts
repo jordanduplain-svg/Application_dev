@@ -2,7 +2,7 @@ import { taskRunner } from '../lib/task-runner';
 import { sendApplicationEmail } from '../lib/mailer';
 import { getProfile } from '../modules/profile/profile.service';
 import { refreshCampaignStatus } from '../modules/campaign/campaign.service';
-import { getApplication, MAX_FOLLOWUPS, recordOutboundMessage } from '../modules/application/application.service';
+import { getApplication, MAX_FOLLOWUPS, followUpCutoff, recordOutboundMessage } from '../modules/application/application.service';
 import { generatePitch } from '../modules/ai/ai.service';
 import { prisma } from '../lib/prisma';
 import { tryIncrementDailySend, getDailySendLimit, refundDailySend } from '../lib/secrets';
@@ -67,14 +67,15 @@ export async function generateFollowUpContent(
   return {
     // THREAD-02 : « Re: » (pas « Relance : ») → la relance se regroupe dans le fil de la
     // candidature partout, Gmail compris (dont la vue conversation est sensible à l'objet).
-    subject: `Re: ${app.subject}`,
+    // Anti-marqueur IA : le tiret demi-cadratin (– U+2013) d'un objet stocké → trait d'union simple.
+    subject: `Re: ${app.subject}`.replace(/[ \t]*–[ \t]*/g, ' - '),
     body: generated.body,
   };
 }
 
 /**
  * UX-12 : envoi d'une relance automatique (follow-up) pour une candidature SENT
- * sans réponse depuis plus de 7 jours.
+ * sans réponse depuis plus de FOLLOWUP_DELAY_DAYS jours.
  */
 export async function enqueueFollowUp(applicationId: string): Promise<void> {
   const initial = await getApplication(applicationId);
@@ -94,8 +95,8 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       const restore = before; // alias lisible pour les rollbacks
 
       // Claim atomique : accepte la 1ʳᵉ relance (SENT) ET les suivantes (FOLLOWED_UP
-      // dont la dernière relance date de + de 10 j), sans réponse et sous le plafond.
-      const tenDaysAgo = new Date(Date.now() - 10 * 864e5);
+      // dont la dernière relance date de + de FOLLOWUP_DELAY_DAYS j), sans réponse et sous le plafond.
+      const cutoff = followUpCutoff();
       const claimed = await prisma.application.updateMany({
         where: {
           id: applicationId,
@@ -104,7 +105,7 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
           followUpCount: { lt: MAX_FOLLOWUPS },
           OR: [
             { status: 'SENT', followUpSentAt: null },
-            { status: 'FOLLOWED_UP', followUpSentAt: { lt: tenDaysAgo } },
+            { status: 'FOLLOWED_UP', followUpSentAt: { lt: cutoff } },
           ],
         },
         data: { status: 'FOLLOWED_UP', followUpSentAt: new Date(), followUpCount: { increment: 1 } },
@@ -148,7 +149,7 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
       const allowed = await tryIncrementDailySend();
       if (!allowed) {
         // Plafond du jour atteint → on restaure l'état d'avant : redevient éligible
-        // (le quota se libère demain ; le claim 10 j reste cohérent).
+        // (le quota se libère demain ; le claim FOLLOWUP_DELAY_DAYS j reste cohérent).
         await prisma.application.update({
           where: { id: applicationId },
           data: {
@@ -181,7 +182,8 @@ export async function enqueueFollowUp(applicationId: string): Promise<void> {
         );
 
         // THREAD-02 : « Re: » (pas « Relance : ») → regroupement fiable dans le fil, Gmail compris.
-        const relanceSubject = `Re: ${app.subject}`;
+        // Anti-marqueur IA : tiret demi-cadratin (– U+2013) d'un objet stocké → trait d'union simple.
+        const relanceSubject = `Re: ${app.subject}`.replace(/[ \t]*–[ \t]*/g, ' - ');
         // BUG-04 fix : passer le Message-ID original pour que la relance
         // apparaisse dans le même fil (In-Reply-To + References).
         const messageId = await sendApplicationEmail({

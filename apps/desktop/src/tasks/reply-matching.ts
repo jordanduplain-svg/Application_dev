@@ -141,6 +141,10 @@ const _OPT_OUT_PATTERNS: RegExp[] = [
   /(?:please\s+)?(?:stop|no\s+more)\s+(?:contact|emails?|messages?|sending)/i,
   /please\s+(?:stop|do\s*n['’]?t)\s+(?:contact|email|messag)/i,
   /^\s*stop\.?\s*$/im,                                       // réponse réduite à « STOP » (cf. pied d'email opt-out)
+  // FR — « stop avec vos emails », « stop les mails », « stop vos sollicitations ».
+  /\bstop\b.{0,20}(?:e[\s-]?mails?|mails?|messages?|sollicit|envoi|démarch)/i,
+  // FR — « arrêtez vos emails », « arrêtez de m'envoyer/écrire/contacter », « cessez vos envois ».
+  /(?:arr[êe]t|cess)(?:ez|er|e|es)?\b.{0,25}(?:e[\s-]?mails?|mails?|messages?|envoi|sollicit|d[ée]march|contact|de\s+m['’]?(?:envoy|[ée]cri|contact|sollicit))/i,
 ];
 
 /**

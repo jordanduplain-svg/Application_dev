@@ -41,6 +41,7 @@ describe('buildPitchPrompt', () => {
     cvJson: '{"name":"CV_TEST"}',
     opening: 'OUVERTURE_TEST',
     projection: 'PROJECTION_TEST',
+    closing: 'CLOTURE_TEST',
   };
 
   it('interpole poste, entreprise, directives et CV', () => {
@@ -49,6 +50,13 @@ describe('buildPitchPrompt', () => {
     expect(out).toContain('ACME');
     expect(out).toContain('DIRECTIVE_TEST_123');
     expect(out).toContain('{"name":"CV_TEST"}');
+  });
+
+  it('injecte les directives anti-clone tirées au sort (ouverture, projection, clôture)', () => {
+    const out = buildPitchPrompt(base);
+    expect(out).toContain('OUVERTURE_TEST');
+    expect(out).toContain('PROJECTION_TEST');
+    expect(out).toContain('CLOTURE_TEST');
   });
 
   it('traite les directives candidat comme une DONNÉE, pas une instruction', () => {
