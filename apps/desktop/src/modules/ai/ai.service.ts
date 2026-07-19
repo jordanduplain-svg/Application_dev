@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { CvParsed, Profile } from '@candio/shared';
+import type { CvParsed, Profile, RequirementCoverage } from '@candio/shared';
 import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiModel, getAiProvider, getOllamaModel, getOllamaHost } from '../../lib/secrets';
 // PROMPT-EXTRACT (P2) : les prompts (chaînes) vivent dans campaign-prompt.ts (fonctions pures, testables).
 import { buildCampaignPromptsMessage, buildPitchPrompt, buildCoverLetterPrompt, pickLetterVariation } from '../../lib/campaign-prompt';
@@ -542,9 +542,64 @@ async function completePitch(prompt: string, jobTitle: string, fallbackSubject: 
 }
 
 /**
+ * LETTRE-ANNONCE — couverture des exigences : compare l'annonce au CV et renvoie 3 à 6
+ * exigences clés avec leur niveau de couverture (yes/partial/no), pour juger le « fit »
+ * avant de candidater. Appel DÉDIÉ à basse température (analytique, pas créatif) → plus fiable
+ * que d'entasser l'analyse dans le JSON de la lettre. Best-effort : toute erreur → [] (bonus
+ * optionnel, ne bloque JAMAIS la génération de la lettre).
+ */
+async function analyzeRequirementCoverage(annonceBlock: string, cvParsed: CvParsed): Promise<RequirementCoverage[]> {
+  const prompt = `Tu compares une ANNONCE d'emploi au CV d'un candidat. Extrais les 3 à 6 EXIGENCES
+les plus importantes de l'annonce (compétences, outils, années d'expérience, diplômes, langues).
+Pour CHACUNE, dis si le CV la couvre :
+- "yes"     : présente telle quelle dans le CV
+- "partial" : le CV a un équivalent proche (ex. l'annonce demande Tableau, le CV a Power BI)
+- "no"      : absente du CV
+Ajoute "note" TRÈS court seulement si utile (l'équivalent trouvé, ou « absent du CV »). Ne juge
+QUE sur le CV fourni, n'invente aucune compétence. "label" = l'exigence en 2 à 5 mots.
+
+Réponds en JSON strict : {"requirements":[{"label":"...","covered":"yes|partial|no","note":"..."}]}
+
+ANNONCE :
+<ANNONCE>
+${annonceBlock}
+</ANNONCE>
+
+CV (JSON) : ${JSON.stringify(cvParsed)}`;
+
+  try {
+    const completion = await getClient().chat.completions.create({
+      model: getActiveModel(),
+      messages: [{ role: 'user', content: prompt }],
+      ...jsonRequestParams(),
+      temperature: 0.2, // analytique : réponse stable, pas créative
+    });
+    void recordAiUsage('coverletter', getActiveModel(), completion.usage); // COST-01
+    const raw = completion.choices[0]?.message?.content || '{}';
+    const parsed = (needsJsonExtraction() ? extractJson(raw) : JSON.parse(raw)) as { requirements?: unknown } | null;
+    const list = Array.isArray(parsed?.requirements) ? parsed.requirements : [];
+    const out: RequirementCoverage[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const r = item as { label?: unknown; covered?: unknown; note?: unknown };
+      const label = typeof r.label === 'string' ? r.label.trim() : '';
+      const covered = r.covered === 'yes' || r.covered === 'partial' || r.covered === 'no' ? r.covered : null;
+      if (!label || !covered) continue;
+      const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim() : undefined;
+      out.push({ label, covered, note });
+      if (out.length >= 6) break;
+    }
+    return out;
+  } catch {
+    return []; // couverture = bonus, jamais bloquant pour la lettre
+  }
+}
+
+/**
  * LETTRE-ANNONCE : rédige une lettre de motivation EN RÉPONSE À UNE ANNONCE collée.
  * Distinct de generatePitch (spontané) : utilise buildCoverLetterPrompt, qui ordonne de
  * RÉPONDRE aux exigences de l'offre. Même pipeline d'appel + polish via completePitch.
+ * Renvoie aussi la couverture des exigences (analyse en parallèle, non bloquante).
  */
 export async function generateCoverLetter(
   jobTitle: string,
@@ -554,7 +609,7 @@ export async function generateCoverLetter(
   cvParsed: CvParsed,
   profile?: Pick<Profile, 'phone' | 'linkedin' | 'portfolio' | 'github'> | null,
   availability?: string | null,
-): Promise<GeneratedEmail> {
+): Promise<GeneratedEmail & { requirements: RequirementCoverage[] }> {
   const safeJob = sanitizeForPrompt(jobTitle);
   const safeCompany = sanitizeForPrompt(company);
   const safeContact = contactName ? sanitizeForPrompt(contactName) : null;
@@ -591,9 +646,15 @@ export async function generateCoverLetter(
     closing: variation.closing,
   });
 
-  const email = await completePitch(prompt, jobTitle, `Candidature – ${jobTitle}`);
+  // Lettre + couverture des exigences EN PARALLÈLE : l'analyse est un appel dédié qui ne
+  // partage pas le pipeline de rédaction → aucune latence ajoutée. La couverture ne bloque
+  // jamais la lettre (analyzeRequirementCoverage renvoie [] en cas d'échec).
+  const [email, requirements] = await Promise.all([
+    completePitch(prompt, jobTitle, `Candidature – ${jobTitle}`),
+    analyzeRequirementCoverage(annonceBlock, cvParsed),
+  ]);
   // Filet déterministe SPÉCIFIQUE à la lettre annonce (le flux spontané n'est pas touché).
-  return { subject: email.subject, body: scrubCoverLetterTics(email.body) };
+  return { subject: email.subject, body: scrubCoverLetterTics(email.body), requirements };
 }
 
 /**

@@ -60,6 +60,19 @@ export interface Cv {
   createdAt: string;
 }
 
+/**
+ * LETTRE-ANNONCE : couverture d'une exigence de l'annonce par le CV du candidat.
+ * Affiché sous la lettre pour juger le « fit » d'un coup d'œil avant de candidater.
+ *  - 'yes'     : l'exigence figure telle quelle dans le CV
+ *  - 'partial' : le CV a un équivalent proche (ex. annonce Tableau, CV Power BI)
+ *  - 'no'      : absente du CV
+ */
+export interface RequirementCoverage {
+  label: string;                        // l'exigence extraite de l'annonce
+  covered: 'yes' | 'partial' | 'no';
+  note?: string;                        // précision courte (l'équivalent, ou « absent du CV »)
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -629,7 +642,7 @@ export interface IpcRequests {
   // contexte d'entreprise. Pas de stockage : la lettre est rendue à l'écran.
   'ai:generateCoverLetter': {
     req: { cvId: string; jobTitle: string; company: string; contact?: string | null; annonce: string; availability?: string | null };
-    res: { subject: string; body: string };
+    res: { subject: string; body: string; requirements: RequirementCoverage[] };
   };
   'cv:rename': { req: { id: string; name: string }; res: Cv };
   'cv:delete': { req: { id: string }; res: void };

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Mail, Copy, Sparkles } from 'lucide-react';
-import type { Cv } from '@candio/shared';
+import { Mail, Copy, Sparkles, ListChecks } from 'lucide-react';
+import type { Cv, RequirementCoverage } from '@candio/shared';
 import { api } from '../lib/api';
 
 /**
@@ -25,7 +25,7 @@ export default function CoverLetterPage() {
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ subject: string; body: string } | null>(null);
+  const [result, setResult] = useState<{ subject: string; body: string; requirements: RequirementCoverage[] } | null>(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -148,6 +148,40 @@ export default function CoverLetterPage() {
             </button>
           </div>
         </div>
+
+        {result && result.requirements.length > 0 && (() => {
+          const yes = result.requirements.filter((r) => r.covered === 'yes').length;
+          const MARK = {
+            yes:     { icon: '✓', color: '#1D9E75' },
+            partial: { icon: '≈', color: '#b8860b' },
+            no:      { icon: '✗', color: '#c4271c' },
+          } as const;
+          return (
+            <div className="form-section" style={{ '--m': '#0a84ff', marginBottom: '16px' } as React.CSSProperties}>
+              <div className="form-section-title">
+                <span className="fst-ico"><ListChecks size={16} /></span>
+                Couverture de l'annonce · {yes}/{result.requirements.length} pleinement couvertes
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                {result.requirements.map((r, i) => {
+                  const m = MARK[r.covered];
+                  return (
+                    <li key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '9px', fontSize: '13px' }}>
+                      <span style={{ color: m.color, fontWeight: 700, minWidth: '14px' }}>{m.icon}</span>
+                      <span>
+                        <strong>{r.label}</strong>
+                        {r.note ? <span style={{ color: 'var(--text-sub)' }}> — {r.note}</span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <small style={{ display: 'block', marginTop: '10px', color: 'var(--text-sub)' }}>
+                Aide à juger le « fit » avant d'envoyer : vérifie les ≈ et ✗ (à assumer ou à compléter à la main).
+              </small>
+            </div>
+          );
+        })()}
 
         {result && (
           <div className="form-section" style={{ '--m': '#34c759' } as React.CSSProperties}>
