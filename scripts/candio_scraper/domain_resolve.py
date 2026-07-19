@@ -198,6 +198,46 @@ def _distinctive(s: str) -> str:
     return "".join(toks)
 
 
+# Mots de MÉTIER / ACTIVITÉ génériques : décrivent ce que fait la boîte, pas QUI elle est.
+# Des dizaines d'entreprises partagent « RENOV TOUT », « BATIMENT SERVICES », « TOUS TRAVAUX » —
+# toutes avec une similarité de nom ~1.0. Un nom composé UNIQUEMENT de ces mots (+ tokens
+# juridiques/liaison) n'a aucune identité distinctive → résoudre son domaine par similarité,
+# c'est tirer au hasard entre les homonymes (cf. RENOV TOUT Lyon → renov-tout.com Saint-Nazaire).
+_GENERIC_TRADE_WORDS = frozenset({
+    "renov", "renove", "renovation", "renovations", "reno", "renovtout",
+    "batiment", "batiments", "bati", "travaux", "construction", "constructions",
+    "btp", "maconnerie", "macon", "plomberie", "plombier", "sanitaire",
+    "electricite", "electricien", "elec", "peinture", "peintre", "toiture",
+    "couverture", "couvreur", "menuiserie", "menuisier", "isolation", "carrelage",
+    "platrerie", "platrier", "chauffage", "climatisation", "clim", "facade", "ravalement",
+    "jardin", "jardins", "paysage", "paysagiste", "espaces", "vert", "verts",
+    "nettoyage", "proprete", "entretien", "transport", "transports", "taxi", "vtc",
+    "auto", "autos", "automobile", "garage", "immobilier", "immo", "securite",
+    "coiffure", "coiffeur", "esthetique", "restaurant", "resto", "pizza", "pizzeria",
+    "boulangerie", "patisserie", "traiteur", "multiservices", "multiservice", "multi",
+    "habitat", "maison", "maisons", "deco", "decoration", "amenagement", "amenagements",
+    "sol", "sols", "mur", "murs", "renover", "tout", "tous", "toute", "toutes",
+})
+
+
+def _is_generic_business_name(name: str) -> bool:
+    """
+    True si le nom n'est composé QUE de mots génériques de métier/activité (renov, batiment,
+    travaux, tout…) et de tokens juridiques/liaison, SANS aucune partie DISTINCTIVE (patronyme,
+    marque inventée). Pour ces libellés, des dizaines d'homonymes existent en France → un domaine
+    deviné par similarité de nom est un tirage au sort entre eux ; on refuse alors de résoudre.
+    Ex : « RENOV TOUT », « BATIMENT SERVICES », « TOUS TRAVAUX RENOVATION » → True.
+        « DUPONT RENOVATION », « AKKODIS », « CAPGEMINI » → False (token distinctif présent).
+    Conservateur : ne renvoie True QUE si RIEN de distinctif ne subsiste (zéro faux positif visé).
+    """
+    toks = [t for t in re.split(r"[^a-z0-9]+", name.lower()) if t]
+    if not toks:
+        return False
+    generic = _GENERIC_NAME_TOKENS | _GENERIC_TRADE_WORDS
+    distinctive = [t for t in toks if len(t) > 1 and t not in generic]
+    return not distinctive
+
+
 def _distinctive_match(name: str, core: str) -> bool:
     """
     APPROCHE HYBRIDE — cœur de la validation anti-homonyme-sectoriel, DÉDIÉE au matching
@@ -445,6 +485,13 @@ def resolve_company_domain(name: str, region_hint: str = "",
     Retourne le domaine (ex: "acme.fr") ou "" si introuvable.
     """
     if not name:
+        return ""
+    # ANTI-HOMONYME GÉNÉRIQUE : un nom entièrement générique (« RENOV TOUT », « TOUS TRAVAUX »)
+    # a des dizaines de porteurs en France, tous à similarité ~1.0 → le domaine deviné serait
+    # un homonyme au hasard (cf. RENOV TOUT Lyon → renov-tout.com = Saint-Nazaire). On ne résout
+    # PAS : mieux vaut aucune adresse (pas d'envoi) qu'un email à la mauvaise entreprise.
+    if _is_generic_business_name(name):
+        log.debug("résolution ignorée (nom générique, homonymes indistinguables) : %s", name)
         return ""
     # Préfixe de version : invalide les résolutions mises en cache AVANT chaque
     # durcissement — sinon les mauvais domaines ressortent du cache 30 j malgré le fix.

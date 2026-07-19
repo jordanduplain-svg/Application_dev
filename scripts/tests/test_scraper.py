@@ -327,6 +327,19 @@ class TestDomainMatching(unittest.TestCase):
         self.assertTrue(_domain_matches_name("Orange", "orange.com"))   # marque = mot exact
         self.assertTrue(_domain_matches_name("Office", "office.com"))    # idem
 
+    def test_generic_business_name_skips_resolution(self):
+        # Anti-homonyme générique : un nom uniquement composé de mots de métier
+        # (renov, tout, travaux, batiment…) a des dizaines de porteurs → on refuse de
+        # deviner un domaine (cas réel RENOV TOUT Lyon → renov-tout.com Saint-Nazaire).
+        from candio_scraper.domain_resolve import _is_generic_business_name as gen
+        for n in ["RENOV TOUT", "RENOV TOUT (RENOV TOUT)", "TOUS TRAVAUX RENOVATION",
+                  "BATIMENT SERVICES", "RENOVATION SARL", "ELEC TOUT"]:
+            self.assertTrue(gen(n), f"{n} devrait être générique")
+        # Un token distinctif (patronyme, marque, nombre) → on garde et on résout.
+        for n in ["DUPONT RENOVATION", "AKKODIS FRANCE SAS", "EUREKA RENOVATION",
+                  "RENOV 2000", "STEM ALPHA"]:
+            self.assertFalse(gen(n), f"{n} ne devrait PAS être générique")
+
     def test_rejects_shared_sector_token_collision(self):
         # Cas réel CEGI-SANTE → media-sante.com : les deux noms ne partagent que le token
         # SECTORIEL « sante » → similarité ~0.63 (> 0.62) alors que ce sont deux sociétés
