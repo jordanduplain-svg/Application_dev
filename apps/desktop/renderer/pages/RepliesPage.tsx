@@ -21,6 +21,7 @@ const CANNED_REPLIES: { label: string; body: string }[] = [
   { label: 'Dispo entretien', body: 'Bonjour,\n\nMerci pour votre retour. Je suis disponible pour un entretien à votre convenance — n\'hésitez pas à me proposer un créneau, en visio ou sur place.\n\nBien cordialement,' },
   { label: 'Demander des précisions', body: 'Bonjour,\n\nMerci pour votre message. Pourriez-vous me préciser les prochaines étapes du processus ainsi que le détail du poste ?\n\nBien cordialement,' },
   { label: 'Remercier / rester en contact', body: 'Bonjour,\n\nMerci pour votre retour. Je reste à votre disposition et à l\'écoute de toute opportunité future au sein de votre équipe.\n\nBien cordialement,' },
+  { label: 'Remercier (clôturer)', body: 'Bonjour,\n\nMerci pour votre retour et pour le temps consacré à ma candidature. Je vous souhaite une bonne continuation.\n\nBien cordialement,' },
 ];
 
 // Page Réponses : liste des candidatures dont une réponse a été détectée par IMAP.
@@ -261,16 +262,29 @@ export default function RepliesPage() {
   // de répondre OU qui vient de recevoir une réponse remonte en haut.
   const lastActivity = (r: Application) =>
     Math.max(new Date(r.repliedAt ?? 0).getTime(), new Date(r.myRepliedAt ?? 0).getTime());
+
+  // TRI PRIORITAIRE (prime TOUJOURS sur le tri choisi, qui ne départage qu'à égalité) :
+  //   0 = réponse POSITIVE non refusée → tout en haut ;
+  //   1 = à traiter : pas encore répondu de ma part, et pas refusée ;
+  //   2 = le reste (déjà traitées, refusées, neutres/refus).
+  const isRejected = (r: Application) => r.manualStatus === 'REJECTED';
+  const replyPriority = (r: Application): number => {
+    if (effectiveSentiment(r) === 'positive' && !isRejected(r)) return 0;
+    if (!r.myRepliedAt && !isRejected(r)) return 1;
+    return 2;
+  };
+
   const q = search.toLowerCase();
   const filteredReplies = replies
     .filter((r) => !q || [r.companyName, r.subject, r.replyContent]
       .some((v) => (v ?? '').toLowerCase().includes(q)))
     .sort((a, b) => {
+      const pa = replyPriority(a), pb = replyPriority(b);
+      if (pa !== pb) return pa - pb;                        // priorité d'abord
       if (sortBy === 'date_asc') return lastActivity(a) - lastActivity(b);
-      if (sortBy === 'date_desc') return lastActivity(b) - lastActivity(a);
       if (sortBy === 'company') return a.companyName.localeCompare(b.companyName);
       if (sortBy === 'status') return (a.manualStatus ?? '').localeCompare(b.manualStatus ?? '');
-      return 0;
+      return lastActivity(b) - lastActivity(a);             // date_desc (défaut)
     });
 
   // PERF-1 : pagination des réponses filtrées.
@@ -436,11 +450,11 @@ export default function RepliesPage() {
                 </p>
               )}
               <textarea
-                rows={2}
+                rows={5}
                 placeholder="Note de suivi…"
                 value={noteInputs[a.id] ?? a.followUpNote ?? ''}
                 onChange={(e) => setNoteInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                style={{ width: '100%', resize: 'vertical' }}
+                style={{ width: '100%', resize: 'vertical', minHeight: '96px', fontSize: '13.5px', lineHeight: 1.5 }}
               />
               <button
                 onClick={() => saveNote(a.id)}
@@ -516,11 +530,11 @@ export default function RepliesPage() {
                   ))}
                 </div>
                 <textarea
-                  rows={3}
+                  rows={8}
                   placeholder="Votre réponse…"
                   value={replyBody}
                   onChange={(e) => setReplyBody(e.target.value)}
-                  style={{ width: '100%', resize: 'vertical' }}
+                  style={{ width: '100%', resize: 'vertical', minHeight: '180px', fontSize: '13.5px', lineHeight: 1.55 }}
                 />
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button
