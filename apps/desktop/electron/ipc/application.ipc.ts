@@ -450,17 +450,28 @@ export function registerApplicationHandlers(): void {
     // différer de l'email scrapé d'origine. Repli sur contactEmail si non captée (vieux fils).
     const replyTo = app.replyFromEmail || app.contactEmail;
 
-    // BUG-04 fix : threading — la réponse s'accroche au fil de l'email initial.
-    // Le recruteur a répondu à l'email de candidature (messageId) ; on repasse
-    // ce même Message-ID pour que la réponse s'imbrique dans le même fil.
+    // REPLY-THREAD fix : on répond AU MESSAGE DU RECRUTEUR (son dernier entrant), pas à
+    // notre propre email initial. Avant, In-Reply-To = notre messageId de candidature →
+    // dans Gmail la réponse s'imbriquait sous NOTRE mail, pas sous celui du recruteur.
+    // Maintenant : In-Reply-To = Message-ID du dernier message reçu ; References = la chaîne
+    // complète (candidature initiale + réponse reçue) pour rester dans le même fil.
+    const lastInbound = await prisma.message.findFirst({
+      where: { applicationId: id, direction: 'IN', messageId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { messageId: true },
+    });
+    const inReplyTo = lastInbound?.messageId ?? app.messageId ?? undefined;
+    const chain = [app.messageId, lastInbound?.messageId].filter((m): m is string => !!m);
+    const references = chain.length ? [...new Set(chain)].join(' ') : undefined;
+
     const outMessageId = await sendApplicationEmail({
       fromName: `${profile.firstName} ${profile.lastName}`,
       fromEmail: profile.emailSender,
       to: replyTo,
       subject: `Re: ${app.subject}`,
       body,
-      inReplyTo: app.messageId ?? undefined,
-      references: app.messageId ?? undefined,
+      inReplyTo,
+      references,
     });
 
     // REPLY-OUT : email parti → on trace ma réponse (contenu + date) pour l'afficher
