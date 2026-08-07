@@ -1,0 +1,202 @@
+{
+  "rr_eagle": {
+    "nom": "Rolls-Royce Eagle IX",
+    "type": "ligne",
+    "puissance_cv": 360,
+    "masse_kg": 350,
+    "conso_kg_h": 85,
+    "fiabilite": 0.74,
+    "cout": 85000,
+    "annee": 1919,
+    "marque": "Rolls-Royce"
+  },
+  "lorraine_12eb": {
+    "nom": "Napier Lion II",
+    "type": "ligne",
+    "puissance_cv": 450,
+    "masse_kg": 385,
+    "conso_kg_h": 105,
+    "fiabilite": 0.78,
+    "cout": 95000,
+    "annee": 1924,
+    "marque": "Napier"
+  },
+  "farman_12we": {
+    "nom": "Rolls-Royce Condor III",
+    "type": "ligne",
+    "puissance_cv": 500,
+    "masse_kg": 470,
+    "conso_kg_h": 120,
+    "fiabilite": 0.72,
+    "cout": 110000,
+    "annee": 1924,
+    "marque": "Rolls-Royce"
+  },
+  "gr_jupiter": {
+    "nom": "Bristol Jupiter VI",
+    "type": "radial",
+    "puissance_cv": 420,
+    "masse_kg": 330,
+    "conso_kg_h": 95,
+    "fiabilite": 0.8,
+    "cout": 90000,
+    "annee": 1926,
+    "marque": "Bristol"
+  },
+  "hs_12nb": {
+    "nom": "Rolls-Royce Kestrel IIS",
+    "type": "ligne",
+    "puissance_cv": 650,
+    "masse_kg": 440,
+    "conso_kg_h": 140,
+    "fiabilite": 0.76,
+    "cout": 140000,
+    "annee": 1929,
+    "marque": "Rolls-Royce"
+  },
+  "kestrel_v": {
+    "nom": "Rolls-Royce Kestrel V",
+    "type": "ligne",
+    "puissance_cv": 695,
+    "masse_kg": 445,
+    "conso_kg_h": 145,
+    "fiabilite": 0.79,
+    "cout": 155000,
+    "annee": 1931,
+    "marque": "Rolls-Royce"
+  },
+  "mercury_viii": {
+    "nom": "Bristol Mercury VIII",
+    "type": "radial",
+    "puissance_cv": 840,
+    "masse_kg": 465,
+    "conso_kg_h": 175,
+    "fiabilite": 0.79,
+    "cout": 205000,
+    "annee": 1936,
+    "marque": "Bristol"
+  },
+  "gr_14kirs": {
+    "nom": "Bristol Pegasus III",
+    "type": "radial",
+    "puissance_cv": 800,
+    "masse_kg": 600,
+    "conso_kg_h": 165,
+    "fiabilite": 0.74,
+    "cout": 190000,
+    "annee": 1933,
+    "marque": "Bristol"
+  },
+  "hs_12y": {
+    "nom": "Rolls-Royce Merlin I",
+    "type": "ligne",
+    "puissance_cv": 860,
+    "masse_kg": 470,
+    "conso_kg_h": 175,
+    "fiabilite": 0.77,
+    "cout": 210000,
+    "annee": 1935,
+    "marque": "Rolls-Royce"
+  },
+  "gr_14n": {
+    "nom": "Bristol Taurus II",
+    "type": "radial",
+    "puissance_cv": 1030,
+    "masse_kg": 620,
+    "conso_kg_h": 205,
+    "fiabilite": 0.75,
+    "cout": 260000,
+    "annee": 1938,
+    "marque": "Bristol"
+  },
+  "hs_12y45": {
+    "nom": "Rolls-Royce Merlin III",
+    "type": "ligne",
+    "puissance_cv": 1030,
+    "masse_kg": 620,
+    "conso_kg_h": 210,
+    "fiabilite": 0.78,
+    "cout": 280000,
+    "annee": 1939,
+    "marque": "Rolls-Royce"
+  },
+  "merlin_45": {
+    "nom": "Rolls-Royce Merlin 45",
+    "type": "ligne",
+    "puissance_cv": 1185,
+    "masse_kg": 640,
+    "conso_kg_h": 240,
+    "fiabilite": 0.8,
+    "cout": 320000,
+    "annee": 1941,
+    "marque": "Rolls-Royce"
+  },
+  "vulture": {
+    "nom": "Rolls-Royce Vulture",
+    "type": "ligne",
+    "puissance_cv": 1780,
+    "masse_kg": 1130,
+    "conso_kg_h": 360,
+    "fiabilite": 0.62,
+    "cout": 430000,
+    "annee": 1941,
+    "bots_ignorent": true,
+    "marque": "Rolls-Royce"
+  },
+  "twin_wasp": {
+    "nom": "Pratt & Whitney Twin Wasp",
+    "type": "radial",
+    "puissance_cv": 1200,
+    "masse_kg": 675,
+    "conso_kg_h": 250,
+    "fiabilite": 0.84,
+    "cout": 315000,
+    "annee": 1941,
+    "marque": "Pratt & Whitney"
+  },
+  "sabre_ii": {
+    "nom": "Napier Sabre II",
+    "type": "ligne",
+    "puissance_cv": 2180,
+    "masse_kg": 1070,
+    "conso_kg_h": 420,
+    "fiabilite": 0.68,
+    "cout": 560000,
+    "annee": 1943,
+    "bots_ignorent": true,
+    "marque": "Napier"
+  },
+  "merlin_61": {
+    "nom": "Rolls-Royce Merlin 61",
+    "type": "ligne",
+    "puissance_cv": 1565,
+    "masse_kg": 745,
+    "conso_kg_h": 305,
+    "fiabilite": 0.79,
+    "cout": 410000,
+    "annee": 1942,
+    "marque": "Rolls-Royce"
+  },
+  "hercules_vi": {
+    "nom": "Bristol Hercules VI",
+    "type": "radial",
+    "puissance_cv": 1615,
+    "masse_kg": 875,
+    "conso_kg_h": 325,
+    "fiabilite": 0.77,
+    "cout": 430000,
+    "annee": 1943,
+    "marque": "Bristol"
+  },
+  "griffon_65": {
+    "nom": "Rolls-Royce Griffon 65",
+    "type": "ligne",
+    "puissance_cv": 2035,
+    "masse_kg": 900,
+    "conso_kg_h": 390,
+    "fiabilite": 0.76,
+    "cout": 520000,
+    "annee": 1944,
+    "marque": "Rolls-Royce"
+  }
+}

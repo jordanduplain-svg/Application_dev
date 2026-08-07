@@ -1,0 +1,112 @@
+{
+  "maisons": {
+    "blochard": {
+      "nom": "Bristow",
+      "personnalite": "agressif",
+      "moteur_pref": "eco",
+      "marge": 0.1,
+      "marge_prix": 0.12,
+      "biais_qualite": -0.078,
+      "capacite_trim": 7,
+      "proba_pionnier": 0.005,
+      "segments": [
+        "transport_civil",
+        "ligne_postale",
+        "export_militaire"
+      ],
+      "rep_depart": {
+        "civile": 0.35,
+        "militaire": 0.25
+      }
+    },
+    "marane": {
+      "nom": "Marlowe",
+      "personnalite": "prestige",
+      "moteur_pref": "puissance",
+      "marge": 0.16,
+      "marge_prix": 0.35,
+      "biais_qualite": 0.032,
+      "capacite_trim": 6,
+      "proba_pionnier": 0.03,
+      "segments": [
+        "transport_civil",
+        "export_militaire",
+        "ligne_postale"
+      ],
+      "rep_depart": {
+        "civile": 0.55,
+        "militaire": 0.35
+      }
+    },
+    "bristow_marlowe": {
+      "nom": "Bristow-Marlowe",
+      "fusion_only": true,
+      "personnalite": "prestige",
+      "moteur_pref": "puissance",
+      "marge": 0.14,
+      "marge_prix": 0.22,
+      "biais_qualite": 0.032,
+      "capacite_trim": 13,
+      "proba_pionnier": 0.03,
+      "segments": [
+        "transport_civil",
+        "export_militaire",
+        "ligne_postale"
+      ],
+      "rep_depart": {
+        "civile": 0.55,
+        "militaire": 0.35
+      }
+    }
+  },
+  "archetypes": {
+    "ligne_postale": {
+      "surface": 30.0,
+      "carburant_base": 520.0,
+      "carburant_par_an": 45.0,
+      "charge_utile": 250.0,
+      "armement": 0
+    },
+    "transport_civil": {
+      "surface": 45.0,
+      "carburant_base": 420.0,
+      "carburant_par_an": 15.0,
+      "charge_utile": -1.0,
+      "armement": 0
+    },
+    "export_militaire": {
+      "surface": 18.0,
+      "carburant_base": 300.0,
+      "carburant_par_an": 10.0,
+      "charge_utile": 0.0,
+      "armement": -1
+    }
+  },
+  "regles": {
+    "an_monoplan": 1930,
+    "an_mixte": 1931,
+    "prix_pas": 0.03,
+    "marge_min": 0.05,
+    "exp_carnet_mult": 2.0,
+    "capacite_max": 24,
+    "riposte_part": 0.5,
+    "riposte_age": 2.0,
+    "surmesure_facteurs": [
+      0.85,
+      1.0,
+      1.15
+    ],
+    "part_reprise_renouv": 0.5,
+    "pionnier_tresor_mult": 4,
+    "retard_pionnier": 3,
+    "rd_plancher_trim": 12000,
+    "sursaut_seuil": 0.55,
+    "sursaut_mult": 2.5,
+    "fusion": {
+      "annee_min": 1930,
+      "seuil_part": 0.5,
+      "trimestres": 8,
+      "capacite_max": 48
+    }
+  }
+}

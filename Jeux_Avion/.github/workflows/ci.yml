@@ -1,0 +1,32 @@
+# Verrou d'intégration : les tests headless ET l'équilibrage (§15.2) doivent rester verts.
+# Une régression d'équilibrage (falaise de pricing, cibles de faillite) casse ici, plus en douce.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Le binaire Godot vit dans tools/ (gitignoré) : la CI télécharge la version épinglée.
+      - name: Télécharger Godot 4.7
+        run: |
+          curl -fL -o godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7-stable/Godot_v4.7-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          mv Godot_v4.7-stable_linux.x86_64 godot
+          chmod +x godot
+
+      # run.gd/balance.gd ne lisent que du JSON (FileAccess) et la fonte moteur : aucun import requis.
+      - name: Tests logiques (calibration, déterminisme, save/load, AO, essais…)
+        run: ./godot --headless --path . -s res://tests/run.gd
+
+      - name: Smoke UI (les 5 écrans s'instancient et réagissent)
+        run: ./godot --headless --path . -s res://tests/ui.gd
+
+      - name: Harnais d'équilibrage (§15.2 — exit 0 = toutes les cibles tenues, ~3 min 30)
+        run: ./godot --headless --path . -s res://tests/balance.gd

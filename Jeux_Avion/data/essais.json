@@ -1,0 +1,14 @@
+{
+  "proba_defaut": 0.55,
+  "proba_second": 0.25,
+  "k_features": 0.02,
+  "k_surcharge": 0.004,
+  "defauts": {
+    "vibrations_queue": {"nom": "Vibrations de l'empennage", "effet": {"fiabilite": -0.05}, "cout": 22000, "sem": 5},
+    "surchauffe": {"nom": "Moteur en surchauffe", "effet": {"fiabilite": -0.04, "vmax_kmh": -8}, "cout": 18000, "sem": 4},
+    "gauchissement": {"nom": "Gauchissement de l'aile", "effet": {"maniabilite": -8}, "cout": 25000, "sem": 6},
+    "atterrisseur": {"nom": "Atterrisseur fragile", "effet": {"fiabilite": -0.03}, "cout": 12000, "sem": 3},
+    "alimentation": {"nom": "Alimentation capricieuse", "effet": {"autonomie_km": -120}, "cout": 15000, "sem": 4},
+    "givrage": {"nom": "Verrière qui givre", "effet": {"vmax_kmh": -5, "maniabilite": -3}, "cout": 8000, "sem": 2}
+  }
+}

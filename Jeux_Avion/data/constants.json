@@ -1,0 +1,514 @@
+{
+  "avion": {
+    "rho": 1.225,
+    "cv_to_w": 735.5,
+    "cd0_base": {
+      "biplan": 0.023,
+      "monoplan": 0.011
+    },
+    "aire_parasite_fixe": 0.3,
+    "cd0_train_fixe": 0.006,
+    "cd0_capot_naca": -0.004,
+    "cd0_cockpit_ferme": -0.001,
+    "cd0_monocoque": -0.001,
+    "cd0_par_armement": 0.0005,
+    "cd0_roues_carenees": -0.0015,
+    "cd0_rivetage": -0.0012,
+    "cd0_verriere": -0.0005,
+    "cd0_soute": -0.0015,
+    "cd0_tourelle": 0.002,
+    "mania_malus_tourelle": 6,
+    "eta_helice_fixe": 0.72,
+    "eta_pas_variable": 0.81,
+    "eta_bonus_metallique": 0.02,
+    "eta_bonus_tripale": 0.03,
+    "eta_bonus_contrarotative": 0.02,
+    "fiab_bonus_autoetanche": 0.03,
+    "bonus_vmax_surales": 1.06,
+    "bonus_vmax_turbo": 1.05,
+    "plafond_bonus_turbo": 2000,
+    "plafond_bonus_pressu": 1500,
+    "mania_bonus_pa": 4,
+    "mania_bonus_verriere": 2,
+    "fiab_bonus_demarreur": 0.02,
+    "fiab_bonus_blindage": 0.03,
+    "bonus_autonomie_gonio": 1.05,
+    "bonus_autonomie_reservoirs": 1.15,
+    "dens_aile": {
+      "bois": 12,
+      "mixte": 13,
+      "metal": 14
+    },
+    "base_cellule": {
+      "bois": 520,
+      "mixte": 580,
+      "metal": 640
+    },
+    "masse_par_armement": 40,
+    "mania_base": 120,
+    "mania_pente_ca": 0.55,
+    "mania_bonus_biplan": 15,
+    "mult_masse_cellule_biplan": 0.9,
+    "fiab_bonus_biplan": 0.02,
+    "mania_bonus_volets": 8,
+    "plafond_base": 2500,
+    "plafond_k": 22000,
+    "plafond_bonus_surales": 1800,
+    "croisiere_ratio": 0.72,
+    "k_induit": 0.05,
+    "ca_limite": {
+      "bois": 100,
+      "mixte": 120,
+      "metal": 140
+    },
+    "fiab_malus_surcharge": 0.003,
+    "fiab_malus_par_feature": 0.025,
+    "fiab_maturite_epoque": 1936,
+    "fiab_maturite_ans": 6,
+    "fiab_bonus_span": 9,
+    "cout_maturite_plancher": 0.6,
+    "cout_maturite_span": 14,
+    "fiab_malus_plancher": 0.5,
+    "fiab_bonus_structure": {
+      "bois": 0,
+      "mixte": 0.02,
+      "metal": 0.04
+    },
+    "fiab_min": 0.3,
+    "fiab_max": 0.98,
+    "prix_kg": {
+      "bois": 55,
+      "mixte": 70,
+      "metal": 85
+    },
+    "cout_par_armement": 6000,
+    "cout_par_kg_charge": 10,
+    "exploit_k_conso": 0.9,
+    "exploit_k_masse": 0.02,
+    "exploit_k_fiab": 220,
+    "proto_mult": 1.5,
+    "proto_fixe": 20000,
+    "variante_proto_mult": 0.4,
+    "variante_delai_mult": 0.5,
+    "variante_structure_devi": 0.5,
+    "delai_base_sem": 10,
+    "delai_par_feature": 2,
+    "kg_par_passager": 90
+  },
+  "marche": {
+    "clamp_qualite": 1.4,
+    "critique_seuil": 0.7,
+    "critique_plancher": 0.72,
+    "critique_poids_min": 0.15,
+    "note_pointe": 1.0,
+    "note_obsolete": 0.7,
+    "age_recent_ans": 3,
+    "elasticite_prix": 1.2,
+    "clamp_prix": 2.0,
+    "clamp_prix_conformite": 1.0,
+    "repu_base": 0.7,
+    "repu_k": 0.6,
+    "delai_k": 0.15,
+    "inertie": 0.2,
+    "alea_demande": 0.35,
+    "carnet_max_trim": 4,
+    "seuil_renouvellement": 0.15,
+    "age_min_renouvellement": 2,
+    "age_max_produit_rival": 6
+  },
+  "repu": {
+    "par_livraison": 0.0025,
+    "pivot_fiab": 0.72,
+    "delta_max": 0.02
+  },
+  "accidents": {
+    "pivot_fiab": 0.65,
+    "k": 0.008,
+    "proba_max": 0.35,
+    "carnet_mult": 0.65,
+    "rep_malus": 0.03,
+    "carnet_mult_assure": 0.75,
+    "rep_malus_assure": 0.02,
+    "assurance_prime_sem_par_produit": 300
+  },
+  "occasion": {
+    "mult": 0.5,
+    "rep_malus": 0.02,
+    "hangar_sem_par_appareil": 40
+  },
+  "entretien_flotte": {
+    "fee_trim_par_appareil": 350,
+    "trimestres_service": 12
+  },
+  "banque": {
+    "plafond_base": 150000,
+    "plafond_par_rep": 900000,
+    "taux_hebdo": 0.0015
+  },
+  "filiale": {
+    "cout": 1500000,
+    "commandes_trim": 2
+  },
+  "publicite": {
+    "cout": 25000,
+    "gain_base": 0.12,
+    "plafond": 0.45,
+    "cooldown_sem": 26
+  },
+  "eco": {
+    "tresorerie_depart": 420000,
+    "frais_fixes_sem": 2800,
+    "entretien_atelier_sem": [
+      500,
+      4000,
+      11000,
+      100000
+    ],
+    "faillite_semaines": 8,
+    "max_produits": 4,
+    "paliers_atelier": [
+      6,
+      13,
+      32,
+      64
+    ],
+    "cout_palier": [
+      0,
+      260000,
+      1200000,
+      8000000
+    ],
+    "delai_palier_sem": [
+      0,
+      10,
+      16,
+      30
+    ],
+    "plafond_atelier_sem": 260
+  },
+  "features_avion": {
+    "capot_naca": {
+      "masse": 15,
+      "cout": 4000,
+      "fiab_plancher": 0.35
+    },
+    "helice_pas_variable": {
+      "masse": 25,
+      "cout": 9000,
+      "fiab_plancher": 0.55
+    },
+    "train_rentrant": {
+      "masse": 60,
+      "cout": 14000,
+      "fiab_plancher": 0.6
+    },
+    "cockpit_ferme": {
+      "masse": 10,
+      "cout": 2000,
+      "fiab_plancher": 0.3,
+      "fiab": 0.5,
+      "fiab_bonus_max": 0.02
+    },
+    "suralimentation": {
+      "masse": 55,
+      "cout": 16000,
+      "fiab_plancher": 0.6
+    },
+    "volets_atterrissage": {
+      "masse": 15,
+      "cout": 5000,
+      "fiab_plancher": 0.45
+    },
+    "radio_embarquee": {
+      "masse": 40,
+      "cout": 7000,
+      "fiab_plancher": 0.2,
+      "fiab": 0.5,
+      "fiab_bonus_max": 0.02
+    },
+    "canon_moteur": {
+      "masse": 90,
+      "cout": 18000,
+      "fiab_plancher": 0.55
+    },
+    "reservoirs_largables": {
+      "masse": 20,
+      "cout": 4000,
+      "fiab_plancher": 0.4
+    },
+    "instruments_vol": {
+      "masse": 25,
+      "cout": 8000,
+      "fiab_plancher": 0.25,
+      "fiab": 0.5,
+      "fiab_bonus_max": 0.02
+    },
+    "helice_metallique": {
+      "masse": 10,
+      "cout": 3000,
+      "fiab_plancher": 0.35
+    },
+    "roues_carenees": {
+      "masse": 12,
+      "cout": 2500,
+      "fiab_plancher": 0.3
+    },
+    "demarreur_electrique": {
+      "masse": 20,
+      "cout": 4000,
+      "fiab_plancher": 0.2
+    },
+    "pilote_automatique": {
+      "masse": 30,
+      "cout": 9000,
+      "fiab_plancher": 0.45,
+      "fiab": 0.5,
+      "fiab_bonus_max": 0.02
+    },
+    "radio_gonio": {
+      "masse": 25,
+      "cout": 6000,
+      "fiab_plancher": 0.2,
+      "fiab": 0.5,
+      "fiab_bonus_max": 0.02
+    },
+    "rivetage_affleurant": {
+      "masse": 0,
+      "cout": 10000,
+      "fiab_plancher": 0.3
+    },
+    "helice_tripale": {
+      "masse": 35,
+      "cout": 12000,
+      "fiab_plancher": 0.45
+    },
+    "verriere_goutte": {
+      "masse": 8,
+      "cout": 5000,
+      "fiab_plancher": 0.3
+    },
+    "blindage_pilote": {
+      "masse": 80,
+      "cout": 8000,
+      "fiab_plancher": 0.4
+    },
+    "turbocompresseur": {
+      "masse": 90,
+      "cout": 22000,
+      "fiab_plancher": 0.8
+    },
+    "cabine_pressurisee": {
+      "masse": 120,
+      "cout": 25000,
+      "fiab_plancher": 0.75
+    },
+    "soute_bombes": {
+      "masse": 70,
+      "cout": 12000,
+      "fiab_plancher": 0.5
+    },
+    "tourelle_defensive": {
+      "masse": 120,
+      "cout": 16000,
+      "fiab_plancher": 0.6
+    },
+    "armes_ailes": {
+      "masse": 25,
+      "cout": 9000,
+      "fiab_plancher": 0.5
+    },
+    "reservoir_autoetanche": {
+      "masse": 50,
+      "cout": 11000,
+      "fiab_plancher": 0.4
+    },
+    "helice_contrarotative": {
+      "masse": 45,
+      "cout": 20000,
+      "fiab_plancher": 0.75
+    }
+  },
+  "equipe": {
+    "max_postes": 12,
+    "moral_baisse_rouge": 0.02,
+    "moral_hausse": 0.005,
+    "moral_min": 0.3,
+    "bonus_recherche_par_point": 0.04,
+    "bonus_etudes_par_point": 0.02,
+    "bonus_etudes_max": 0.2,
+    "bonus_atelier_par_point": 0.01,
+    "bonus_atelier_max": 0.15,
+    "indemnite_sem": 4,
+    "greve_moral_seuil": 0.32,
+    "greve_sem_seuil": 20,
+    "greve_duree_sem": 4,
+    "greve_cooldown_sem": 78,
+    "regen_sem": 26,
+    "candidats_par_regen": 3,
+    "salaire_base": 420,
+    "salaire_par_comp": 55,
+    "moral_candidat": 0.8
+  },
+  "conseil": {
+    "dividende_part": 0.02,
+    "malus_rep": 0.005,
+    "mandats": [
+      {
+        "id": "m1935",
+        "des": 1935,
+        "fin": 1938,
+        "type": "livraisons",
+        "cible": 70,
+        "bonus": 150000,
+        "titre": "livrer la cadence promise avant 1938"
+      },
+      {
+        "id": "m1934",
+        "des": 1934.5,
+        "fin": 1941.0,
+        "type": "victoire_ao",
+        "cible": 1,
+        "bonus": 150000,
+        "titre": "un concours ou une commande remportée avant 1941"
+      },
+      {
+        "id": "m1939",
+        "des": 1939,
+        "fin": 1943,
+        "type": "tresorerie",
+        "cible": 500000,
+        "bonus": 250000,
+        "titre": "tenir la maison à flot : 500 000 £ en caisse en 1943"
+      }
+    ],
+    "exigence": 1.0
+  },
+  "motoriste": {
+    "remise_cout": 0.85,
+    "marques": [
+      "Rolls-Royce",
+      "Bristol"
+    ]
+  },
+  "ao": {
+    "acompte_part": 0.3,
+    "repu_victoire": 0.06,
+    "repu_victoire_rival": 0.015,
+    "repu_base": 0.85,
+    "repu_k": 0.3,
+    "minist_base": 0.9,
+    "minist_k": 0.2,
+    "minist_victoire": 0.05,
+    "seuil_faveur": 0.7,
+    "acompte_bonus": 0.1,
+    "patience_trim": 4,
+    "retard_rep": 0.012,
+    "retard_ministere": 0.04
+  },
+  "recherche": {
+    "mult_cout_pionnier": 4,
+    "mult_duree_pionnier": 2,
+    "mult_cout_suiveur": 0.6,
+    "rd_part_rivale": 0.25,
+    "mult_rival_suiveur": 0.8,
+    "mult_rival_pionnier": 2,
+    "brevet_duree_sem": 156,
+    "licence_achat_part": 0.5,
+    "mult_duree_contournement": 1.3,
+    "royalties_part": 0.15
+  },
+  "fin": {
+    "tick": 1214,
+    "benchmark": {
+      "vmax_kmh": 700,
+      "armement": 4,
+      "plafond_m": 12000
+    },
+    "poids_verdict": {
+      "modernite": 0.45,
+      "livraisons": 0.2,
+      "rep_militaire": 0.2,
+      "rep_civile": 0.15
+    },
+    "livraisons_cible": 1800,
+    "seuils": {
+      "legende": 0.88,
+      "pilier": 0.72,
+      "sous_traitant": 0.5
+    },
+    "modernite_plancher": 0.35
+  },
+  "temps": {
+    "sec_par_tick": 6,
+    "vitesses": [
+      1,
+      2,
+      4
+    ]
+  },
+  "moteurs": {
+    "cout_departement": 900000,
+    "cv_par_litre": [
+      [
+        1922,
+        13
+      ],
+      [
+        1930,
+        17
+      ],
+      [
+        1936,
+        24
+      ],
+      [
+        1940,
+        31
+      ],
+      [
+        1945,
+        38
+      ]
+    ],
+    "cv_par_litre_sain": 20,
+    "k_stress": 0.006,
+    "kg_par_litre": 13.5,
+    "radial_masse": 0.9,
+    "radial_puissance": 0.97,
+    "suralim_puissance": 1.15,
+    "suralim_masse": 45,
+    "suralim_fiab": 0.05,
+    "suralim_cout": 1.05,
+    "conso_par_cv": 0.235,
+    "fiab_base": 0.8,
+    "fiab_par_soin": 0.12,
+    "fiab_min": 0.55,
+    "fiab_max": 0.95,
+    "cout_par_soin": 0.45,
+    "banc_cout_base": 60000,
+    "banc_cout_par_litre": 3200,
+    "banc_sem_base": 18,
+    "banc_sem_par_litre": 0.6,
+    "banc_sem_suralim": 10,
+    "cyl_saine": 24,
+    "fiab_par_litre_au_dela": 0.009,
+    "cout_par_cv": 165
+  },
+  "impots": {
+    "annee_debut": 1937,
+    "annee_fin": 1945,
+    "franchise": 1000000,
+    "taux": 0.8
+  },
+  "bombardements": {
+    "annee_debut": 1940,
+    "annee_fin": 1944,
+    "base": 0.02,
+    "par_appareil_capacite": 0.0015,
+    "proba_max": 0.3,
+    "degats_sem": 6,
+    "mult_disperse": 0.35,
+    "degats_mult_disperse": 0.4,
+    "cout_dispersion": 2500000
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "sous_licence": [
+    {"id": "sl_1940", "nom": "Sous licence — chasseur Marlowe pour l'Air Ministry",
+     "des": 1940.3, "fin": 1942.0, "volume": 60, "fee": 52000},
+    {"id": "sl_1943", "nom": "Sous licence — bombardier Bristow pour l'Air Ministry",
+     "des": 1943.0, "fin": 1944.5, "volume": 50, "fee": 60000}
+  ],
+  "programmes": {
+    "1924_imperial": {
+      "nom": "Imperial Airways — la ligne du Caire",
+      "domaine": "civile", "segment": "transport_civil",
+      "ouverture": 1924.3, "cloture": 1925.1,
+      "volume": 6, "prix_unitaire": 165000, "seuil": 0.50,
+      "criteres": [
+        {"nom": "capacité", "spec": "capacite", "poids": 0.30, "inverse": false, "ref": 5},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.30, "inverse": false, "ref": 0.70},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.25, "inverse": true, "ref": 285},
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.15, "inverse": false, "ref": 800}
+      ]
+    },
+    "1928_poste": {
+      "nom": "General Post Office — le courrier des Indes",
+      "domaine": "civile", "segment": "ligne_postale",
+      "ouverture": 1928.2, "cloture": 1929.0,
+      "volume": 8, "prix_unitaire": 140000, "seuil": 0.50,
+      "criteres": [
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.35, "inverse": false, "ref": 1400},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.30, "inverse": false, "ref": 0.76},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.20, "inverse": true, "ref": 255},
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.15, "inverse": false, "ref": 190}
+      ]
+    },
+    "1931_afrique": {
+      "nom": "Imperial Airways — l'Afrique en ligne",
+      "domaine": "civile", "segment": "transport_civil",
+      "ouverture": 1931.5, "cloture": 1932.3,
+      "volume": 5, "prix_unitaire": 210000, "seuil": 0.50,
+      "criteres": [
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.30, "inverse": false, "ref": 1100},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.25, "inverse": false, "ref": 9},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.80},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.20, "inverse": true, "ref": 260}
+      ]
+    },
+    "1935_qantas": {
+      "nom": "Qantas Empire Airways — la route kangourou",
+      "domaine": "civile", "segment": "transport_civil",
+      "ouverture": 1935.0, "cloture": 1935.8,
+      "volume": 10, "prix_unitaire": 265000, "seuil": 0.55,
+      "criteres": [
+        {"nom": "capacité", "spec": "capacite", "poids": 0.30, "inverse": false, "ref": 13},
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.30, "inverse": false, "ref": 1600},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.84},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.15, "inverse": true, "ref": 250}
+      ]
+    },
+    "1938_europe": {
+      "nom": "British Airways Ltd — l'Europe rapide",
+      "domaine": "civile", "segment": "transport_civil",
+      "ouverture": 1938.0, "cloture": 1938.8,
+      "volume": 12, "prix_unitaire": 300000, "seuil": 0.55,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.35, "inverse": false, "ref": 380},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.25, "inverse": false, "ref": 15},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.87},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.15, "inverse": true, "ref": 240}
+      ]
+    },
+    "1933_poste_urgence": {
+      "nom": "GPO — URGENT : le courrier de Noël des Indes (6 mois)",
+      "domaine": "civile", "segment": "ligne_postale",
+      "ouverture": 1933.2, "cloture": 1933.7,
+      "volume": 10, "prix_unitaire": 175000, "seuil": 0.62,
+      "criteres": [
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.35, "inverse": false, "ref": 1900},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.30, "inverse": false, "ref": 0.82},
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.20, "inverse": false, "ref": 250},
+        {"nom": "coût", "spec": "cout_exploitation", "poids": 0.15, "inverse": true, "ref": 240}
+      ]
+    },
+    "1938_munich": {
+      "nom": "URGENT — Crise de Munich : chasseurs, livraison immédiate (5 mois)",
+      "ouverture": 1938.6, "cloture": 1939.0,
+      "volume": 40, "prix_unitaire": 390000, "seuil": 0.66,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.40, "inverse": false, "ref": 460},
+        {"nom": "armement", "spec": "armement", "poids": 0.25, "inverse": false, "ref": 4},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.20, "inverse": false, "ref": 0.84},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.15, "inverse": true, "ref": 320000}
+      ]
+    },
+    "1942_ferry": {
+      "nom": "URGENT — Transport de guerre : la navette de l'Atlantique (6 mois)",
+      "domaine": "civile", "segment": "transport_civil",
+      "ouverture": 1942.2, "cloture": 1942.7,
+      "volume": 15, "prix_unitaire": 520000, "seuil": 0.64,
+      "criteres": [
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.35, "inverse": false, "ref": 3200},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.30, "inverse": false, "ref": 16},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.20, "inverse": false, "ref": 0.86},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.15, "inverse": true, "ref": 520000}
+      ]
+    },
+    "1927_jockey": {
+      "nom": "Spécification F.9/27 — chasseur léger",
+      "ouverture": 1927.0, "cloture": 1928.0,
+      "volume": 12, "prix_unitaire": 150000, "seuil": 0.55,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.35, "inverse": false, "ref": 235},
+        {"nom": "maniabilité", "spec": "maniabilite", "poids": 0.25, "inverse": false, "ref": 100},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.25, "inverse": true, "ref": 120000},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.15, "inverse": false, "ref": 0.72}
+      ]
+    },
+    "1930_c1": {
+      "nom": "Spécification F.7/30 — chasseur de jour",
+      "ouverture": 1930.0, "cloture": 1931.0,
+      "volume": 24, "prix_unitaire": 200000, "seuil": 0.55,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.30, "inverse": false, "ref": 300},
+        {"nom": "maniabilité", "spec": "maniabilite", "poids": 0.15, "inverse": false, "ref": 55},
+        {"nom": "plafond", "spec": "plafond_m", "poids": 0.15, "inverse": false, "ref": 7000},
+        {"nom": "armement", "spec": "armement", "poids": 0.20, "inverse": false, "ref": 2},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 170000}
+      ]
+    },
+    "1932_bn3": {
+      "nom": "Spécification B.9/32 — bombardier de nuit",
+      "ouverture": 1932.0, "cloture": 1933.0,
+      "volume": 18, "prix_unitaire": 270000, "seuil": 0.55,
+      "criteres": [
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.30, "inverse": false, "ref": 1600},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.25, "inverse": false, "ref": 6},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.78},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 250000}
+      ]
+    },
+    "1934_m4": {
+      "nom": "Spécification A.39/34 — multiplace de coopération",
+      "ouverture": 1934.0, "cloture": 1935.2,
+      "volume": 30, "prix_unitaire": 310000, "seuil": 0.68,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.25, "inverse": false, "ref": 340},
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.25, "inverse": false, "ref": 1300},
+        {"nom": "armement", "spec": "armement", "poids": 0.20, "inverse": false, "ref": 2},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.15, "inverse": false, "ref": 4},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.15, "inverse": true, "ref": 280000}
+      ]
+    },
+    "1936_chasseur": {
+      "nom": "Spécification F.36/34 — chasseur moderne",
+      "ouverture": 1936.0, "cloture": 1937.0,
+      "volume": 60, "prix_unitaire": 365000, "seuil": 0.60,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.35, "inverse": false, "ref": 430},
+        {"nom": "maniabilité", "spec": "maniabilite", "poids": 0.10, "inverse": false, "ref": 50},
+        {"nom": "armement", "spec": "armement", "poids": 0.23, "inverse": false, "ref": 3},
+        {"nom": "plafond", "spec": "plafond_m", "poids": 0.12, "inverse": false, "ref": 9000},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 290000}
+      ]
+    },
+    "1937_b4": {
+      "nom": "Spécification P.13/36 — bombardier rapide",
+      "ouverture": 1937.2, "cloture": 1938.2,
+      "volume": 50, "prix_unitaire": 420000, "seuil": 0.60,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.30, "inverse": false, "ref": 400},
+        {"nom": "capacité", "spec": "capacite", "poids": 0.25, "inverse": false, "ref": 8},
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.25, "inverse": false, "ref": 1800},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 370000}
+      ]
+    },
+    "1939_urgence": {
+      "nom": "Spécification F.16/39 — chasseur, programme d'urgence",
+      "ouverture": 1939.0, "cloture": 1939.7,
+      "volume": 100, "prix_unitaire": 345000, "seuil": 0.50,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.40, "inverse": false, "ref": 470},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.85},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 270000},
+        {"nom": "armement", "spec": "armement", "poids": 0.15, "inverse": false, "ref": 3}
+      ]
+    },
+    "1940_bataille": {
+      "nom": "Spécification F.19/40 — chasseur d'interception (la Bataille)",
+      "ouverture": 1940.5, "cloture": 1941.1,
+      "volume": 150, "prix_unitaire": 300000, "seuil": 0.50,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.40, "inverse": false, "ref": 520},
+        {"nom": "fiabilité", "spec": "fiabilite", "poids": 0.25, "inverse": false, "ref": 0.85},
+        {"nom": "armement", "spec": "armement", "poids": 0.20, "inverse": false, "ref": 4},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.15, "inverse": true, "ref": 280000}
+      ]
+    },
+    "1941_lourd": {
+      "nom": "Spécification B.11/41 — bombardier lourd de nuit",
+      "ouverture": 1941.3, "cloture": 1942.3,
+      "volume": 80, "prix_unitaire": 510000, "seuil": 0.60,
+      "criteres": [
+        {"nom": "capacité", "spec": "capacite", "poids": 0.30, "inverse": false, "ref": 12},
+        {"nom": "autonomie", "spec": "autonomie_km", "poids": 0.30, "inverse": false, "ref": 2500},
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.20, "inverse": false, "ref": 380},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 500000}
+      ]
+    },
+    "1943_altitude": {
+      "nom": "Spécification F.6/43 — chasseur de haute altitude",
+      "ouverture": 1943.0, "cloture": 1943.8,
+      "volume": 120, "prix_unitaire": 450000, "seuil": 0.60,
+      "criteres": [
+        {"nom": "vitesse", "spec": "vmax_kmh", "poids": 0.35, "inverse": false, "ref": 640},
+        {"nom": "plafond", "spec": "plafond_m", "poids": 0.25, "inverse": false, "ref": 11500},
+        {"nom": "armement", "spec": "armement", "poids": 0.20, "inverse": false, "ref": 4},
+        {"nom": "coût", "spec": "cout_unitaire", "poids": 0.20, "inverse": true, "ref": 420000}
+      ]
+    }
+  }
+}

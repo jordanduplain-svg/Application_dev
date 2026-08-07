@@ -1,0 +1,168 @@
+{
+  "cooldown_sem": 5,
+  "liste": {
+    "1923_empire": {
+      "des": 1923.3, "titre": "L'Empire par les airs",
+      "texte": "Le Caire-Bagdad ouvre. Londres rêve d'un courrier aérien jusqu'aux Indes — les constructeurs sérieux sont attendus.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"demande_mult": {"segment": "ligne_postale", "mult": 1.05, "duree_sem": 52}}},
+      "b": null
+    },
+    "1926_ligne": {
+      "des": 1926.3, "titre": "La poste d'Empire s'étend",
+      "texte": "La ligne des Indes se prolonge. Imperial Airways cherche des cellules robustes, livrables vite.",
+      "presse": false, "condition": "produit_postal", "choix_bot": "a",
+      "a": {"libelle": "Fournir la ligne (commande ferme de 8 postaux)", "effets": {"contrat_postal": 8}},
+      "b": {"libelle": "Décliner poliment", "effets": {}}
+    },
+    "1927_lindbergh": {
+      "des": 1927.4, "titre": "Lindbergh a traversé",
+      "texte": "Paris, minuit. Le monde s'enflamme pour l'aviation — les compagnies commandent.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"demande_mult": {"segment": "transport_civil", "mult": 1.05, "duree_sem": 52}}},
+      "b": null
+    },
+    "1928_atlantique_sud": {
+      "des": 1928.2, "titre": "Londres–Le Caire sans escale",
+      "texte": "Votre pilote propose de tenter le vol direct avec votre meilleur appareil. La gloire, ou le deuil.",
+      "presse": false, "condition": "pilote_recrute", "choix_bot": "b",
+      "a": {"libelle": "Financer la tentative (60 000 £, raid immédiat)", "effets": {"tresorerie": -60000, "raid_immediat": "1928_atlantique_sud"}},
+      "b": {"libelle": "Refuser — il part chez Marlowe", "effets": {"retirer_pilote": true, "rep_marane_militaire": 0.04}}
+    },
+    "1929_wall_street": {
+      "des": 1929.8, "titre": "Octobre noir à Wall Street",
+      "texte": "Les cours s'effondrent. Les commandes civiles vont se tarir — tenez vos réserves.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {}},
+      "b": null
+    },
+    "1931_rappel_pret": {
+      "des": 1931.1, "titre": "La banque se fait nerveuse",
+      "texte": "La crise mord. Votre banquier, inquiet, menace de rappeler votre découvert. Négocier coûte cher ; refuser, c'est risquer qu'il exige tout, sur-le-champ.",
+      "presse": false, "condition": "a_emprunt", "choix_bot": "a",
+      "a": {"libelle": "Payer les frais de rééchelonnement (20 000 £)", "effets": {"tresorerie": -20000}},
+      "b": {"libelle": "Tenir tête au banquier", "effets": {"rappel_pret": 1}}
+    },
+    "1931_faillites": {
+      "des": 1931.3, "titre": "Faillites en chaîne",
+      "texte": "Votre client principal dépose le bilan et annule son carnet de transport.",
+      "presse": false, "condition": "", "choix_bot": "b",
+      "a": {"libelle": "Poursuivre en justice (30 000 £ de frais, réputation défendue)", "effets": {"tresorerie": -30000, "rep_civile": 0.03, "carnet_transport_mult": 0.5}},
+      "b": {"libelle": "Encaisser la perte", "effets": {"carnet_transport_mult": 0.5}}
+    },
+    "1932_dumping": {
+      "des": 1932.4, "titre": "Bristow casse les prix",
+      "texte": "Bristow brade ses transports 20 % sous les vôtres. Suivre, c'est vendre à marge nulle.",
+      "presse": false, "condition": "", "choix_bot": "b",
+      "a": {"libelle": "Suivre (vos prix transport −20 %)", "effets": {"prix_transport_mult": 0.8}},
+      "b": {"libelle": "Monter en gamme (réputation civile +)", "effets": {"rep_civile": 0.02}}
+    },
+    "1933_berlin": {
+      "des": 1933.1, "titre": "Janvier, Berlin",
+      "texte": "Le chancelier nommé. Les états-majors d'Europe relisent leurs budgets d'armement.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {}},
+      "b": null
+    },
+    "1934_doctrine": {
+      "des": 1934.5, "titre": "L'Air Ministry change de doctrine",
+      "texte": "Le ministère révise son cahier des charges en plein programme A.39/34. Adapter vos prototypes coûtera cher.",
+      "presse": false, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Adapter le prototype (40 000 £, le ministère apprécie)", "effets": {"tresorerie": -40000, "ministere": 0.06}},
+      "b": {"libelle": "Maintenir tel quel (candidatures annulées, Whitehall s'en souviendra)", "effets": {"annuler_candidatures": true, "ministere": -0.08}}
+    },
+    "1935_motoriste": {
+      "des": 1935.4, "titre": "Le motoriste livre en retard",
+      "texte": "Vos moteurs n'arrivent pas. Attendre gèle l'usine et le bureau ; remotoriser coûte cher.",
+      "presse": false, "condition": "", "choix_bot": "b",
+      "a": {"libelle": "Attendre (production et études gelées 6 semaines)", "effets": {"gel_production_sem": 6, "gel_etudes_sem": 6}},
+      "b": {"libelle": "Remotoriser en urgence (50 000 £)", "effets": {"tresorerie": -50000}}
+    },
+    "1936_greves": {
+      "des": 1936.4, "titre": "Grève aux ateliers",
+      "texte": "Les compagnons posent les outils pour quatre semaines. Les syndicats tiennent bon — tout est gelé.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"gel_production_sem": 4, "gel_etudes_sem": 4}},
+      "b": null
+    },
+    "1936_nationalisations": {
+      "des": 1936.7, "titre": "Le plan des usines fantômes",
+      "texte": "L'Air Ministry veut intégrer vos halls au « shadow scheme ». Le chèque est réel, la contrepartie aussi : tant que le plan dure — cinq ans — vos chaînes restent à leur taille actuelle. Vous ne décidez plus de votre outil.",
+      "presse": false, "condition": "", "choix_bot": "b",
+      "a": {"libelle": "Accepter : 800 000 £ + faveur du ministère, mais aucun agrandissement d'atelier pendant 5 ans", "effets": {"tresorerie": 800000, "capacite_plafonnee": true, "ministere": 0.12}},
+      "b": {"libelle": "Refuser (le ministère s'en souviendra)", "effets": {"rep_militaire": -0.02, "ministere": -0.12}}
+    },
+    "1937_salon": {
+      "des": 1937.5, "titre": "Le grand meeting de Hendon",
+      "texte": "Stand premium ou discrétion ? Exposer révèle tout — chez vous comme chez eux.",
+      "presse": false, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Stand premium (25 000 £, réputations +, specs rivales révélées)", "effets": {"tresorerie": -25000, "rep_civile": 0.04, "rep_militaire": 0.04, "revelation_specs": true}},
+      "b": {"libelle": "Rester discret", "effets": {}}
+    },
+    "1937_espagne": {
+      "des": 1937.8, "titre": "Guerre d'Espagne",
+      "texte": "Vos appareils exportés y volent. Les rapports du front valent de l'or — et font scandale aux Communes.",
+      "presse": false, "condition": "produit_export", "choix_bot": "a",
+      "a": {"libelle": "Exploiter les données du front (réputation militaire +, presse civile −)", "effets": {"rep_militaire": 0.05, "rep_civile": -0.03, "ministere": 0.05}},
+      "b": {"libelle": "Garder ses distances", "effets": {}}
+    },
+    "1938_munich": {
+      "des": 1938.7, "titre": "Munich",
+      "texte": "« La paix pour notre temps. » Personne n'y croit : les commandes de panique affluent.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"demande_mult": {"segment": "export_militaire", "mult": 1.1, "duree_sem": 52}}},
+      "b": null
+    },
+    "1938_debauchage": {
+      "des": 1938.3, "titre": "Débauchage",
+      "texte": "Un concurrent courtise votre meilleur élément avec un pont d'or.",
+      "presse": false, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Contre-offre (son salaire +40 %)", "effets": {"salaire_meilleur_mult": 1.4}},
+      "b": {"libelle": "Le laisser partir", "effets": {"retirer_meilleur_ingenieur": true}}
+    },
+    "1939_mobilisation": {
+      "des": 1939.7, "titre": "L'Angleterre entre en guerre",
+      "texte": "Chamberlain à la TSF : nous sommes en guerre avec l'Allemagne. Un ingénieur est appelé. Le ciel civil ferme.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"retirer_dernier_ingenieur": true,
+        "demande_mult": {"segment": "transport_civil", "mult": 0.05, "duree_sem": 270},
+        "demande_mult2": {"segment": "ligne_postale", "mult": 0.3, "duree_sem": 270}}},
+      "b": null
+    },
+    "1940_dunkerque": {
+      "des": 1940.4, "titre": "Dunkerque",
+      "texte": "L'armée rembarque sous les bombes. L'île est seule désormais — et elle regarde le ciel.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {}},
+      "b": null
+    },
+    "1940_bataille": {
+      "des": 1940.6, "titre": "La Bataille d'Angleterre",
+      "texte": "« Never was so much owed by so many to so few. » L'Air Ministry prend tout ce qui vole.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"demande_mult": {"segment": "export_militaire", "mult": 1.1, "duree_sem": 26}}},
+      "b": null
+    },
+    "1940_blitz": {
+      "des": 1940.9, "titre": "Le Blitz — votre usine touchée",
+      "texte": "Une bombe a crevé le toit du hall d'assemblage. Disperser la production coûte cher ; réparer prend du temps.",
+      "presse": false, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Disperser la production (60 000 £)", "effets": {"tresorerie": -60000}},
+      "b": {"libelle": "Réparer sur place (production gelée 6 semaines)", "effets": {"gel_production_sem": 6}}
+    },
+    "1942_alliees": {
+      "des": 1942.2, "titre": "Les usines américaines tournent",
+      "texte": "Les livraisons alliées affluent. L'Air Ministry devient regardant : seuls les meilleurs appareils seront reconduits.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {}},
+      "b": null
+    },
+    "1944_v1": {
+      "des": 1944.5, "titre": "Les V1 sur Londres",
+      "texte": "Des bombes volantes tombent jour et nuit. Les chasseurs les plus rapides sont réquisitionnés pour la chasse aux robots.",
+      "presse": true, "condition": "", "choix_bot": "a",
+      "a": {"libelle": "Continuer", "effets": {"demande_mult": {"segment": "export_militaire", "mult": 1.05, "duree_sem": 26}}},
+      "b": null
+    }
+  }
+}

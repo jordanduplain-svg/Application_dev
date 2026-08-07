@@ -1,0 +1,50 @@
+{
+  "tolerance": 0.05,
+  "references": [
+    {
+      "vmax_attendu": 290,
+      "design": {
+        "nom": "Référence biplan 1925",
+        "annee": 1925,
+        "formule": "biplan",
+        "structure": "bois",
+        "moteur": "farman_12we",
+        "surface": 18.0,
+        "carburant_kg": 260.0,
+        "charge_utile_kg": 100.0,
+        "armement": 0,
+        "features": []
+      }
+    },
+    {
+      "vmax_attendu": 450,
+      "design": {
+        "nom": "Référence transition 1935",
+        "annee": 1935,
+        "formule": "monoplan",
+        "structure": "mixte",
+        "moteur": "hs_12y",
+        "surface": 17.0,
+        "carburant_kg": 330.0,
+        "charge_utile_kg": 0.0,
+        "armement": 1,
+        "features": ["capot_naca", "helice_pas_variable", "train_rentrant", "cockpit_ferme"]
+      }
+    },
+    {
+      "vmax_attendu": 530,
+      "design": {
+        "nom": "Référence moderne 1939",
+        "annee": 1939,
+        "formule": "monoplan",
+        "structure": "metal",
+        "moteur": "gr_14n",
+        "surface": 16.0,
+        "carburant_kg": 400.0,
+        "charge_utile_kg": 0.0,
+        "armement": 2,
+        "features": ["capot_naca", "helice_pas_variable", "train_rentrant", "cockpit_ferme", "suralimentation"]
+      }
+    }
+  ]
+}

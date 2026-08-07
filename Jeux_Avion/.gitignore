@@ -1,0 +1,6 @@
+.godot/
+tools/
+*.tmp
+# Captures produites par tests/capture.gd — artefacts regénérables, pas des sources.
+capture*.png
+capture*.png.import

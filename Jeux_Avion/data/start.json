@@ -1,0 +1,12 @@
+{
+  "rep_civile": 0.15,
+  "rep_militaire": 0.05,
+  "ingenieurs": [
+    {"nom": "Hartley", "salaire_sem": 680, "comp": {"etudes": 3, "recherche": 2, "atelier": 1},
+     "trait": "meticuleux", "moral": 0.8, "poste": "etudes"},
+    {"nom": "Whitcombe", "salaire_sem": 630, "comp": {"etudes": 1, "recherche": 3, "atelier": 2},
+     "trait": "acharne", "moral": 0.8, "poste": "recherche"},
+    {"nom": "Clarke", "salaire_sem": 610, "comp": {"etudes": 1, "recherche": 1, "atelier": 3},
+     "trait": "ancien_usine", "moral": 0.8, "poste": "atelier"}
+  ]
+}

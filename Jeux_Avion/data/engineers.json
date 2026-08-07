@@ -1,0 +1,18 @@
+{
+  "noms": ["Pierson", "Chadwick", "Wallis", "Fedden", "Folland",
+    "Petter", "Shenstone", "Bulman", "Volkert", "Gouge", "Frise", "Carter",
+    "Lloyd", "Rowe", "Baker", "Duncanson", "Hollis", "Yapp", "Tilney",
+    "Ashworth", "Prentice", "Sedgwick"],
+  "traits": {
+    "acharne": {"nom": "Acharné", "comp": "recherche"},
+    "meticuleux": {"nom": "Méticuleux", "comp": "etudes"},
+    "ancien_usine": {"nom": "Ancien d'usine", "comp": "atelier"},
+    "visionnaire": {"nom": "Visionnaire", "comp": "etudes", "bonus": 2}
+  },
+  "genies": [
+    {"nom": "R. J. Mitchell", "des": 1929.0, "fin": 1932.0, "salaire_sem": 1400,
+     "trait": "visionnaire", "comp": {"etudes": 6, "recherche": 3, "atelier": 1}},
+    {"nom": "S. Camm", "des": 1935.0, "fin": 1938.0, "salaire_sem": 1550,
+     "trait": "visionnaire", "comp": {"etudes": 5, "recherche": 4, "atelier": 2}}
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "pilotes": [
+    {"nom": "Tremayne", "culot": 0.8, "celebrite": 0.5, "salaire_sem": 900},
+    {"nom": "Whitfield", "culot": 0.5, "celebrite": 0.2, "salaire_sem": 550}
+  ],
+  "constantes": {
+    "base_reussite": 0.35,
+    "k_autonomie": 0.45,
+    "k_fiabilite": 0.35,
+    "k_culot": 0.15,
+    "proba_pilote_perdu": 0.5,
+    "repu_par_celebrite": 0.5,
+    "k_course_fiab": 0.3,
+    "bonus_racer_rival": 1.04,
+    "repu_forfait_mult": 0.25,
+    "repu_deuil": -0.03,
+    "celebrite_gain": 0.2,
+    "repu_duel_rival_mult": 0.6
+  },
+  "epreuves": {
+    "1927_transat": {
+      "type": "raid", "nom": "L'Atlantique Nord", "des": 1927.5, "fin": 1933.0,
+      "distance_km": 5800, "prime": 150000, "repu_militaire": 0.0, "repu_civile": 0.10
+    },
+    "1928_atlantique_sud": {
+      "type": "raid", "nom": "Londres–Le Caire sans escale", "des": 1928.0, "fin": 1934.0,
+      "distance_km": 3100, "prime": 90000, "repu_militaire": 0.02, "repu_civile": 0.07
+    },
+    "1930_croisiere_noire": {
+      "type": "raid", "nom": "La Croisière d'Empire", "des": 1930.0, "fin": 1935.0,
+      "distance_km": 2400, "prime": 60000, "repu_militaire": 0.03, "repu_civile": 0.05
+    },
+    "1933_deutsch": {
+      "type": "course", "nom": "King's Cup 1933", "des": 1933.35, "fin": 1933.45,
+      "prime": 100000, "repu_militaire": 0.05, "repu_civile": 0.04
+    },
+    "1934_deutsch": {
+      "type": "course", "nom": "King's Cup 1934", "des": 1934.35, "fin": 1934.45,
+      "prime": 100000, "repu_militaire": 0.05, "repu_civile": 0.04
+    },
+    "1936_deutsch": {
+      "type": "course", "nom": "King's Cup 1936", "des": 1936.35, "fin": 1936.45,
+      "prime": 120000, "repu_militaire": 0.06, "repu_civile": 0.03
+    },
+    "1938_kings": {
+      "type": "course", "nom": "King's Cup 1938", "des": 1938.35, "fin": 1938.45,
+      "prime": 150000, "repu_militaire": 0.06, "repu_civile": 0.03
+    }
+  }
+}

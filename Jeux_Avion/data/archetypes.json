@@ -1,0 +1,52 @@
+{
+  "chasseur_moderne": {
+    "nom": "Chasseur moderne",
+    "requiert": ["monocoque_metal", "helice_pas_variable", "train_rentrant"],
+    "presse": "Monocoque, hélice à pas variable, train escamotable : vos ingénieurs tiennent la formule du chasseur moderne. Un préréglage est disponible au Bureau — à vous de le faire vôtre.",
+    "design": {
+      "formule": "monoplan", "structure": "metal", "surface": 16.0,
+      "carburant_kg": 360.0, "charge_utile_kg": 0.0, "armement": 3,
+      "features": ["helice_pas_variable", "train_rentrant"]
+    }
+  },
+  "bombardier_lourd": {
+    "nom": "Bombardier lourd",
+    "requiert": ["monocoque_metal", "soute_bombes", "tourelle_defensive"],
+    "presse": "Soute interne, tourelle, cellule métal : votre bureau maîtrise la formule du bombardier lourd. Un préréglage est disponible au Bureau.",
+    "design": {
+      "formule": "monoplan", "structure": "metal", "surface": 60.0,
+      "carburant_kg": 2100.0, "charge_utile_kg": 1300.0, "armement": 1,
+      "features": ["soute_bombes", "tourelle_defensive"]
+    }
+  },
+  "intercepteur_altitude": {
+    "nom": "Intercepteur de haute altitude",
+    "requiert": ["monocoque_metal", "turbocompresseur", "cabine_pressurisee"],
+    "presse": "Turbocompresseur et cabine pressurisée : vos machines chassent désormais là où les autres suffoquent. Un préréglage est disponible au Bureau.",
+    "design": {
+      "formule": "monoplan", "structure": "metal", "surface": 15.5,
+      "carburant_kg": 380.0, "charge_utile_kg": 0.0, "armement": 2,
+      "features": ["turbocompresseur", "cabine_pressurisee"]
+    }
+  },
+  "chasseur_bombardier": {
+    "nom": "Chasseur-bombardier",
+    "requiert": ["armes_ailes", "soute_bombes", "train_rentrant"],
+    "presse": "Des ailes qui tirent, une soute qui frappe : la formule du chasseur-bombardier est née chez vous. Un préréglage est disponible au Bureau.",
+    "design": {
+      "formule": "monoplan", "structure": "mixte", "surface": 22.0,
+      "carburant_kg": 520.0, "charge_utile_kg": 450.0, "armement": 1,
+      "features": ["armes_ailes", "soute_bombes", "train_rentrant"]
+    }
+  },
+  "courrier_grande_ligne": {
+    "nom": "Courrier de grande ligne",
+    "requiert": ["capot_naca", "cockpit_ferme", "radio_gonio"],
+    "presse": "Capot profilé, poste fermé, radionavigation : la formule du courrier de grande ligne est à vous. Un préréglage est disponible au Bureau.",
+    "design": {
+      "formule": "monoplan", "structure": "mixte", "surface": 25.0,
+      "carburant_kg": 1200.0, "charge_utile_kg": 270.0, "armement": 0,
+      "features": ["capot_naca", "cockpit_ferme", "radio_gonio"]
+    }
+  }
+}
