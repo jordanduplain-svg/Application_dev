@@ -565,10 +565,13 @@ class SocieteScraper(BaseScraper):
         "saas":          ["58.29C","58.29A","62.01Z","62.02A","63.11Z","63.12Z"],
         "logiciel":      ["58.29C","58.29A","58.21Z","62.01Z","62.02A","62.03Z","62.09Z"],
         "data":          ["63.11Z","63.12Z","62.01Z","72.11Z"],
-        # R&D / Ingénierie : recherche (72.11Z biotech, 72.19Z autres sciences) et
-        # ingénierie/études techniques (71.12B, 71.20B). Le classifieur les étiquette
-        # « R&D » (division 72) et « Ingénierie / R&D » (division 71).
-        "rd":            ["72.11Z","72.19Z","71.12B","71.20B"],
+        # R&D : recherche PURE uniquement (72.11Z biotech, 72.19Z autres sciences).
+        # 71.12B / 71.20B en ont été RETIRÉS : ces codes fourre-tout ramènent tous les
+        # bureaux d'études et diagnostiqueurs immobiliers (DPE/amiante) — hors sujet pour
+        # un poste data, et ils consommaient la moitié du quota du run.
+        "rd":            ["72.11Z","72.19Z"],
+        # Ingénierie / bureaux d'études, séparé de « rd » pour rester ciblable à part.
+        "ingenierie":    ["71.12B","71.20B"],
         "conseil":       ["70.22Z","70.21Z","70.10Z","69.20Z"],
         "consulting":    ["70.22Z","70.21Z","70.10Z"],
         "audit":         ["69.20Z","71.12B","70.22Z"],
@@ -863,8 +866,18 @@ class SocieteScraper(BaseScraper):
     def _do_request(self, params: dict, naf_hint: str) -> list[Company]:
         for attempt in range(self._MAX_429_RETRIES + 1):
             try:
-                resp = self._api_get(self.API, params=params)
+                # Timeout à 20 s : l'API gouv sature souvent, 10 s coupait des codes NAF
+                # pourtant joignables une fraction de seconde plus tard.
+                resp = self._api_get(self.API, params=params, timeout=20)
             except Exception as e:
+                # Timeout / erreur réseau : on réessaie avec back-off (comme un 429) au lieu
+                # d'abandonner le code NAF au 1er essai. Épuisé → skip propre (repris au run suivant).
+                if attempt < self._MAX_429_RETRIES:
+                    wait = min(1.5 * (attempt + 1), 10.0)
+                    print(f"   ⏳  [{self.name}] {type(e).__name__} (NAF {naf_hint}) — nouvelle "
+                          f"tentative dans {wait:.0f}s ({attempt + 1}/{self._MAX_429_RETRIES})")
+                    time.sleep(wait)
+                    continue
                 print(f"   ⚠  [{self.name}] {e}")
                 return []
 

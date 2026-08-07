@@ -5,6 +5,7 @@ import { getOpenaiKey, getAnthropicKey, getGeminiKey, getGroqKey, getAiModel, ge
 import { buildCampaignPromptsMessage, buildPitchPrompt, buildCoverLetterPrompt, pickLetterVariation } from '../../lib/campaign-prompt';
 // COST-01 : journalisation du coût des appels IA (best-effort, non bloquant).
 import { recordAiUsage } from '../../lib/ai-cost';
+import { cleanContactName } from '../../lib/contact-name';
 
 /**
  * Interface avec l'API OpenAI (GPT-4o), pour deux usages :
@@ -356,7 +357,11 @@ export async function generatePitch(
   // SEC-1 : sanitiser les valeurs utilisateur directement interpolées.
   const safeJob     = sanitizeForPrompt(jobTitle);
   const safeCompany = sanitizeForPrompt(companyName);
-  const safeContact = contactName ? sanitizeForPrompt(contactName) : null;
+  // Le nom de contact vient du scraper et contient du bruit de page web
+  // (« Antoine Responsable », « None None », « Page Not Found »). Non validé, il
+  // produit « Bonjour Monsieur Responsable » dans un mail réellement envoyé.
+  const validContact = cleanContactName(contactName);
+  const safeContact = validContact ? sanitizeForPrompt(validContact) : null;
 
   const safePrompt = sanitizeForPrompt(promptInfo);
   // Type(s) de contrat ciblé(s) par la campagne (chips Alternance/CDI/Stage…) →
@@ -612,7 +617,11 @@ export async function generateCoverLetter(
 ): Promise<GeneratedEmail & { requirements: RequirementCoverage[] }> {
   const safeJob = sanitizeForPrompt(jobTitle);
   const safeCompany = sanitizeForPrompt(company);
-  const safeContact = contactName ? sanitizeForPrompt(contactName) : null;
+  // Le nom de contact vient du scraper et contient du bruit de page web
+  // (« Antoine Responsable », « None None », « Page Not Found »). Non validé, il
+  // produit « Bonjour Monsieur Responsable » dans un mail réellement envoyé.
+  const validContact = cleanContactName(contactName);
+  const safeContact = validContact ? sanitizeForPrompt(validContact) : null;
   const safeAvailability = availability ? sanitizeForPrompt(availability).trim() : '';
   // L'annonce est une DONNÉE : on la nettoie (anti-injection) et on la borne (assez pour
   // couvrir un descriptif de poste complet sans exploser le contexte).

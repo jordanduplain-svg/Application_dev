@@ -504,7 +504,10 @@ export const SECTOR_KEY_TO_LABELS: Record<string, string[]> = {
   // éditeurs de logiciels). Ne PLUS pointer vers « Tech / IT » (services info 62.xx) — c'était
   // la cause d'une campagne « Logiciel » remplie de prestataires IT génériques.
   logiciel:    ['Logiciel / SaaS'],
-  rd:          ['R&D', 'Ingénierie / R&D'],
+  // « rd » = recherche pure (NAF 72.11Z/72.19Z). L'ingénierie/bureaux d'études a sa
+  // propre clé — cf. le retrait de 71.12B/71.20B du mapping NAF « rd » côté scraper.
+  rd:          ['R&D'],
+  ingenierie:  ['Ingénierie / R&D'],
   finance:     ['Finance / Banque'],
   assurance:   ['Assurance'],
   // Resserré : « Conseil / Consulting » = conseil de gestion/stratégie (NAF 70 → « Conseil »).

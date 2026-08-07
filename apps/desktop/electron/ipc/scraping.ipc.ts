@@ -40,7 +40,7 @@ const DEFAULT_CONFIG: ScrapingConfig = {
   industry: '',             // vide = fallback sur sector pour Kompass/PJ
   city: 'Paris',
   sources: ['wttj', 'indeed'],
-  max: 300,
+  max: 600,                 // volume max entreprises — défaut au plafond UI
   hunterKey: '',
   hunterMaxSearches: 20,   // plafond recherches Hunter/run (free = 50 crédits/mois)
   pythonPath: 'python',
@@ -84,7 +84,7 @@ const DEFAULT_CONFIG: ScrapingConfig = {
   sizeTarget: 'all',
   crawlBudgetSec: 25,
   maxRuntimeMin: 0,        // 0 = illimité
-  pagesPerRun: 5,          // pages lues par source par run
+  pagesPerRun: 10,         // pages lues par source par run — défaut au max (lecture la plus profonde)
   exploreNewPages: false,
   exploreSources: true,   // toujours actif — pagination auto inter-runs
   fastCrawl: true,
@@ -124,10 +124,10 @@ function readConfig(): ScrapingConfig {
       const parts = merged.industry.split(',').map((s) => s.trim()).filter(Boolean);
       if (parts.length > 3) merged.industry = parts.slice(0, 3).join(',');
     }
-    // Clamp : pages par run plafonnées à 5.
-    if (merged.pagesPerRun && merged.pagesPerRun > 5) merged.pagesPerRun = 5;
-    // Clamp : max entreprises borné [10, 300] (illimité retiré → 0 ou >300 ramené à 300).
-    if (!merged.max || merged.max <= 0 || merged.max > 300) merged.max = 300;
+    // Clamp : pages par run plafonnées à 10 (valeur max de l'UI).
+    if (merged.pagesPerRun && merged.pagesPerRun > 10) merged.pagesPerRun = 10;
+    // Clamp : max entreprises borné [10, 600] (illimité retiré → 0 ou >600 ramené à 600).
+    if (!merged.max || merged.max <= 0 || merged.max > 600) merged.max = 600;
     return merged;
   } catch { return DEFAULT_CONFIG; }
 }

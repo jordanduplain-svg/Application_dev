@@ -7,7 +7,7 @@ export const INDUSTRY_GROUPS: { group: string; items: { value: string; label: st
     { value: 'tech',      label: '💻 IT / Tech' },
     { value: 'data',      label: '📊 Data / IA' },
     { value: 'logiciel',  label: '🖥️ Logiciel / SaaS' },
-    { value: 'rd',        label: '🔬 R&D / Ingénierie' },
+    { value: 'rd',        label: '🔬 R&D / Recherche' },
   ]},
   { group: '💰 Finance & Conseil', items: [
     { value: 'finance',   label: '💰 Finance / Banque' },
@@ -19,6 +19,7 @@ export const INDUSTRY_GROUPS: { group: string; items: { value: string; label: st
     { value: 'industrie', label: '🏭 Industrie / Manufacture' },
     { value: 'energie',   label: '⚡ Énergie / Environnement' },
     { value: 'btp',       label: '🏗️ BTP / Construction' },
+    { value: 'ingenierie', label: '📐 Ingénierie / Bureaux d\'études' },
   ]},
   { group: '🏥 Santé & Sciences', items: [
     { value: 'sante',     label: '🏥 Santé / Médical' },

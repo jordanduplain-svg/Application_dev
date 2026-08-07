@@ -4,6 +4,7 @@ import type { Company as DbCompany } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { levenshteinSimilarity } from '../../lib/levenshtein';
+import { normLoc } from '../../lib/loc';
 import { classifyReplySentiment } from '../../tasks/reply-matching';
 import { isOptedOut, matchesOptOut } from '../optout/optout.service';
 
@@ -652,16 +653,19 @@ export async function importLeadsFromMasterContent(
   const { rows: allRows } = parseCompanyCsvRows(content);
   if (allRows.length === 0) return { added: 0, matched: 0, skippedUsed: 0, widened: false, capped: false };
 
-  // 1) Filtre par lieu (ville / département / région). Repli si zéro correspondance.
-  const loc = opts.location.trim().toLowerCase();
+  // 1) Filtre par lieu (ville / département / région). Comparaison insensible aux
+  //    accents / casse / séparateurs (« Auvergne-Rhône-Alpes » ≡ « auvergne rhone alpes »).
+  //    Contrairement au secteur, le LIEU N'ÉLARGIT JAMAIS : cibler une région et se
+  //    retrouver à contacter une entreprise d'une autre région (Nantes/Paris pour une
+  //    campagne Auvergne-Rhône-Alpes) est le bug qu'on corrige — mieux vaut 0 lead
+  //    (« va scraper cette région ») qu'un contact hors zone.
+  const loc = normLoc(opts.location);
   let widened = false;
   let pool = allRows;
   if (loc) {
     const locMatch = (r: ParsedCompanyRow) =>
-      [r.city, r.deptName, r.regionAdmin].some((v) => String(v ?? '').trim().toLowerCase() === loc);
-    const located = allRows.filter(locMatch);
-    if (located.length > 0) pool = located;
-    else widened = true; // aucun lead pour ce lieu → on garde tous les leads.
+      [r.city, r.deptName, r.regionAdmin].some((v) => normLoc(String(v ?? '')) === loc);
+    pool = allRows.filter(locMatch); // peut être vide → campagne vide assumée (jamais hors zone)
   }
 
   // 2) Filtre par secteurs préférés (élargit si trop peu).

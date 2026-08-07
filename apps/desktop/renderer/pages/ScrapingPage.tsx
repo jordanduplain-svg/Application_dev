@@ -614,7 +614,7 @@ export default function ScrapingPage({ onGoToLeads }: { onGoToLeads?: () => void
           <label>
             <span style={labelStyle}>Pages lues par source / run</span>
             <select
-              value={config.pagesPerRun ?? 2}
+              value={config.pagesPerRun ?? 10}
               onChange={(e) => setConfig({ ...config, pagesPerRun: Number(e.target.value) })}
               style={inputStyle}
             >
