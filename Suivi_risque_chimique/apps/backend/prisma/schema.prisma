@@ -1,0 +1,383 @@
+// =====================================================================
+// Schéma de la base — étape 2 du MVP : les trois listes métier en SCD2.
+//
+// Référence : docs/adr/0003-historisation-scd2.md
+//
+// Principe SCD type 2 : chaque ligne logique (une affectation, un produit
+// dans un secteur, un degré d'exposition) est représentée par PLUSIEURS
+// versions horodatées. Une seule version est active à un instant donné
+// (valid_to IS NULL). Modifier une ligne = clore la version active puis
+// insérer une nouvelle version. On ne fait JAMAIS d'UPDATE destructif ni
+// de DELETE physique : la traçabilité 40 ans (art. R. 4412-93-3) exige de
+// pouvoir reconstituer l'état des listes à toute date passée.
+//
+// NOTE index partiels : l'unicité « une seule version active par ligne
+// logique » s'exprime en SQL par un index unique partiel
+// (UNIQUE ... WHERE valid_to IS NULL), que le DSL Prisma ne sait pas
+// décrire. Ces index sont ajoutés à la main dans la migration SQL —
+// voir prisma/migrations/*/migration.sql. Ne pas les supprimer lors
+// d'un `migrate dev` ultérieur.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Nature de l'opération qui a produit une version. Permet de distinguer,
+// dans l'historique, une création d'une modification ou d'une suppression
+// logique (soft-delete : la version est close sans successeur).
+enum HistoryOperation {
+  INSERT
+  UPDATE
+  DELETE
+}
+
+enum ImportRunStatus {
+  SUCCESS // toutes les lignes importées
+  PARTIAL // import passé mais des lignes rejetées (anomalies)
+  FAILED // échec global (source illisible, config invalide…)
+}
+
+enum UserRole {
+  ADMIN
+  HSE
+  RH
+  MEDECINE
+  MANAGER
+  COLLABORATEUR
+}
+
+// ---------------------------------------------------------------------
+// Transmission au SPST (décret 2024-307) — trace horodatée de chaque
+// transmission de la liste au service de prévention et de santé au travail.
+// L'envoi lui-même se fait via le canal sécurisé de l'organisation ; on
+// CONSERVE la preuve (quand, par qui, volume) pour démontrer la conformité
+// et calculer les échéances. Aucune donnée nominative ici.
+// ---------------------------------------------------------------------
+model Transmission {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @default("default")
+  at       DateTime @db.Timestamptz(3)
+  userId   String?  @db.Uuid
+  kind     String // spst_nominative | …
+  rowCount Int
+  note     String?
+
+  @@index([tenantId, at])
+  @@map("transmissions")
+}
+
+// ---------------------------------------------------------------------
+// Moteur de flux (brief §10) — version MVP : déclencheur planifié (cron)
+// + action « réimporter les sources ». Les définitions vivent en base
+// (éditables), pas en dur.
+//
+// Une SOURCE d'import = un connecteur + sa configuration + le mapping des
+// colonnes vers les champs canoniques. `connectorType` est extensible
+// (excel au MVP ; sharepoint / snowflake / datalake plus tard) sans
+// changer le schéma.
+//
+// `config` (JSON) : propre au connecteur. Excel = { location, sheet }.
+// `mapping` (JSON) : { champ_canonique: "Nom de colonne client" }.
+// AUCUN secret dans `config` : les credentials des connecteurs distants
+// iront dans un coffre chiffré séparé, jamais dans cette table.
+// ---------------------------------------------------------------------
+model ImportSource {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @default("default")
+  name          String
+  listType      String // PERSONNEL | RISQUES_CHIMIQUES | DEGRE_EXPOSITION
+  connectorType String // "excel" au MVP
+  config        Json
+  mapping       Json
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, enabled])
+  @@map("import_sources")
+}
+
+// Un FLOW = un déclencheur planifié (cron) qui réimporte les sources
+// actives de son tenant. Conditions et déclencheur événementiel
+// (ChangeTrigger) sont prévus post-MVP — le modèle accueillera les champs
+// sans rupture.
+model Flow {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @default("default")
+  name           String
+  cronExpression String // ex. "0 2 * * *" (chaque nuit à 2 h)
+  enabled        Boolean   @default(true)
+  lastRunAt      DateTime? @db.Timestamptz(3)
+  lastRunStatus  String? // success | partial | failed
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, enabled])
+  @@map("flows")
+}
+
+// ---------------------------------------------------------------------
+// Coffre à secrets — identifiants chiffrés des connecteurs distants
+// (chaîne de connexion SQL, jeton SharePoint…). Le secret est chiffré
+// (AES-256-GCM) avec FIELD_ENCRYPTION_KEY ; JAMAIS en clair, JAMAIS dans la
+// config de la source. `ref` = id de la source d'import.
+// ---------------------------------------------------------------------
+model ConnectorSecret {
+  id         BigInt   @id @default(autoincrement())
+  tenantId   String   @default("default")
+  ref        String
+  ciphertext String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([tenantId, ref])
+  @@map("connector_secrets")
+}
+
+// ---------------------------------------------------------------------
+// Comptes applicatifs (auth locale du MVP — un OIDC self-hosté type
+// Keycloak viendra derrière le même port AuthProvider).
+//
+// `matricule` rattache un COLLABORATEUR à sa fiche PERSONNEL — clé
+// d'identité stable décidée au cadrage. Jamais l'email, jamais nom+prénom.
+// ---------------------------------------------------------------------
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @default("default")
+  email        String
+  passwordHash String // argon2id — jamais loggé, jamais sérialisé
+  displayName  String
+  role         UserRole
+  matricule    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  managedSectors ManagerSector[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+// Rattachement explicite manager → secteurs (ADR 0002 : pas d'auto-
+// déduction depuis PERSONNEL, pour rester auditable).
+model ManagerSector {
+  id          BigInt @id @default(autoincrement())
+  userId      String @db.Uuid
+  codeSecteur String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeSecteur])
+  @@map("manager_sectors")
+}
+
+// ---------------------------------------------------------------------
+// Journal d'accès (brief §11 : « tout accès et tout export sont
+// journalisés »). Append-only : aucune mise à jour, aucune suppression
+// applicative. AUCUNE donnée personnelle des salariés dans `detail` —
+// uniquement des identifiants techniques et des compteurs.
+// ---------------------------------------------------------------------
+model AuditEvent {
+  id       BigInt   @id @default(autoincrement())
+  tenantId String   @default("default")
+  userId   String?  @db.Uuid // null pour un échec de login (pas d'identité prouvée)
+  action   String // login_success | login_failed | dashboard_view | export_* …
+  detail   Json? // compteurs, rôle, périmètre — JAMAIS de PII salarié
+  at       DateTime @db.Timestamptz(3)
+
+  @@index([tenantId, at])
+  @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------
+// Journal des imports — règle UX n°4 : « l'état du système est toujours
+// visible ». Chaque exécution d'import laisse une trace consultable :
+// quand, quelle source, combien de lignes lues/créées/màj, combien
+// d'anomalies. C'est ce qui alimente l'écran « mon import est-il passé ? ».
+// ---------------------------------------------------------------------
+model ImportRun {
+  id          String          @id @default(uuid()) @db.Uuid
+  tenantId    String          @default("default")
+  listType    String // PERSONNEL | RISQUES_CHIMIQUES | DEGRE_EXPOSITION
+  sourceLabel String // description lisible de la source (ex. nom de fichier)
+  status      ImportRunStatus
+  startedAt   DateTime        @db.Timestamptz(3)
+  finishedAt  DateTime        @db.Timestamptz(3)
+  rowsRead    Int
+  created     Int
+  updated     Int
+  unchanged   Int
+
+  anomalies ImportAnomaly[]
+
+  @@index([tenantId, startedAt])
+  @@map("import_runs")
+}
+
+// ---------------------------------------------------------------------
+// Anomalies d'import — décision de cadrage : jamais de masquage silencieux.
+// Chaque ligne rejetée (champ obligatoire vide, date illisible, colonne
+// mappée absente) est enregistrée avec le numéro de ligne SOURCE tel que
+// l'utilisateur le voit dans Excel, pour qu'il corrige vite (règle UX n°5 :
+// les erreurs disent quoi faire).
+// AUCUNE donnée personnelle dans `message` : uniquement le champ, le motif
+// et le numéro de ligne.
+// ---------------------------------------------------------------------
+model ImportAnomaly {
+  id        BigInt @id @default(autoincrement())
+  runId     String @db.Uuid
+  rowNumber Int // numéro de ligne dans le fichier source (1 = en-têtes)
+  field     String?
+  code      String // missing_required_field | invalid_date | mapped_column_absent
+  message   String
+
+  run ImportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("import_anomalies")
+}
+
+// ---------------------------------------------------------------------
+// Liste PERSONNEL — une ligne logique = UNE AFFECTATION (personne ×
+// secteur × date d'entrée), pas une personne. Une personne qui change de
+// secteur a plusieurs affectations, chacune avec son propre historique de
+// versions. C'est ce qui permet de calculer l'exposition par période.
+//
+// Identité logique (`entityId`) : UUID généré au premier import d'une
+// affectation, stable ensuite. Le rapprochement entre une ligne importée
+// et une affectation existante se fait via `naturalKey` (clé métier
+// calculée par le domaine : matricule|code_secteur|date_debut, avec
+// repli nom+prénom normalisés si matricule absent — cf. domain/mapping).
+// ---------------------------------------------------------------------
+model PersonnelHistory {
+  id       BigInt @id @default(autoincrement())
+  entityId String @db.Uuid
+
+  // Clé de rapprochement métier, calculée AVANT l'écriture par le domaine.
+  // Stockée pour rendre les upserts déterministes et requêtables.
+  naturalKey String
+
+  // Multi-tenant prévu tôt (brief §16.3 : le rétrofit coûte cher).
+  // Mono-tenant pour l'instant : valeur par défaut unique partout.
+  tenantId String @default("default")
+
+  // --- Champs canoniques (brief §7) ---
+  matricule        String? // identité stable de la personne quand la source la fournit
+  nom              String
+  prenom           String
+  fonction         String?
+  codeSecteur      String
+  dateDebutSecteur DateTime  @db.Date
+  dateFinSecteur   DateTime? @db.Date // null = encore en poste dans ce secteur
+
+  // Intérimaire : nom de l'entreprise de travail temporaire (ETT) qui l'emploie.
+  // null = salarié de l'entreprise utilisatrice. Le décret 2024-307 impose de
+  // gérer les intérimaires en lien avec leur ETT (destinataire de leurs infos).
+  entrepriseTravailTemporaire String?
+
+  // --- Colonnes SCD2 ---
+  validFrom  DateTime         @db.Timestamptz(3)
+  validTo    DateTime?        @db.Timestamptz(3) // null = version active
+  operation  HistoryOperation
+  recordedBy String? // id technique de l'utilisateur ou du flow d'import
+  recordedAt DateTime         @db.Timestamptz(3)
+
+  // Requêtes temporelles « état au JJ/MM/AAAA » (ADR 0003).
+  @@index([entityId, validFrom])
+  // Le dashboard filtre l'état courant par secteur (row-level manager).
+  @@index([tenantId, codeSecteur])
+  // Rapprochement à l'import : retrouver la version active d'une naturalKey.
+  @@index([naturalKey])
+  @@map("personnel_history")
+}
+
+// ---------------------------------------------------------------------
+// Liste RISQUES_CHIMIQUES — une ligne logique = UN PRODUIT évalué DANS UN
+// SECTEUR. Le même produit présent dans deux secteurs donne deux lignes
+// logiques distinctes (dates d'évaluation et de retrait propres à chaque
+// secteur).
+//
+// naturalKey : designation normalisée | code_secteur (le n° CAS peut
+// manquer dans les fichiers réels, la désignation est le pivot du
+// rapprochement avec DEGRE_EXPOSITION — cf. choix « match exact
+// normalisé » du cadrage).
+// ---------------------------------------------------------------------
+model RisqueChimiqueHistory {
+  id       BigInt @id @default(autoincrement())
+  entityId String @db.Uuid
+
+  naturalKey String
+  tenantId   String @default("default")
+
+  // --- Champs canoniques (brief §7) ---
+  designation       String
+  nCas              String? // n° CAS de la substance (peut manquer à l'import)
+  classifSgh        String? // classification SGH/CLP — identifie les CMR 1A/1B
+  pictogrammes      String?
+  voiesExposition   String?
+  mentionDanger     String?
+  mesuresPrevention String?
+  niveauRisque      String?
+  dateEvaluation    DateTime? @db.Date
+  dateRetrait       DateTime? @db.Date // null = produit encore utilisé
+  codeSecteur       String
+
+  // --- Colonnes SCD2 ---
+  validFrom  DateTime         @db.Timestamptz(3)
+  validTo    DateTime?        @db.Timestamptz(3)
+  operation  HistoryOperation
+  recordedBy String?
+  recordedAt DateTime         @db.Timestamptz(3)
+
+  @@index([entityId, validFrom])
+  @@index([tenantId, codeSecteur])
+  @@index([naturalKey])
+  @@map("risque_chimique_history")
+}
+
+// ---------------------------------------------------------------------
+// Liste DEGRE_EXPOSITION — une ligne logique = LE DEGRÉ d'exposition
+// d'UNE PERSONNE à UN PRODUIT dans UN SECTEUR.
+//
+// `degreExposition` est volontairement du TEXTE BRUT : le cadrage a acté
+// que le degré est polymorphe selon le client (échelle qualitative,
+// score numérique, texte libre). On stocke la valeur telle qu'importée ;
+// son interprétation (tri, agrégation, seuils) se fait à la lecture via
+// la configuration de la liste (type déclaré : enum / num / texte).
+// Convertir à l'import serait destructif — contraire au principe de
+// traçabilité.
+//
+// naturalKey : matricule|code_secteur|nom_produit normalisé, avec repli
+// nom+prénom si matricule absent (+ détection d'ambiguïté homonymes côté
+// domaine, qui produit une anomalie d'import plutôt qu'un faux match).
+// ---------------------------------------------------------------------
+model DegreExpositionHistory {
+  id       BigInt @id @default(autoincrement())
+  entityId String @db.Uuid
+
+  naturalKey String
+  tenantId   String @default("default")
+
+  // --- Champs canoniques (brief §7) ---
+  matricule       String?
+  nom             String
+  prenom          String
+  codeSecteur     String
+  nomProduit      String // rapproché de RisqueChimique.designation (normalisé)
+  degreExposition String
+
+  // --- Colonnes SCD2 ---
+  validFrom  DateTime         @db.Timestamptz(3)
+  validTo    DateTime?        @db.Timestamptz(3)
+  operation  HistoryOperation
+  recordedBy String?
+  recordedAt DateTime         @db.Timestamptz(3)
+
+  @@index([entityId, validFrom])
+  @@index([tenantId, codeSecteur])
+  @@index([naturalKey])
+  @@map("degre_exposition_history")
+}

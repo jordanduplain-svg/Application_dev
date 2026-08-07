@@ -1,0 +1,108 @@
+# ============================================================
+# Suivi du risque chimique — .gitignore
+# ============================================================
+# Strict : aucune fuite de credentials, aucune donnée réelle.
+# Un hook pre-commit (.husky/pre-commit) rejette en plus tout fichier
+# qui ressemble à de la donnée (xlsx, csv hors fixtures/synth/).
+# ============================================================
+
+# --- Dépendances ---
+node_modules/
+.pnpm-store/
+.pnpm-state.json
+
+# --- Builds ---
+dist/
+build/
+out/
+.next/
+.vite/
+*.tsbuildinfo
+
+# --- Tests / coverage ---
+coverage/
+.nyc_output/
+*.lcov
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- IDE / OS ---
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Logs ---
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Caches divers ---
+.cache/
+.turbo/
+.eslintcache
+.stylelintcache
+
+# --- Prisma ---
+# Fichier généré par Prisma (mais le schéma reste versionné)
+node_modules/.prisma/
+prisma/migrations/dev.db*
+
+# --- Données d'exécution locales (jamais versionnées) ---
+# Cluster Postgres embarqué + fichiers importés via l'UI.
+var/
+
+# ============================================================
+# Données — interdiction stricte
+# ============================================================
+# Aucun fichier de données réel ne doit entrer dans le dépôt.
+# Seuls les jeux SYNTHÉTIQUES placés sous fixtures/synth/ ou
+# apps/backend/test/fixtures/ sont autorisés.
+
+# Données tabulaires (sauf fixtures explicites)
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.dat
+
+# Exports / dumps de base
+*.sql.gz
+*.dump
+*.bak
+*.backup
+db_export*
+postgres_dump*
+
+# Documents potentiellement sensibles
+*.pdf
+!docs/**/*.pdf
+
+# Exceptions : fixtures synthétiques explicites
+!**/fixtures/**/*.xlsx
+!**/fixtures/**/*.csv
+!**/fixtures/synth/**
+
+# ============================================================
+# Crypto / secrets — ne JAMAIS versionner
+# ============================================================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+secrets.json
+credentials.json

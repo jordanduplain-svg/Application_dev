@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Pre-commit hook — bloque l'introduction de données réelles dans le dépôt.
+# Activé automatiquement après `pnpm install` (Husky).
+# Voir scripts/check-no-real-data.mjs pour la logique.
+
+node scripts/check-no-real-data.mjs || exit 1
