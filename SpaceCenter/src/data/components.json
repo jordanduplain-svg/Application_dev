@@ -1,0 +1,17 @@
+{
+  "components": [
+    { "id": "eng_k5", "name": "Moteur K-5 (kérosène)", "role": "engine", "branch": "propulsion", "tier": 0, "reliability": 0.95, "cost": 120 },
+    { "id": "eng_hyper", "name": "Moteur hypergolique", "role": "engine", "branch": "propulsion", "tier": 1, "reliability": 0.96, "cost": 190 },
+    { "id": "eng_hydro", "name": "Moteur hydrolox", "role": "engine", "branch": "propulsion", "tier": 2, "reliability": 0.975, "cost": 280 },
+
+    { "id": "tank_al", "name": "Réservoir aluminium", "role": "tank", "branch": "structures", "tier": 0, "reliability": 0.98, "cost": 80 },
+    { "id": "tank_alli", "name": "Réservoir Al-Li", "role": "tank", "branch": "structures", "tier": 1, "reliability": 0.985, "cost": 140 },
+    { "id": "tank_comp", "name": "Réservoir composite carbone", "role": "tank", "branch": "structures", "tier": 2, "reliability": 0.992, "cost": 220 },
+
+    { "id": "avi_gyro", "name": "Gyroscopes", "role": "avionics", "branch": "avionique", "tier": 0, "reliability": 0.96, "cost": 90 },
+    { "id": "avi_inert", "name": "Guidage inertiel", "role": "avionics", "branch": "avionique", "tier": 1, "reliability": 0.975, "cost": 160 },
+    { "id": "avi_cpu", "name": "Informatique embarquée", "role": "avionics", "branch": "avionique", "tier": 2, "reliability": 0.988, "cost": 240 },
+
+    { "id": "fair_std", "name": "Coiffe standard", "role": "fairing", "branch": "structures", "tier": 0, "reliability": 0.98, "cost": 70 }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "grid": {
+    "cellSize": 4,
+    "worldParcels": 9,
+    "parcelCells": 4,
+    "startParcels": [[3, 3], [4, 3], [5, 3], [3, 4], [4, 4], [5, 4], [3, 5], [4, 5], [5, 5]],
+    "parcelBasePrice": 400,
+    "parcelPriceMultiplier": 1.4
+  },
+  "startBudget": 3500,
+  "buildings": [
+    { "id": "warehouse", "name": "Entrepôt logistique", "footprint": [2, 2], "cost": 600, "model": "/models/Props_ContainerFull.glb", "color": "#8a6d5c", "height": 3.5, "effect": "−6 % coût des fusées" },
+    { "id": "pad_small", "name": "Pas de tir · Petit", "footprint": [2, 2], "cost": 800, "model": "/models/RoofTile_Plate.glb", "color": "#5c6570", "height": 1.5, "effect": "Lance jusqu’à 2 étages" },
+    { "id": "training", "name": "Centre de formation", "footprint": [2, 2], "cost": 900, "model": "/models/Props_Capsule.glb", "color": "#F2A65A", "height": 3.5, "effect": "+2 % fiabilité (équipes)" },
+    { "id": "factory_prop", "name": "Usine · Propulsion", "footprint": [2, 2], "cost": 1000, "model": "/models/House_Long.gltf", "color": "#b06a4a", "height": 4, "effect": "Propulsion −15 % de risque" },
+    { "id": "factory_struct", "name": "Usine · Structures", "footprint": [2, 2], "cost": 1000, "model": "/models/House_Open.gltf", "color": "#8a8f98", "height": 4, "effect": "Structures −15 % de risque" },
+    { "id": "factory_avionics", "name": "Usine · Avionique", "footprint": [2, 2], "cost": 1000, "model": "/models/House_Cylinder.gltf", "color": "#4a7ab0", "height": 4, "effect": "Avionique −15 % de risque" },
+    { "id": "lab", "name": "Labo R&D", "footprint": [2, 2], "cost": 1000, "model": "/models/GeodesicDome.gltf", "color": "#4FD1C5", "height": 5, "effect": "+50 % Points de Recherche" },
+    { "id": "control", "name": "Centre de contrôle", "footprint": [2, 2], "cost": 1500, "model": "/models/Prop_SatelliteDish.gltf", "color": "#4FD1C5", "height": 6, "effect": "+3 % fiabilité (contrôle)" },
+    { "id": "pad_medium", "name": "Pas de tir · Moyen", "footprint": [3, 3], "cost": 2000, "model": "/models/RoofTile_Plate2.glb", "color": "#5c6570", "height": 2, "effect": "Lance jusqu’à 3 étages" },
+    { "id": "pad_heavy", "name": "Pas de tir · Lourd", "footprint": [4, 4], "cost": 4500, "model": "/models/RoofTile_Details.glb", "color": "#5c6570", "height": 2.5, "effect": "Lance jusqu’à 5 étages" }
+  ]
+}

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Orbite — Interface prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0A0D12;
+    --bg-panel:#12161D;
+    --bg-panel-2:#171C25;
+    --line-grid:#1C232E;
+    --line-grid-major:#242C39;
+    --text-primary:#E4E9F0;
+    --text-dim:#78849A;
+    --text-faint:#4A5468;
+    --accent-amber:#F2A65A;
+    --accent-cyan:#4FD1C5;
+    --accent-red:#E5595E;
+    --border-soft: rgba(228,233,240,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-deep);color:var(--text-primary);font-family:'Inter',sans-serif;overflow:hidden;}
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- TOPBAR ---------- */
+  .topbar{
+    height:52px;flex:0 0 auto;display:flex;align-items:center;gap:28px;
+    padding:0 20px;background:var(--bg-panel);border-bottom:1px solid var(--border-soft);
+    font-family:'Barlow Condensed',sans-serif;letter-spacing:0.04em;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;text-transform:uppercase;color:var(--text-primary);}
+  .brand .dot{width:9px;height:9px;border-radius:2px;background:var(--accent-amber);transform:rotate(45deg);}
+  .topbar .stat{display:flex;flex-direction:column;line-height:1.1;}
+  .topbar .stat .label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;}
+  .topbar .stat .value{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--text-primary);font-weight:500;}
+  .topbar .stat .value.cyan{color:var(--accent-cyan);}
+  .topbar .stat .value.amber{color:var(--accent-amber);}
+  .topbar .spacer{flex:1;}
+  .topbar .era{font-size:12px;color:var(--text-dim);text-transform:uppercase;border:1px solid var(--border-soft);padding:5px 12px;border-radius:2px;}
+
+  /* ---------- BODY ---------- */
+  .body{flex:1;display:flex;min-height:0;position:relative;}
+
+  /* ---------- SIDEBAR ---------- */
+  .sidebar{
+    width:268px;flex:0 0 auto;background:var(--bg-panel);border-right:1px solid var(--border-soft);
+    overflow-y:auto;z-index:15;
+  }
+  .sidebar-head{padding:16px 16px 8px;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:0.08em;font-size:13px;color:var(--text-dim);}
+  .cat{border-top:1px solid var(--border-soft);}
+  .cat-head{
+    display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;
+    font-family:'Barlow Condensed',sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:0.03em;
+    color:var(--text-primary);user-select:none;
+  }
+  .cat-head:hover{background:var(--bg-panel-2);}
+  .cat-head .chev{color:var(--text-faint);transition:transform .15s ease;font-size:11px;}
+  .cat.open .cat-head .chev{transform:rotate(90deg);}
+  .cat-items{max-height:0;overflow:hidden;transition:max-height .18s ease;}
+  .cat.open .cat-items{max-height:400px;}
+  .build-item{
+    display:flex;align-items:center;gap:10px;padding:9px 16px 9px 28px;cursor:pointer;
+    border-left:2px solid transparent;
+  }
+  .build-item:hover{background:var(--bg-panel-2);}
+  .build-item.selected{background:rgba(242,166,90,0.08);border-left-color:var(--accent-amber);}
+  .build-item .icon{
+    width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;flex:0 0 auto;border:1px solid var(--border-soft);
+  }
+  .build-item .info{flex:1;min-width:0;}
+  .build-item .name{font-size:12.5px;color:var(--text-primary);}
+  .build-item .cost{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .build-item.disabled{opacity:0.4;cursor:not-allowed;}
+
+  .sidebar-footer{padding:14px 16px;font-size:11px;color:var(--text-faint);line-height:1.5;border-top:1px solid var(--border-soft);}
+  kbd{background:var(--bg-panel-2);border:1px solid var(--border-soft);border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);}
+
+  /* ---------- MAP VIEWPORT ---------- */
+  .viewport{flex:1;position:relative;overflow:hidden;cursor:grab;background:var(--bg-deep);}
+  .viewport.dragging{cursor:grabbing;}
+  .viewport.placing{cursor:crosshair;}
+  .map-layer{
+    position:absolute;top:0;left:0;width:2400px;height:1700px;
+    transform-origin:0 0;
+    background-image:
+      linear-gradient(var(--line-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-grid) 1px, transparent 1px),
+      linear-gradient(var(--line-grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-grid-major) 1px, transparent 1px);
+    background-size:32px 32px, 32px 32px, 160px 160px, 160px 160px;
+    background-color:#0C0F15;
+  }
+  .site-zone{
+    position:absolute;border:1px dashed rgba(79,209,197,0.25);border-radius:6px;
+    background:rgba(79,209,197,0.03);pointer-events:none;
+  }
+  .site-zone .zone-label{
+    position:absolute;top:-20px;left:4px;font-family:'Barlow Condensed',sans-serif;
+    font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(79,209,197,0.5);
+  }
+
+  .building{
+    position:absolute;width:88px;height:88px;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    cursor:pointer;
+  }
+  .building .shape{
+    width:52px;height:52px;border-radius:8px;background:var(--bg-panel-2);
+    border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;
+    font-size:22px;position:relative;transition:border-color .12s ease, box-shadow .12s ease;
+  }
+  .building:hover .shape{border-color:var(--text-dim);}
+  .building.selected .shape{border-color:var(--accent-amber);box-shadow:0 0 0 3px rgba(242,166,90,0.12);}
+  .building .ring{
+    position:absolute;inset:-4px;border-radius:11px;border:2px solid transparent;
+  }
+  .building .label{font-family:'Barlow Condensed',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:0.03em;color:var(--text-dim);white-space:nowrap;}
+  .building .fiab-dot{position:absolute;bottom:-3px;right:-3px;width:11px;height:11px;border-radius:50%;border:2px solid var(--bg-deep);}
+
+  /* targeting reticle on selection */
+  .building.selected::before, .building.selected::after{content:'';position:absolute;width:12px;height:12px;border-color:var(--accent-amber);pointer-events:none;}
+  .building.selected::before{top:-10px;left:-10px;border-top:2px solid;border-left:2px solid;}
+  .building.selected::after{bottom:-10px;right:-10px;border-bottom:2px solid;border-right:2px solid;}
+
+  .ghost-building{
+    position:absolute;width:52px;height:52px;transform:translate(-50%,-50%);
+    border:1px dashed var(--accent-amber);border-radius:8px;background:rgba(242,166,90,0.08);
+    pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.85;
+  }
+
+  /* ---------- ZOOM CONTROLS ---------- */
+  .zoom-controls{position:absolute;bottom:20px;left:20px;display:flex;flex-direction:column;gap:1px;z-index:10;}
+  .zoom-btn{
+    width:32px;height:32px;background:var(--bg-panel);border:1px solid var(--border-soft);
+    color:var(--text-primary);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .zoom-btn:first-child{border-radius:4px 4px 0 0;}
+  .zoom-btn:last-child{border-radius:0 0 4px 4px;}
+  .zoom-btn:hover{background:var(--bg-panel-2);}
+  .zoom-pct{position:absolute;bottom:20px;left:60px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);z-index:10;}
+
+  /* ---------- DETAIL PANEL ---------- */
+  .detail-panel{
+    position:absolute;top:0;right:0;height:100%;width:320px;background:var(--bg-panel);
+    border-left:1px solid var(--border-soft);transform:translateX(100%);transition:transform .2s ease;
+    z-index:25;display:flex;flex-direction:column;
+  }
+  .detail-panel.open{transform:translateX(0);}
+  .dp-head{padding:18px 18px 14px;border-bottom:1px solid var(--border-soft);}
+  .dp-close{position:absolute;top:16px;right:16px;cursor:pointer;color:var(--text-faint);font-size:18px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;}
+  .dp-close:hover{color:var(--text-primary);}
+  .dp-cat{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:4px;}
+  .dp-title{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:600;text-transform:uppercase;letter-spacing:0.01em;}
+  .dp-status{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;padding:4px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.05em;}
+  .dp-status.ok{background:rgba(79,209,197,0.12);color:var(--accent-cyan);}
+  .dp-status.warn{background:rgba(242,166,90,0.12);color:var(--accent-amber);}
+  .dp-status.build{background:rgba(120,132,154,0.12);color:var(--text-dim);}
+  .dp-body{padding:16px 18px;flex:1;overflow-y:auto;}
+  .dp-metric{margin-bottom:16px;}
+  .dp-metric .m-top{display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+  .dp-metric .m-top .m-val{font-family:'JetBrains Mono',monospace;color:var(--text-primary);}
+  .bar{height:6px;background:var(--bg-panel-2);border-radius:3px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:3px;}
+  .dp-desc{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-bottom:18px;}
+  .dp-actions{padding:16px 18px;border-top:1px solid var(--border-soft);display:flex;flex-direction:column;gap:8px;}
+  .btn{
+    padding:10px 14px;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;text-align:center;
+    border:1px solid var(--border-soft);background:var(--bg-panel-2);color:var(--text-primary);
+  }
+  .btn:hover{border-color:var(--text-dim);}
+  .btn.primary{background:var(--accent-amber);color:#1A1305;border-color:var(--accent-amber);font-weight:600;}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.danger{color:var(--accent-red);}
+  .btn.danger:hover{border-color:var(--accent-red);}
+
+  /* ---------- TOAST ---------- */
+  .toast-wrap{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:center;}
+  .toast{
+    background:var(--bg-panel);border:1px solid var(--border-soft);border-left:3px solid var(--accent-cyan);
+    padding:9px 16px;border-radius:4px;font-size:12.5px;color:var(--text-primary);
+    box-shadow:0 6px 20px rgba(0,0,0,0.4);animation:toastIn .18s ease;
+  }
+  .toast.error{border-left-color:var(--accent-red);}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+
+  .placing-banner{
+    position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:10;
+    background:var(--bg-panel);border:1px solid var(--accent-amber);color:var(--accent-amber);
+    padding:8px 16px;border-radius:4px;font-size:12.5px;display:none;align-items:center;gap:10px;
+  }
+  .placing-banner.show{display:flex;}
+  .placing-banner .esc{color:var(--text-dim);font-size:11px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>ORBITE — AGENCE DEMO</div>
+    <div class="stat"><span class="label">Budget</span><span class="value amber" id="budgetVal">€ 850 000</span></div>
+    <div class="stat"><span class="label">Réputation</span><span class="value cyan">72%</span></div>
+    <div class="stat"><span class="label">Fiabilité moyenne</span><span class="value cyan">88%</span></div>
+    <div class="spacer"></div>
+    <div class="era">Ère 2 · Guerre froide</div>
+  </div>
+
+  <div class="body">
+
+    <div class="sidebar">
+      <div class="sidebar-head">Menu de construction</div>
+
+      <div class="cat open" data-cat="pas">
+        <div class="cat-head"><span>Pas de tir</span><span class="chev">▶</span></div>
+        <div class="cat-items">
+          <div class="build-item" data-type="pas" data-name="Pas de tir · Petit" data-cost="60000" data-icon="🚀">
+            <div class="icon">🚀</div><div class="info"><div class="name">Petit gabarit</div><div class="cost">€ 60 000</div></div>
+          </div>
+          <div class="build-item" data-type="pas" data-name="Pas de tir · Moyen" data-cost="140000" data-icon="🚀">
+            <div class="icon">🚀</div><div class="info"><div class="name">Moyen gabarit</div><div class="cost">€ 140 000</div></div>
+          </div>
+          <div class="build-item disabled" data-name="Pas de tir · Lourd" data-cost="320000" data-icon="🚀">
+            <div class="icon">🚀</div><div class="info"><div class="name">Lourd (verrouillé)</div><div class="cost">Ère 3 requise</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cat" data-cat="usines">
+        <div class="cat-head"><span>Usines composants</span><span class="chev">▶</span></div>
+        <div class="cat-items">
+          <div class="build-item" data-type="usine" data-name="Usine · Propulsion" data-cost="95000" data-icon="🔥">
+            <div class="icon">🔥</div><div class="info"><div class="name">Propulsion</div><div class="cost">€ 95 000</div></div>
+          </div>
+          <div class="build-item" data-type="usine" data-name="Usine · Structures" data-cost="80000" data-icon="🏗">
+            <div class="icon">🏗</div><div class="info"><div class="name">Structures</div><div class="cost">€ 80 000</div></div>
+          </div>
+          <div class="build-item" data-type="usine" data-name="Usine · Avionique" data-cost="110000" data-icon="🛰">
+            <div class="icon">🛰</div><div class="info"><div class="name">Avionique</div><div class="cost">€ 110 000</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cat" data-cat="support">
+        <div class="cat-head"><span>Support & logistique</span><span class="chev">▶</span></div>
+        <div class="cat-items">
+          <div class="build-item" data-type="labo" data-name="Labo R&D" data-cost="120000" data-icon="🧪">
+            <div class="icon">🧪</div><div class="info"><div class="name">Labo R&D</div><div class="cost">€ 120 000</div></div>
+          </div>
+          <div class="build-item" data-type="entrepot" data-name="Entrepôt logistique" data-cost="45000" data-icon="📦">
+            <div class="icon">📦</div><div class="info"><div class="name">Entrepôt</div><div class="cost">€ 45 000</div></div>
+          </div>
+          <div class="build-item" data-type="controle" data-name="Centre de contrôle" data-cost="130000" data-icon="🖥">
+            <div class="icon">🖥</div><div class="info"><div class="name">Centre de contrôle</div><div class="cost">€ 130 000</div></div>
+          </div>
+          <div class="build-item" data-type="formation" data-name="Centre de formation" data-cost="70000" data-icon="🎓">
+            <div class="icon">🎓</div><div class="info"><div class="name">Formation</div><div class="cost">€ 70 000</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <kbd>Glisser</kbd> pour naviguer · <kbd>Molette</kbd> pour zoomer<br><br>
+        Cliquez un élément puis un emplacement libre sur la carte pour construire. <kbd>Échap</kbd> pour annuler.
+      </div>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <div class="map-layer" id="mapLayer">
+
+        <div class="site-zone" style="left:120px;top:120px;width:420px;height:340px;">
+          <div class="zone-label">Zone A · Complexe de lancement</div>
+        </div>
+        <div class="site-zone" style="left:620px;top:200px;width:480px;height:300px;">
+          <div class="zone-label">Zone B · Industrie</div>
+        </div>
+
+        <!-- Pré-placés -->
+        <div class="building" data-name="Pas de tir A1" data-cat="Pas de tir · Moyen gabarit" data-fiab="91" data-status="ok" style="left:280px;top:250px;">
+          <div class="ring"></div>
+          <div class="shape">🚀<div class="fiab-dot" style="background:var(--accent-cyan);"></div></div>
+          <div class="label">Pas de tir A1</div>
+        </div>
+
+        <div class="building" data-name="Usine Propulsion N1" data-cat="Usine · Propulsion" data-fiab="76" data-status="warn" style="left:760px;top:290px;">
+          <div class="ring"></div>
+          <div class="shape">🔥<div class="fiab-dot" style="background:var(--accent-amber);"></div></div>
+          <div class="label">Usine Propulsion</div>
+        </div>
+
+        <div class="building" data-name="Labo R&D Central" data-cat="Labo R&D" data-fiab="—" data-status="ok" style="left:900px;top:400px;">
+          <div class="ring"></div>
+          <div class="shape">🧪<div class="fiab-dot" style="background:var(--accent-cyan);"></div></div>
+          <div class="label">Labo R&D</div>
+        </div>
+
+        <div class="building" data-name="Entrepôt Sud" data-cat="Entrepôt logistique" data-fiab="—" data-status="build" style="left:1020px;top:250px;">
+          <div class="ring"></div>
+          <div class="shape">📦<div class="fiab-dot" style="background:var(--text-faint);"></div></div>
+          <div class="label">Entrepôt Sud</div>
+        </div>
+
+      </div>
+
+      <div class="placing-banner" id="placingBanner">
+        <span id="placingText">Placement : Pas de tir · Petit</span>
+        <span class="esc">Échap pour annuler</span>
+      </div>
+
+      <div class="toast-wrap" id="toastWrap"></div>
+
+      <div class="zoom-controls">
+        <div class="zoom-btn" id="zoomIn">+</div>
+        <div class="zoom-btn" id="zoomOut">−</div>
+      </div>
+      <div class="zoom-pct" id="zoomPct">100%</div>
+    </div>
+
+    <div class="detail-panel" id="detailPanel">
+      <div class="dp-close" id="dpClose">✕</div>
+      <div class="dp-head">
+        <div class="dp-cat" id="dpCat">Pas de tir · Moyen gabarit</div>
+        <div class="dp-title" id="dpTitle">Pas de tir A1</div>
+        <div class="dp-status ok" id="dpStatus">● Opérationnel</div>
+      </div>
+      <div class="dp-body">
+        <div class="dp-metric">
+          <div class="m-top"><span>Fiabilité structurelle</span><span class="m-val" id="dpFiabVal">91%</span></div>
+          <div class="bar"><div class="bar-fill" id="dpFiabBar" style="width:91%;background:var(--accent-cyan);"></div></div>
+        </div>
+        <div class="dp-metric">
+          <div class="m-top"><span>Cadence de production</span><span class="m-val">1 lancement / 18j</span></div>
+          <div class="bar"><div class="bar-fill" style="width:60%;background:var(--accent-amber);"></div></div>
+        </div>
+        <div class="dp-desc" id="dpDesc">
+          Complexe de lancement moyen gabarit, mis en service en 1958. Deux campagnes réussies, aucun incident majeur enregistré à ce jour.
+        </div>
+      </div>
+      <div class="dp-actions">
+        <div class="btn primary">Assembler une fusée ici</div>
+        <div class="btn">Améliorer l'infrastructure</div>
+        <div class="btn">Consulter le journal</div>
+        <div class="btn danger">Démanteler</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const viewport = document.getElementById('viewport');
+const mapLayer = document.getElementById('mapLayer');
+const detailPanel = document.getElementById('detailPanel');
+const placingBanner = document.getElementById('placingBanner');
+const placingText = document.getElementById('placingText');
+const toastWrap = document.getElementById('toastWrap');
+const budgetVal = document.getElementById('budgetVal');
+const zoomPct = document.getElementById('zoomPct');
+
+let budget = 850000;
+let scale = 1, tx = -260, ty = -140;
+let isDown = false, dragged = false, startX=0, startY=0, startTx=0, startTy=0;
+let placingType = null;
+let selectedBuilding = null;
+
+function applyTransform(){
+  mapLayer.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+  zoomPct.textContent = Math.round(scale*100)+'%';
+}
+applyTransform();
+
+/* ---- Pan ---- */
+viewport.addEventListener('pointerdown', (e)=>{
+  if(e.target.closest('.building')) return;
+  isDown = true; dragged = false;
+  startX = e.clientX; startY = e.clientY;
+  startTx = tx; startTy = ty;
+  viewport.setPointerCapture(e.pointerId);
+});
+viewport.addEventListener('pointermove', (e)=>{
+  if(!isDown) return;
+  const dx = e.clientX-startX, dy = e.clientY-startY;
+  if(Math.abs(dx)>4 || Math.abs(dy)>4){
+    dragged = true;
+    viewport.classList.add('dragging');
+  }
+  if(dragged){
+    tx = startTx+dx; ty = startTy+dy;
+    applyTransform();
+  }
+});
+viewport.addEventListener('pointerup', (e)=>{
+  isDown = false;
+  viewport.classList.remove('dragging');
+  if(!dragged){
+    handleViewportClick(e);
+  }
+});
+
+/* ---- Zoom ---- */
+function zoomAt(newScale, cx, cy){
+  newScale = Math.min(2, Math.max(0.5, newScale));
+  const rect = viewport.getBoundingClientRect();
+  const mx = cx - rect.left, my = cy - rect.top;
+  const worldX = (mx - tx)/scale, worldY = (my - ty)/scale;
+  scale = newScale;
+  tx = mx - worldX*scale;
+  ty = my - worldY*scale;
+  applyTransform();
+}
+viewport.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  zoomAt(scale*factor, e.clientX, e.clientY);
+}, {passive:false});
+document.getElementById('zoomIn').onclick = ()=> {
+  const r = viewport.getBoundingClientRect();
+  zoomAt(scale*1.2, r.left+r.width/2, r.top+r.height/2);
+};
+document.getElementById('zoomOut').onclick = ()=> {
+  const r = viewport.getBoundingClientRect();
+  zoomAt(scale*0.8, r.left+r.width/2, r.top+r.height/2);
+};
+
+/* ---- Sidebar categories ---- */
+document.querySelectorAll('.cat-head').forEach(h=>{
+  h.addEventListener('click', ()=>{
+    h.parentElement.classList.toggle('open');
+  });
+});
+
+/* ---- Construction menu selection ---- */
+document.querySelectorAll('.build-item:not(.disabled)').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.build-item').forEach(i=>i.classList.remove('selected'));
+    item.classList.add('selected');
+    placingType = {
+      name: item.dataset.name,
+      cost: parseInt(item.dataset.cost),
+      icon: item.dataset.icon
+    };
+    placingText.textContent = 'Placement : ' + placingType.name + ' — € ' + placingType.cost.toLocaleString('fr-FR');
+    placingBanner.classList.add('show');
+    viewport.classList.add('placing');
+  });
+});
+
+function cancelPlacing(){
+  placingType = null;
+  placingBanner.classList.remove('show');
+  viewport.classList.remove('placing');
+  document.querySelectorAll('.build-item').forEach(i=>i.classList.remove('selected'));
+}
+
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape'){
+    cancelPlacing();
+    closeDetail();
+  }
+});
+
+/* ---- Click on empty map (place or deselect) ---- */
+function handleViewportClick(e){
+  const rect = viewport.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  const worldX = (mx-tx)/scale, worldY = (my-ty)/scale;
+
+  if(placingType){
+    if(budget < placingType.cost){
+      showToast('Budget insuffisant pour '+placingType.name, true);
+      return;
+    }
+    placeBuilding(placingType, worldX, worldY);
+    budget -= placingType.cost;
+    budgetVal.textContent = '€ ' + budget.toLocaleString('fr-FR');
+    showToast('Construction lancée : '+placingType.name);
+    cancelPlacing();
+  } else {
+    closeDetail();
+  }
+}
+
+function placeBuilding(type, x, y){
+  const div = document.createElement('div');
+  div.className = 'building';
+  div.dataset.name = type.name.split('·').pop().trim() + ' (nouv.)';
+  div.dataset.cat = type.name;
+  div.dataset.fiab = '—';
+  div.dataset.status = 'build';
+  div.style.left = x+'px';
+  div.style.top = y+'px';
+  div.innerHTML = `<div class="ring"></div><div class="shape">${type.icon}<div class="fiab-dot" style="background:var(--text-faint);"></div></div><div class="label">${div.dataset.name}</div>`;
+  mapLayer.appendChild(div);
+  attachBuildingHandler(div);
+}
+
+/* ---- Building click => detail panel ---- */
+function attachBuildingHandler(el){
+  el.addEventListener('pointerdown', (e)=> e.stopPropagation());
+  el.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    if(placingType) return;
+    document.querySelectorAll('.building').forEach(b=>b.classList.remove('selected'));
+    el.classList.add('selected');
+    openDetail(el);
+  });
+}
+document.querySelectorAll('.building').forEach(attachBuildingHandler);
+
+function openDetail(el){
+  selectedBuilding = el;
+  document.getElementById('dpCat').textContent = el.dataset.cat;
+  document.getElementById('dpTitle').textContent = el.dataset.name;
+
+  const statusEl = document.getElementById('dpStatus');
+  statusEl.className = 'dp-status ' + el.dataset.status;
+  statusEl.textContent = el.dataset.status === 'ok' ? '● Opérationnel'
+    : el.dataset.status === 'warn' ? '● Fiabilité dégradée'
+    : '● En construction';
+
+  const fiab = el.dataset.fiab;
+  const fiabBar = document.getElementById('dpFiabBar');
+  const fiabVal = document.getElementById('dpFiabVal');
+  if(fiab === '—'){
+    fiabVal.textContent = '—';
+    fiabBar.style.width = '0%';
+  } else {
+    fiabVal.textContent = fiab+'%';
+    fiabBar.style.width = fiab+'%';
+    fiabBar.style.background = fiab >= 85 ? 'var(--accent-cyan)' : fiab >= 60 ? 'var(--accent-amber)' : 'var(--accent-red)';
+  }
+
+  document.getElementById('dpDesc').textContent = el.dataset.status === 'build'
+    ? "Chantier en cours. Les statistiques de fiabilité seront disponibles à la mise en service."
+    : "Infrastructure en service. Historique et journal d'incidents consultables ci-dessous.";
+
+  detailPanel.classList.add('open');
+}
+function closeDetail(){
+  detailPanel.classList.remove('open');
+  document.querySelectorAll('.building').forEach(b=>b.classList.remove('selected'));
+}
+document.getElementById('dpClose').onclick = closeDetail;
+
+/* ---- Toasts ---- */
+function showToast(msg, isError){
+  const t = document.createElement('div');
+  t.className = 'toast'+(isError?' error':'');
+  t.textContent = msg;
+  toastWrap.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 2600);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+{
+  "events": [
+    {
+      "id": "budget_hike",
+      "category": "politique",
+      "title": "Nouveau gouvernement",
+      "description": "Une coalition pro-espace remporte les élections et promet une rallonge budgétaire — en échange d'un jalon de prestige rapide.",
+      "weight": 3,
+      "choices": [
+        { "label": "Accepter la rallonge (+1200 ◈, mais réputation en jeu)", "effect": { "budget": 1200, "repState": -6 }, "note": "L'opinion attend des résultats." },
+        { "label": "Rester indépendant (+4 réputation étatique)", "effect": { "repState": 4 } }
+      ]
+    },
+    {
+      "id": "budget_crisis",
+      "category": "economique",
+      "title": "Crise budgétaire nationale",
+      "description": "Une récession force l'État à couper les dépenses. Vos réserves sont ponctionnées.",
+      "weight": 3,
+      "choices": [
+        { "label": "Encaisser la coupe (−15 % du budget)", "effect": { "budgetFactor": 0.85 } },
+        { "label": "Emprunter pour compenser (−600 ◈ ferme)", "effect": { "budget": -600 }, "note": "Moins douloureux si vos réserves sont hautes." }
+      ]
+    },
+    {
+      "id": "material_breakthrough",
+      "category": "scientifique",
+      "title": "Percée matériaux publiée",
+      "description": "Un institut publie une avancée en alliages. Vous pouvez la rattraper à moindres frais.",
+      "weight": 3,
+      "choices": [
+        { "label": "Financer le rattrapage (−400 ◈, +80 PR)", "effect": { "budget": -400, "rp": 80 } },
+        { "label": "Ignorer", "effect": {} }
+      ]
+    },
+    {
+      "id": "sat_boom",
+      "category": "economique",
+      "title": "Boom de la demande satellite",
+      "description": "Le marché télécom explose. Les clients paient plus cher, mais exigent des cadences.",
+      "weight": 2,
+      "choices": [
+        { "label": "Surchauffer la production (+900 ◈, fiabilité −8 % sur 3 vols)", "effect": { "budget": 900, "reliabilityMult": 0.92, "reliabilityLaunches": 3 } },
+        { "label": "Refuser la précipitation (+3 confiance commerciale)", "effect": { "repCommercial": 3 } }
+      ]
+    },
+    {
+      "id": "strike",
+      "category": "interne",
+      "title": "Grève dans l'usine",
+      "description": "Les ouvriers réclament de meilleures conditions. La production ralentit.",
+      "weight": 2,
+      "choices": [
+        { "label": "Céder aux revendications (−500 ◈)", "effect": { "budget": -500 } },
+        { "label": "Tenir bon (fiabilité −10 % sur 2 vols)", "effect": { "reliabilityMult": 0.9, "reliabilityLaunches": 2 } }
+      ]
+    },
+    {
+      "id": "inquiry",
+      "category": "politique",
+      "title": "Commission d'enquête",
+      "description": "Après votre échec récent, la presse réclame des comptes.",
+      "weight": 0,
+      "failureBoost": 6,
+      "onlyAfterFailure": true,
+      "choices": [
+        { "label": "Financer une enquête indépendante (−700 ◈, +6 réputation)", "effect": { "budget": -700, "repState": 6, "repCommercial": 4 } },
+        { "label": "Étouffer l'affaire (−10 réputation si ça se sait)", "effect": { "repState": -10, "repCommercial": -6 }, "note": "Risqué mais gratuit." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "designs": [
+    {
+      "id": "kestrel1",
+      "name": "Kestrel 1",
+      "cost": 450,
+      "stages": [
+        [
+          { "name": "Moteur K-5", "reliability": 0.95, "branch": "propulsion" },
+          { "name": "Réservoir kérosène", "reliability": 0.98, "branch": "structures" }
+        ],
+        [{ "name": "Avionique", "reliability": 0.97, "branch": "avionique" }]
+      ]
+    },
+    {
+      "id": "albatros",
+      "name": "Albatros",
+      "cost": 800,
+      "requires": { "propulsion": 1, "structures": 1 },
+      "stages": [
+        [
+          { "name": "Booster A-2", "reliability": 0.93, "branch": "propulsion" },
+          { "name": "Réservoir principal", "reliability": 0.97, "branch": "structures" }
+        ],
+        [{ "name": "Moteur de croisière", "reliability": 0.95, "branch": "propulsion" }],
+        [
+          { "name": "Avionique", "reliability": 0.97, "branch": "avionique" },
+          { "name": "Coiffe", "reliability": 0.98, "branch": "structures" }
+        ]
+      ]
+    }
+  ]
+}

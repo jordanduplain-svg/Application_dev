@@ -1,0 +1,7 @@
+node_modules/
+
+# Kits d'assets sources (Quaternius / Sci-Fi Essentials) — non versionnés (lourds).
+# Seuls les .glb/.gltf réellement utilisés sont dans public/models/.
+Ultimate Modular Sci-Fi*/
+Ultimate Space Kit*/
+Sci-Fi Essentials Kit*/

@@ -1,0 +1,65 @@
+{
+  "contracts": [
+    {
+      "id": "demo",
+      "client": "Agence nationale",
+      "type": "etatique",
+      "title": "Capsule de démonstration",
+      "reward": 550,
+      "penalty": 0,
+      "minRep": 0,
+      "minStages": 2,
+      "repeatable": true
+    },
+    {
+      "id": "first_sat",
+      "client": "Agence nationale",
+      "type": "etatique",
+      "title": "Premier satellite national",
+      "reward": 800,
+      "penalty": 0,
+      "minRep": 0,
+      "minStages": 2
+    },
+    {
+      "id": "science_probe",
+      "client": "Institut des sciences",
+      "type": "etatique",
+      "title": "Sonde scientifique",
+      "reward": 1500,
+      "penalty": 0,
+      "minRep": 40,
+      "minStages": 3
+    },
+    {
+      "id": "telestar",
+      "client": "TeleStar",
+      "type": "prive",
+      "title": "Relais télécom",
+      "reward": 1100,
+      "penalty": 300,
+      "minRep": 45,
+      "minStages": 2
+    },
+    {
+      "id": "geoscan",
+      "client": "GeoScan",
+      "type": "prive",
+      "title": "Observation de la Terre",
+      "reward": 1400,
+      "penalty": 450,
+      "minRep": 55,
+      "minStages": 2
+    },
+    {
+      "id": "orbcomm",
+      "client": "OrbComm",
+      "type": "prive",
+      "title": "Constellation télécom",
+      "reward": 2600,
+      "penalty": 800,
+      "minRep": 65,
+      "minStages": 3
+    }
+  ]
+}

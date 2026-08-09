@@ -1,0 +1,28 @@
+{
+  "branches": {
+    "propulsion": {
+      "name": "Propulsion liquide",
+      "tiers": [
+        { "name": "Moteur kérosène/LOX", "cost": 100 },
+        { "name": "Hypergoliques", "cost": 250 },
+        { "name": "Hydrolox", "cost": 500 }
+      ]
+    },
+    "structures": {
+      "name": "Structures & Réservoirs",
+      "tiers": [
+        { "name": "Alliages aluminium", "cost": 100 },
+        { "name": "Aluminium-lithium", "cost": 250 },
+        { "name": "Composites carbone", "cost": 500 }
+      ]
+    },
+    "avionique": {
+      "name": "Avionique & Guidage",
+      "tiers": [
+        { "name": "Gyroscopes", "cost": 100 },
+        { "name": "Guidage inertiel", "cost": 250 },
+        { "name": "Informatique embarquée", "cost": 500 }
+      ]
+    }
+  }
+}
