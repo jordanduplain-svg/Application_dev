@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_test_ao(data)
 	_test_rivaux_reactifs(data)
 	_test_clamp_prix(data)
+	_test_horizon_recherche(data)
 	_test_rd_plancher_sursaut(data)
 	_test_essais(data)
 	_test_accidents(data)
@@ -363,6 +364,10 @@ func _test_brevets(data: Dictionary) -> void:
 	var prix_licence: float = float(data["technos"]["train_rentrant"]["cout_base"]) * float(cr["licence_achat_part"])
 	if absf(treso_avant - float(state["tresorerie"]) - prix_licence) > 0.01:
 		echecs.append("brevets : prix de licence incorrect")
+	# On avance l'horloge AVANT de poser le brevet : le cockpit fermé (1931) est hors de
+	# l'HORIZON de recherche depuis 1922, et ce test mesure le contournement de brevet, pas la
+	# disponibilité de la techno. (Poser le brevet d'abord le faisait expirer avec l'avance.)
+	state["tick"] = float(state["tick"]) + 52.0 * 4.0
 	state["brevets"]["cockpit_ferme"] = {"detenteur": "marane", "expire": float(state["tick"]) + 208.0}
 	Sim.appliquer(state, data, {"type": "lancer_recherche", "techno": "cockpit_ferme"})
 	var attendu_c: float = float(data["technos"]["cockpit_ferme"]["duree_sem"]) \
@@ -1551,3 +1556,27 @@ func _ref_critere(data: Dictionary, seg: String, nom: String) -> Array:
 		if str(crit["nom"]) == nom:
 			return crit["ref"]
 	return [[1925.0, 1.0]]
+
+
+# Horizon de recherche : on ne lance pas une techno trop en avance sur l'état de l'art.
+func _test_horizon_recherche(data: Dictionary) -> void:
+	var h: float = float((data["constants"]["recherche"] as Dictionary).get("pionnier_horizon_ans", 0.0))
+	if h <= 0.0:
+		return
+	var Rech2: GDScript = load("res://sim/research.gd")
+	var state: Dictionary = Sim.nouvelle_partie(5, data)
+	state["tresorerie"] = 9e9   # l'argent ne doit JAMAIS être ce qui bloque dans ce test
+	var loin: String = ""
+	var proche: String = ""
+	for id_t: String in Etat.cles_triees(data["technos"]):
+		var d: float = float(data["technos"][id_t]["date_etat_art"]) - Etat.AN0
+		if d > h and loin == "" and Rech2.prerequis_ok([], data, id_t):
+			loin = id_t
+		if d <= h and proche == "" and Rech2.prerequis_ok([], data, id_t):
+			proche = id_t
+	if loin != "" and Rech2.lancer(state, data, loin):
+		echecs.append("horizon : %s (%.0f) lançable en %.0f malgré l'horizon de %.0f ans"
+			% [loin, float(data["technos"][loin]["date_etat_art"]), Etat.AN0, h])
+	if proche != "" and not Rech2.lancer(state, data, proche):
+		echecs.append("horizon : %s est DANS l'horizon et reste bloqué" % proche)
+	print("horizon recherche | %.0f ans : %s refusé, %s accepté" % [h, loin, proche])

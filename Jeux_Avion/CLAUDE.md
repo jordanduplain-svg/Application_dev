@@ -1429,6 +1429,37 @@ LEÇON DE MÉTHODE : un audit externe se trie CONTRE LE CODE, pas contre l'intui
 trois constats reposaient sur une lecture du harnais sans ouvrir `game/` ni compter les
 échantillons — mais le troisième était exact et personne dans le projet ne l'avait vu.
 
+Retour playtest n°12 — HORIZON DE RECHERCHE (« en début de jeu, acheter des techs de 1935
+était possible pour pas cher »). CONSTAT VÉRIFIÉ : `research.gd` traitait le pari pionnier comme
+un BOOLÉEN (`annee < date_etat_art` → `cout *= 4`). Être en avance d'UN an coûtait donc le même
+multiplicateur qu'en avance de TREIZE. Avec 420 k£ de départ on achète en 1922 : roues carénées
+(1929) 100 k, démarreur (1930) 120 k, cockpit fermé (1931) 120 k — trois technos des années 30
+dès les premières semaines.
+HYPOTHÈSE DU JOUEUR (« les rendre proportionnellement chers réduirait la trésorerie ») : MESURÉE
+FAUSSE. Surcoût linéaire `mult = 4 + par_an × avance`, dosé à 0 / 0.3 / 0.6 :
+  équilibre 37.81 M£ aux TROIS dosages, à la décimale — le bot riche ne fait AUCUN pari pionnier.
+  pionnier 27 % → 57 % → 83 % de faillites ; cible « globales » ratée dès 0.3.
+Avec une franchise de 3 ans (le pari d'un ou deux ans reste à ×4), 0.5 passe les cibles mais le
+bot chercheur tombe encore à 43 % de faillites et 20 → 7 % de victoires : on transforme une
+stratégie en piège, exactement le reproche de l'audit sur le glouton. REVERTÉ, dials supprimés.
+CORRECTIF RETENU — une BORNE, pas un prix : `pionnier_horizon_ans` 8 (0 = pas d'horizon).
+`Recherche.lancer` refuse une techno dont `date_etat_art` dépasse l'année courante de plus de
+8 ans. On ne conçoit pas en 1922 ce que l'industrie ne saura faire qu'en 1935 ; le rivetage
+affleurant (1935) et les armes d'ailes deviennent inaccessibles au départ, le capot NACA (1929)
+reste ouvert. NEUTRE AU HARNAIS aux deux dosages testés (8 et 5 ans) : chiffres IDENTIQUES au
+témoin (37.00 / 33.63 / 76-0-24 / rivaux 63 %, exit 0) — les bots ne cherchent jamais à plus de
+5 ans d'avance, donc l'horizon ne mord QUE sur le joueur. Même profil anti-exploit que
+`clamp_prix` et la médiane par maison.
+LEÇON : quand un exploit vient d'une VARIABLE non bornée (ici l'avance), la borne est souvent
+meilleure que le prix. Renchérir frappe proportionnellement TOUS les usages, y compris
+légitimes ; borner ne frappe que l'abus. Troisième fois de la session que la borne bat le prix
+(cf. `clamp_prix`, plafond par critère).
+TEST `_test_horizon_recherche` (trésorerie mise à 9e9 pour que l'argent ne soit JAMAIS ce qui
+bloque : sinon le test passerait au vert pour la mauvaise raison). PIÈGE RÉSOLU EN CHEMIN :
+`_test_brevets` recherchait `cockpit_ferme` (1931) depuis 1922 — désormais hors horizon. L'horloge
+y est avancée de 4 ans AVANT la pose du brevet ; l'avancer après le faisait expirer (il est posé
+à `tick + 208`, et 4 ans = 208 semaines).
+
 Retour playtest n°3 (pivot de direction artistique, demande propriétaire : « ça fait vieux ») :
 abandon de la police pixel au profit de la fonte lisse par défaut du moteur (antialiasée,
 re-rendue net par le stretch canvas_items), habillage « rétro moderne » : canevas charbon

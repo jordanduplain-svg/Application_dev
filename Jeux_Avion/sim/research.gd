@@ -73,6 +73,15 @@ static func lancer(state: Dictionary, data: Dictionary, id_techno: String) -> bo
 	var annee: float = Etat.AN0 + float(state["tick"]) / 52.0
 	var tn: Dictionary = technos[id_techno]
 	var cr: Dictionary = data["constants"]["recherche"]
+	# HORIZON DE RECHERCHE : on ne conçoit pas en 1922 ce que l'industrie ne saura faire qu'en
+	# 1935. Sans cette borne, le pari pionnier étant un simple ×4 forfaitaire, on achetait trois
+	# technos des années 30 dès les premières semaines (retour joueur playtest n°12). Une BORNE
+	# et non un surcoût : renchérir frappait aussi les paris légitimes d'un ou deux ans et tuait
+	# la stratégie pionnière (mesuré : bot chercheur 27 % → 43 % de faillites, 20 % → 7 % de
+	# victoires). 0 = pas d'horizon (comportement historique).
+	var horizon: float = float(cr.get("pionnier_horizon_ans", 0.0))
+	if horizon > 0.0 and float(tn["date_etat_art"]) - annee > horizon:
+		return false
 	var cout: float = float(tn["cout_base"])
 	var duree: float = float(tn["duree_sem"])
 	var pionnier: bool = annee < float(tn["date_etat_art"])

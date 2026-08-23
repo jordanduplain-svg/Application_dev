@@ -416,7 +416,8 @@
     "brevet_duree_sem": 156,
     "licence_achat_part": 0.5,
     "mult_duree_contournement": 1.3,
-    "royalties_part": 0.15
+    "royalties_part": 0.15,
+    "pionnier_horizon_ans": 8.0
   },
   "fin": {
     "tick": 1214,
