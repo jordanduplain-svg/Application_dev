@@ -255,12 +255,28 @@ static func _allouer(state: Dictionary, data: Dictionary, nom_seg: String, annee
 	var prix_median: float = _mediane(prix_tous)
 
 	# Attractivités → parts cibles (k = 2 accentue les écarts).
-	var attrs: Dictionary = {}
+	# EMPILEMENT : la part se prend au carré PAR PRODUIT puis se somme par maison, donc deux
+	# modèles jumeaux valent √2 fois un seul — mesuré à 13 points de part sur le save d'un
+	# joueur qui n'en alignait que DEUX. `empilement_maison` (1.0 = comportement historique)
+	# applique un rendement décroissant au n-ième modèle d'une même maison sur un segment.
+	# ⚠ MINE DOCUMENTÉE (étape 11) : les bots empilent aussi, et un correctif antérieur qui
+	# leur forçait le renouvellement avait envoyé le glouton de 50 % à 100 % de faillites.
+	# D'où le cadran en data : on mesure à 1.0 (témoin) avant de le bouger.
+	var empil: float = float((data["constants"]["marche"] as Dictionary).get("empilement_maison", 1.0))
+	var n_maison: Dictionary = {}
+	for e: Dictionary in lice:
+		var mm: String = str(e["maison"])
+		n_maison[mm] = int(n_maison.get(mm, 0)) + 1
+	var rang: Dictionary = {}
+	var poids: Dictionary = {}
 	var somme_a2: float = 0.0
 	for e: Dictionary in lice:
 		var a: float = _attractivite(state, data, seg, e, annee, prix_median, cap_ref)
-		attrs[str(e["uid"])] = a
-		somme_a2 += a * a
+		var mm2: String = str(e["maison"])
+		var k: int = int(rang.get(mm2, 0))
+		rang[mm2] = k + 1
+		poids[str(e["uid"])] = a * a * pow(empil, float(k))
+		somme_a2 += float(poids[str(e["uid"])])
 
 	# Produits disparus : on retire leurs parts (renormalisées ensuite).
 	var uids_en_lice: Array = []
@@ -274,8 +290,7 @@ static func _allouer(state: Dictionary, data: Dictionary, nom_seg: String, annee
 	var inertie: float = float(data["constants"]["marche"]["inertie"])
 	for e: Dictionary in lice:
 		var uid_p: String = str(e["uid"])
-		var a: float = float(attrs[uid_p])
-		var cible: float = (a * a) / somme_a2 if somme_a2 > 0.0 else 1.0 / float(lice.size())
+		var cible: float = float(poids[uid_p]) / somme_a2 if somme_a2 > 0.0 else 1.0 / float(lice.size())
 		var actuelle: float = float(parts.get(uid_p, 0.0))
 		parts[uid_p] = actuelle + (cible - actuelle) * inertie
 	var somme_p: float = 0.0

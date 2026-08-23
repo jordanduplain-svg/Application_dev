@@ -1385,6 +1385,50 @@ RESTE : 85 % de part avec des avions de 1933 reste LE symptôme ; la trésorerie
 conséquence. Ce qui porte encore cette domination : la réputation (f_repu 1.286 contre 1.06) et
 l'empilement (a² par produit, sommé par maison), ni l'un ni l'autre traités.
 
+Passe OUTILLAGE + EMPILEMENT (audit externe du harnais, session suivante).
+AUDIT REÇU, TRIÉ CONTRE LE CODE avant d'agir — 2 points sur 3 retenus.
+(1) REJETÉ : « tu n'as pas 3 stratégies, tu en as 1 ; le glouton à 1 % de victoires est une
+stratégie morte ». Prémisse FAUSSE : `grep -rn "glouton_civil|pionnier_militaire|strategies"
+game/` ne retourne RIEN — ce ne sont pas des archétypes jouables mais des fixtures de
+`tests/bots.gd`. Le glouton est le bot imprudent que la crise DOIT tuer à 20-50 % : ses
+faillites SONT la cible §15.2, pas un défaut. Le verdict proposé (échec si une strat gagne
+< 10 %) aurait exigé de rendre le bot suicidaire compétitif, donc de casser la crise.
+(2) SUR-LECTURE : la « falaise déterministe de 1924 » (min = médiane = max chez l'équilibré).
+C'est un échantillon de DEUX faillites sur 100. Distribution réelle mesurée sur 300 campagnes :
+9 morts avant 1926, soit 3 % — un mode de mort qui existe, pas une falaise. MAIS l'intuition
+sous-jacente est juste : ces 3 % n'étaient assertés NULLE PART et se confondaient avec les
+morts de crise dans « faillites globales ».
+(3) EXACT : le verdict « aucune domination » passe par un OU (`victoires <= 0.60 or ecart <=
+ECART_DOMINATION`), donc 76 % de victoires passe grâce à un écart de richesse de +11 %.
+L'exemption avait été ajoutée pour un photo-finish à 0,2 % d'écart ; à +11 % elle est trop
+large. NON CORRIGÉ — le resserrer met la cible au rouge et ouvre une chasse à l'équilibrage,
+c'est une décision propriétaire.
+LIVRÉ côté OUTILLAGE (aucun impact jeu, assumé comme tel) : `n_graines` réglable par argument
+(`-s res://tests/balance.gd -- 20`, ~2 min au lieu de 10 — une boucle de 10 min rend
+l'équilibrage impraticable) ; verdict « mortalité de démarrage » séparé (`ANNEE_DEMARRAGE`
+1926, `SEUIL_PRECOCE` 0.10) — mesuré à 3 %, seuil posé en GARDE-FOU anti-régression et non en
+cible : on ajoute la mesure avant d'en faire une contrainte.
+PUIS L'EMPILEMENT, la dernière cause identifiée et jamais traitée. Sonde de contrefactuels sur
+le save : retirer le cumul faisait passer le joueur de 63,9 % à 51,1 % de l'export avec
+seulement DEUX produits (13 points). La réputation, elle, jouait CONTRE lui dans cette partie
+(militaire 0.118, la pire des trois maisons) — la neutraliser le RENFORÇAIT de 5 points : ce
+n'est pas un levier à raboter, c'est un système qui fonctionne.
+CORRECTIF : `empilement_maison` en data (1.0 = comportement historique, vérifié bit-identique)
+— le n-ième modèle d'une maison sur un segment voit son poids multiplié par `empilement^(n-1)`.
+Le POIDS (a² amorti) est stocké une fois et réutilisé pour la somme ET pour la part de chaque
+produit — sinon les parts ne somment plus à 1.
+DOSAGE MESURÉ (30 graines, boucle courte), et LA MINE DOCUMENTÉE EST RÉELLE :
+  1.0 (témoin) équilibre 39.38 · glouton crise 30 % / total 40 % · rivaux 61 %
+  0.85          équilibre 37.81 · glouton crise 40 % / total 50 % · rivaux 62 %  ✅
+  0.7           équilibre 33.43 · glouton crise 47 % / total 83 % · globales 38,7 % ❌
+À 0.7 le glouton s'effondre exactement comme l'étape 11 l'avait vu : sans empilement il n'a pas
+la caisse pour renouveler. RETENU 0.85. VALIDATION 100 graines, exit 0 : équilibre 39.28 →
+**37.00 M£** (−5,8 %), pionnier 35.32 → **33.63** (−4,8 %), part rivale 62 → **63 %**, glouton
+crise 39 %, globales 28 %, victoires 76/0/24, écart +10 %.
+LEÇON DE MÉTHODE : un audit externe se trie CONTRE LE CODE, pas contre l'intuition. Deux de ses
+trois constats reposaient sur une lecture du harnais sans ouvrir `game/` ni compter les
+échantillons — mais le troisième était exact et personne dans le projet ne l'avait vu.
+
 Retour playtest n°3 (pivot de direction artistique, demande propriétaire : « ça fait vieux ») :
 abandon de la police pixel au profit de la fonte lisse par défaut du moteur (antialiasée,
 re-rendue net par le stretch canvas_items), habillage « rétro moderne » : canevas charbon

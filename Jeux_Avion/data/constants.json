@@ -114,7 +114,8 @@
     "carnet_max_trim": 4,
     "seuil_renouvellement": 0.15,
     "age_min_renouvellement": 2,
-    "age_max_produit_rival": 6
+    "age_max_produit_rival": 6,
+    "empilement_maison": 0.85
   },
   "repu": {
     "par_livraison": 0.0025,
