@@ -7,19 +7,33 @@ const Sim := preload("res://sim/sim.gd")
 const Bots := preload("res://tests/bots.gd")
 
 const ECART_DOMINATION: float = 0.15
-const N_GRAINES: int = 100
 const TICK_DEBUT_CRISE: int = 403   # octobre 1929 (base 1922)
 const TICK_FIN_CRISE: int = 676     # fin 1934 (base 1922)
+# Une faillite avant cette date n'est pas une mort de CRISE, c'est une mort au démarrage :
+# le bot brûle sa trésorerie sur son premier prototype et coule avant sa première vente.
+# Mesuré à 3 % (9 campagnes sur 300) ; le seuil est un garde-fou anti-régression, pas une
+# cible à atteindre — on ajoute la MESURE avant d'en faire une contrainte.
+const ANNEE_DEMARRAGE: float = 1926.0
+const SEUIL_PRECOCE: float = 0.10
+
+# Réglable : `-s res://tests/balance.gd -- 20` pour une boucle courte (~2 min au lieu de 10).
+# 100 graines pour valider, 20 pour itérer — une boucle de 10 min rend l'équilibrage
+# physiquement impossible, on ne teste pas 20 hypothèses dans une soirée à ce prix.
+var n_graines: int = 100
 
 
 func _initialize() -> void:
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	if args.size() > 0 and args[0].is_valid_int():
+		n_graines = maxi(int(args[0]), 1)
+	print("harnais : %d graines × %d stratégies" % [n_graines, 3])
 	var data: Dictionary = Etat.charger_data()
 	var strats: Dictionary = Bots.strategies()
 	var noms: Array = Etat.cles_triees(strats)
 	var resultats: Dictionary = {}
 	for nom: String in noms:
 		var liste: Array = []
-		for graine: int in range(1, N_GRAINES + 1):
+		for graine: int in range(1, n_graines + 1):
 			liste.append(_campagne(graine, data, strats[nom]))
 		resultats[nom] = liste
 	_rapport(noms, resultats)
@@ -56,6 +70,7 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 	var faillites_glouton: float = 0.0
 	var medianes: Dictionary = {}
 	var faillites_glouton_crise: float = 0.0
+	var precoces_total: int = 0
 	for nom: String in noms:
 		var liste: Array = resultats[nom]
 		var n_f: int = 0
@@ -69,6 +84,8 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 				annees_faillite.append(Etat.AN0 + float(ft) / 52.0)
 				if ft >= TICK_DEBUT_CRISE and ft <= TICK_FIN_CRISE:
 					n_f_crise += 1
+				if Etat.AN0 + float(ft) / 52.0 < ANNEE_DEMARRAGE:
+					precoces_total += 1
 			else:
 				tresos.append(float(r["treso"]))
 			parts_rivales.append(float(r["part_rivale"]))
@@ -90,7 +107,7 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 			_mediane(tresos) / 1e6, _mediane(_parts_de(liste)) * 100.0])
 	# victoires croisées (même graine, meilleur score des 3)
 	var gagnants: Dictionary = {}
-	for i: int in range(N_GRAINES):
+	for i: int in range(n_graines):
 		var meilleur: String = ""
 		var score: float = -1e30
 		for nom: String in noms:
@@ -103,7 +120,7 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 	var pire_taux_victoire: float = 0.0
 	var champion: String = ""
 	for nom: String in noms:
-		var taux: float = float(gagnants.get(nom, 0)) / float(N_GRAINES)
+		var taux: float = float(gagnants.get(nom, 0)) / float(n_graines)
 		print("victoires %-18s : %3.0f%%" % [nom, taux * 100.0])
 		if taux > pire_taux_victoire:
 			champion = nom
@@ -121,7 +138,7 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 	var ecart: float = med_champion / maxf(med_second, 1.0) - 1.0
 	print("écart de trésorerie médiane %s vs meilleur autre : %+.0f %%" % [champion, ecart * 100.0])
 	# verdicts contre les cibles du GDD (§15.2 + §16)
-	var taux_faillites: float = float(faillites_total) / float(noms.size() * N_GRAINES)
+	var taux_faillites: float = float(faillites_total) / float(noms.size() * n_graines)
 	var part_rivale_med: float = _mediane(parts_rivales)
 	# Plafond relevé de 35 % à 50 % (décision propriétaire, playtest n°7) : les 35 % avaient été
 	# calibrés AVEC le bug de report de part au renouvellement rival, qui redistribuait
@@ -144,6 +161,13 @@ func _rapport(noms: Array, resultats: Dictionary) -> void:
 		pire_taux_victoire <= 0.60 or ecart <= ECART_DOMINATION)
 	_verdict(echecs, "rivaux à 40-70%% du marché cumulé (méd. %.0f%%)" % (part_rivale_med * 100.0),
 		part_rivale_med >= 0.40 and part_rivale_med <= 0.70)
+	# Mortalité de DÉMARRAGE, distincte de la crise : sans elle, une mort au tutoriel et une
+	# mort en 1931 se confondent dans « faillites globales », et un futur changement qui
+	# ferait couler les bots avant leur première vente passerait inaperçu.
+	var taux_precoce: float = float(precoces_total) / float(noms.size() * n_graines)
+	_verdict(echecs, "mortalité de démarrage < %.0f%% avant %d (%.0f%%)"
+		% [SEUIL_PRECOCE * 100.0, int(ANNEE_DEMARRAGE), taux_precoce * 100.0],
+		taux_precoce < SEUIL_PRECOCE)
 	if echecs.is_empty():
 		print("ÉQUILIBRAGE : TOUTES LES CIBLES SONT ATTEINTES")
 		quit(0)
