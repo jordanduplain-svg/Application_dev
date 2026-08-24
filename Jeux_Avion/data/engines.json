@@ -198,5 +198,16 @@
     "cout": 520000,
     "annee": 1944,
     "marque": "Rolls-Royce"
+  },
+  "centaurus": {
+    "nom": "Bristol Centaurus",
+    "type": "radial",
+    "puissance_cv": 2000,
+    "masse_kg": 1150,
+    "conso_kg_h": 470,
+    "fiabilite": 0.8,
+    "cout": 505000,
+    "annee": 1943,
+    "marque": "Bristol"
   }
 }

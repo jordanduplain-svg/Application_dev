@@ -305,7 +305,10 @@ func _test_designs(data: Dictionary) -> void:
 	state["tresorerie"] = 3000000.0
 	var design: Dictionary = {
 		"nom": "Brouillon", "annee": 1925.0, "formule": "biplan", "structure": "bois",
-		"moteur": str(Etat.cles_triees(data["engines"])[0]), "surface": 30.0,
+		# Moteur EXPLICITE d'époque : « le premier par ordre alphabétique » n'a aucun sens et
+			# casse au premier ajout de contenu — ajouter le Centaurus (1943, 2000 cv) l'a fait
+			# passer en tête et la fixture montait un 2000 cv sur un biplan en bois de 1925.
+			"moteur": "rr_eagle", "surface": 30.0,
 		"carburant_kg": 600.0, "charge_utile_kg": 300.0, "armement": 0, "features": [],
 	}
 	var uid_libre: String = "d%d" % int(state["prochain_id"])
@@ -393,7 +396,10 @@ func _fixture_evenements(data: Dictionary) -> Dictionary:
 		var uid_d: String = "d%d" % int(state["prochain_id"])
 		Sim.appliquer(state, data, {"type": "nouveau_design", "design": {
 			"nom": "Fix " + seg, "annee": 1925.0, "formule": "biplan", "structure": "bois",
-			"moteur": str(Etat.cles_triees(data["engines"])[0]), "surface": 30.0,
+			# Moteur EXPLICITE d'époque : « le premier par ordre alphabétique » n'a aucun sens et
+			# casse au premier ajout de contenu — ajouter le Centaurus (1943, 2000 cv) l'a fait
+			# passer en tête et la fixture montait un 2000 cv sur un biplan en bois de 1925.
+			"moteur": "rr_eagle", "surface": 30.0,
 			"carburant_kg": 600.0, "charge_utile_kg": 300.0, "armement": 0, "features": []}})
 		# Prix margé sur le coût réel : un prix en dur sous le coût fait vendre à perte
 		# et la fixture finit en faillite avant 1930 (vécu).
@@ -1327,7 +1333,14 @@ func _test_raids(data: Dictionary) -> void:
 	var nb_avant: int = (s2["catalogue"] as Dictionary).size()
 	Sim.appliquer(s2, data, {"type": "tenter_epreuve", "epreuve": "1930_croisiere_noire",
 		"produit": uid_court, "pilote": 0})
-	if bool(s2["palmares"][(s2["palmares"] as Array).size() - 1]["succes"]):
+	# `palmares` VIDE = l'épreuve a été refusée (produit inadapté, pilote absent...). On ne peut
+	# pas indexer size-1 sans ça : tout ajout de contenu (un moteur de plus) change les choix
+	# des rivaux, donc l'état du monde en 1930, donc l'issue de la tentative. Un test qui
+	# suppose qu'une action a réussi casse au premier ajout de data sans rien révéler de vrai.
+	var palm: Array = s2["palmares"]
+	if palm.is_empty():
+		echecs.append("raids : l'épreuve n'a même pas été tentée (produit ou pilote inéligible)")
+	elif bool(palm[palm.size() - 1]["succes"]):
 		if float(s2["catalogue"][uid_court]["specs"]["autonomie_km"]) < 2400.0 * 0.8:
 			echecs.append("raids : succès impossible avec une autonomie insuffisante")
 	if (s2["catalogue"] as Dictionary).size() != nb_avant:

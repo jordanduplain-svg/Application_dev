@@ -228,7 +228,7 @@ func _tests_ao(state: Dictionary, data: Dictionary) -> void:
 		Sim.tick(state, data)
 	var design: Dictionary = {
 		"nom": "Test AO", "annee": Marche.annee_de(state), "formule": "biplan", "structure": "bois",
-		"moteur": str(Etat.cles_triees(data["engines"])[0]), "surface": 18.0,
+		"moteur": "rr_eagle", "surface": 18.0,
 		"carburant_kg": 250.0, "charge_utile_kg": 0.0, "armement": 0, "features": [],
 	}
 	Sim.appliquer(state, data, {"type": "nouveau_design", "design": design})

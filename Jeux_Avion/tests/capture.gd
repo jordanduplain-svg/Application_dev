@@ -60,7 +60,7 @@ func _capturer() -> void:
 	var state: Dictionary = Sim.nouvelle_partie(3, data)
 	Sim.appliquer(state, data, {"type": "nouveau_design", "design": {
 		"nom": "Hirondelle I", "annee": 1925.0, "formule": "biplan", "structure": "bois",
-		"moteur": str(Etat.cles_triees(data["engines"])[0]), "surface": 30.0,
+		"moteur": "rr_eagle", "surface": 30.0,
 		"carburant_kg": 600.0, "charge_utile_kg": 300.0, "armement": 0, "features": []}})
 	var uid_design: String = str(Etat.cles_triees(state["designs"])[0])
 	var cout: float = float(state["designs"][uid_design]["specs"]["cout_unitaire"])
