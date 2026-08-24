@@ -54,7 +54,13 @@ static func specs(projet: Dictionary, data: Dictionary, annee: float) -> Diction
 		puissance *= float(cm["radial_puissance"])
 	# Le radial est plus léger (refroidi par air, pas de circuit d'eau) mais traîne plus —
 	# la traînée est l'affaire de aircraft.gd, ici c'est la masse.
-	var masse: float = cyl * float(cm["kg_par_litre"]) * (float(cm["radial_masse"]) if radial else 1.0)
+	# COURBE et non constante : à `kg_par_litre` fixe, la masse au cheval d'un moteur maison
+	# décroît mécaniquement avec la puissance au litre (1.04 kg/cv en 1922, 0.36 en 1945) et
+	# passe sous TOUT le catalogue dès 1939 — un bureau intégré finissait meilleur motoriste
+	# que Rolls-Royce (playtest n°14 : 0.436 contre 0.602 en 1940, +5 pts de fiabilité avion
+	# et −28 k£). Un moteur plus gavé exige une construction plus robuste : la masse au litre
+	# suit l'époque. Le département achète du sur-mesure et du prix, jamais de la supériorité.
+	var masse: float = cyl * _interp(cm["kg_par_litre"], annee) 		* (float(cm["radial_masse"]) if radial else 1.0)
 	if suralim:
 		masse += float(cm["suralim_masse"])
 	# La fiabilité se paie : gaver un moteur (suralimentation, puissance spécifique élevée)
@@ -205,7 +211,7 @@ static func reevaluer_prix(state: Dictionary, data: Dictionary) -> void:
 			# Fiche d'avant la mémorisation du projet : le soin se déduit de la fiabilité
 			# (fiab = base + soin×pente − stress − démesure), les autres termes étant calculables.
 			var cv_l: float = _interp(cm["cv_par_litre"], float(m["annee"]))
-			var cyl: float = float(m["masse_kg"]) / maxf(float(cm["kg_par_litre"]), 0.001)
+			var cyl: float = float(m["masse_kg"]) / maxf(_interp(cm["kg_par_litre"], float(m["annee"])), 0.001)
 			var stress: float = maxf(cv_l - float(cm["cv_par_litre_sain"]), 0.0) * float(cm["k_stress"])
 			var dem: float = maxf(cyl - float(cm["cyl_saine"]), 0.0) * float(cm["fiab_par_litre_au_dela"])
 			soin = clampf((float(m["fiabilite"]) - float(cm["fiab_base"]) + stress + dem)

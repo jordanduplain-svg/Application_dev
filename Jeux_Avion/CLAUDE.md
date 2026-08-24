@@ -1511,6 +1511,56 @@ exigences (un chasseur de haute altitude de 1943 à 470 km/h casse la vraisembla
 deux fois moins cher au cheval que tous les autres (outlier qui déséquilibrerait tout le jeu), et
 en 1943 la cellule et l'équipement pèsent autant que le moteur.
 
+Retour playtest n°14 — LE DÉPARTEMENT MOTEURS ÉTAIT MEILLEUR MOTORISTE QUE ROLLS-ROYCE.
+DÉCLENCHEUR : remarque du joueur « je n'ai utilisé le Sabre qu'une seule fois », alors que je
+venais d'accuser les moteurs-pièges (`bots_ignorent`) de porter sa domination de 1941-1943.
+VÉRIFICATION sur ses designs : de 1936 à 1940 il vole sur `mm33`/`mm39`/`mm42` — SES PROPRES
+moteurs. Le catalogue n'y était pour rien. Sans sa remarque, je corrigeais le mauvais système.
+CAUSE : `kg_par_litre` était une CONSTANTE (13.5) alors que `cv_par_litre` monte de 13 à 38 avec
+l'époque. La masse au cheval d'un moteur maison décroissait donc mécaniquement — 1.038 kg/cv en
+1922, 0.436 en 1940, 0.355 en 1945 — pendant que le catalogue stagne entre 0.442 et 0.602. **À
+partir de 1939 le moteur maison était le plus léger du jeu**, et un moteur léger c'est de la
+vitesse et du plafond gratuits. MESURE À PUISSANCE ÉGALE, même cellule (sonde) :
+  1936  catalogue 0.547 kg/cv · maison 0.563 — avion : égalité (les garde-fous marchent)
+  1940  catalogue 0.602 · maison 0.436 — avion : +305 m de plafond, +5 pts de fiab, −28 k£
+  1943  catalogue 0.491 · maison 0.383 — avion : −6 pts de fiab (la démesure mord bien)
+L'équilibrage de l'étape 13 avait vérifié la PUISSANCE et le COÛT du département (deux
+correctifs : démesure au-delà de `cyl_saine`, `cout_par_cv`). Jamais la MASSE. La fenêtre
+1938-1942 était donc ouverte, et c'est elle qui porte les 69-83 % de part du joueur.
+CORRECTIF : `kg_par_litre` devient une COURBE comme `cv_par_litre` — un moteur plus gavé exige
+une construction plus robuste. [[1922,13.5],[1936,14.0],[1940,16.4],[1945,18.0]], calée pour que
+le maison reste toujours légèrement PLUS LOURD que le meilleur du catalogue de son époque
+(kg/cv maison : 1.038 → 0.583 → 0.529 → 0.474). `_interp` aussi dans `reevaluer_prix`, qui
+reconstruit la cylindrée depuis la masse à l'année du moteur. RÉSULTAT MESURÉ : 1936 maison
+0.584 contre 0.547 (plus lourd) ; 1940 +129 m et +3 pts au lieu de +305 m et +5 pts ; 1943
+égalité de masse et −10 pts de fiabilité. Il reste au département un avantage de PRIX (−20 k£)
+et un peu de fiabilité — exactement ce que l'étape 13 disait vouloir : « le département achète
+du prix et du sur-mesure, pas de la supériorité ».
+NEUTRE AU HARNAIS PAR CONSTRUCTION : `Moteurs.specs` n'est appelé que pour un moteur maison, et
+les bots n'en fondent jamais (exit 0, chiffres dans le bruit).
+CONTENU : Bristol Centaurus 1943 (2000 cv, 1150 kg, fiab 0.80, 252 £/cv). Le drapeau
+`bots_ignorent` laissait les rivaux à 1615 cv en 1943, seule année où le Sabre II n'a pas de
+concurrent autorisé — écart mesuré +69 km/h (et +84 en 1941 face au Vulture). Avec le
+Centaurus les rivaux passent de 642 à 690 km/h, l'écart tombe à +21 km/h comme en 1944, et le
+piège redevient un vrai arbitrage (180 cv de plus contre 9 points de fiabilité).
+⚠ TROIS BUGS LATENTS DU HARNAIS exposés par ce seul ajout de contenu, tous verts depuis des
+mois pour de mauvaises raisons :
+(1) `_test_raids` indexait `palmares[size-1]` sans vérifier qu'une tentative avait eu lieu —
+index −1 dès que l'état du monde change. Désormais un échec explicite si l'épreuve n'est pas
+tentée. (2) TROIS fixtures montaient `Etat.cles_triees(data["engines"])[0]`, soit « le premier
+moteur par ORDRE ALPHABÉTIQUE » : `centaurus` passant en tête, elles collaient un 2000 cv de
+1943 sur un biplan en bois de 1925. Remplacé par `"rr_eagle"` explicite dans run.gd, ui.gd et
+capture.gd. RÈGLE : **une fixture ne désigne JAMAIS une donnée par sa position dans une liste
+triée** — l'ordre alphabétique n'a aucun rapport avec le sens, il change à chaque ajout de
+contenu, et le test se met à mesurer autre chose sans jamais devenir rouge.
+BUG D'UI CORRIGÉ (signalé par le joueur, capture à l'appui) : l'alerte de série déficitaire
+ajoutée au playtest n°13 comparait `solde_unitaire` (60-70 % du prix, l'acompte étant déjà
+encaissé) au coût des 100 % — elle criait « à perte » sur une série à +33 835 £/appareil.
+C'est EXACTEMENT le faux avertissement déjà corrigé au playtest n°7 (point (4)), réintroduit
+par moi dans une autre fonction sans relire ma propre documentation. Le contrat mémorise
+désormais `prix_unitaire` à la signature (`part_acompte_de` ne pouvait pas servir : il
+recalculerait la jauge ministère d'aujourd'hui, pas celle du jour de la signature).
+
 Retour playtest n°3 (pivot de direction artistique, demande propriétaire : « ça fait vieux ») :
 abandon de la police pixel au profit de la fonte lisse par défaut du moteur (antialiasée,
 re-rendue net par le stretch canvas_items), habillage « rétro moderne » : canevas charbon
