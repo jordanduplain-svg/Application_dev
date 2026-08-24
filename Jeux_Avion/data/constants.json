@@ -499,7 +499,7 @@
     "suralim_fiab": 0.05,
     "suralim_cout": 1.05,
     "conso_par_cv": 0.235,
-    "fiab_base": 0.8,
+    "fiab_base": 0.72,
     "fiab_par_soin": 0.12,
     "fiab_min": 0.55,
     "fiab_max": 0.95,

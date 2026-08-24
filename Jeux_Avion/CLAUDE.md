@@ -1536,8 +1536,26 @@ reconstruit la cylindrée depuis la masse à l'année du moteur. RÉSULTAT MESUR
 égalité de masse et −10 pts de fiabilité. Il reste au département un avantage de PRIX (−20 k£)
 et un peu de fiabilité — exactement ce que l'étape 13 disait vouloir : « le département achète
 du prix et du sur-mesure, pas de la supériorité ».
+PUIS LA FIABILITÉ, second volet du même déséquilibre (mesuré après la masse). `fiab_base` 0.80
++ `fiab_par_soin` 0.12 donnait un plafond de 0.92 quand le catalogue culmine à 0.84. Sonde
+« fiabilité atteignable vs meilleur du catalogue de l'époque » (le `<<` marque un dépassement) :
+  1930  catalogue 0.80 · maison 0.92 à soin 1.0 ET **0.86 à soin 0.5** — il dépassait même en bâclant
+  1936  catalogue 0.80 · maison 0.90 / 0.84
+  1940  catalogue 0.80 · maison 0.85 / 0.79
+  1943  catalogue 0.84 · maison 0.83 — seule époque où il ne dépassait pas
+De 1930 à 1940, +5 à +12 points sur le meilleur moteur du commerce. Les `mm33` et `mm39` du
+joueur étaient tous deux à 0.88.
+CORRECTIF : `fiab_base` 0.80 → **0.72**. DOSAGE COMPARÉ : à 0.68 le département n'est plus
+supérieur à RIEN (0.80 en 1930 puis toujours en dessous) — combiné à la correction de masse il
+devient inférieur sur tous les axes sauf le prix, et payer 900 k£ + un banc n'a plus de sens :
+du contenu mort. À 0.72 l'arc est juste — 0.84 contre 0.80 en 1930 (le commerce est médiocre),
+0.82 en 1936, 0.77 en 1940, 0.75 en 1943 : **l'industrie te rattrape puis te dépasse**, ce qui
+crée une vraie décision de milieu de partie (continuer ses moteurs ou repasser au catalogue).
 NEUTRE AU HARNAIS PAR CONSTRUCTION : `Moteurs.specs` n'est appelé que pour un moteur maison, et
 les bots n'en fondent jamais (exit 0, chiffres dans le bruit).
+LEÇON : un sous-système optionnel se vérifie sur TOUS les axes qu'il produit. L'étape 13 avait
+contrôlé puissance et coût, laissant masse ET fiabilité non bornées — deux avantages gratuits
+qui ont porté la domination du joueur pendant douze ans sans qu'aucun test ne s'en aperçoive.
 CONTENU : Bristol Centaurus 1943 (2000 cv, 1150 kg, fiab 0.80, 252 £/cv). Le drapeau
 `bots_ignorent` laissait les rivaux à 1615 cv en 1943, seule année où le Sabre II n'a pas de
 concurrent autorisé — écart mesuré +69 km/h (et +84 en 1941 face au Vulture). Avec le
