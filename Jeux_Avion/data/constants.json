@@ -499,7 +499,7 @@
     "suralim_fiab": 0.05,
     "suralim_cout": 1.05,
     "conso_par_cv": 0.235,
-    "fiab_base": 0.72,
+    "fiab_base": 0.78,
     "fiab_par_soin": 0.12,
     "fiab_min": 0.55,
     "fiab_max": 0.95,
@@ -511,7 +511,7 @@
     "banc_sem_suralim": 10,
     "cyl_saine": 24,
     "fiab_par_litre_au_dela": 0.009,
-    "cout_par_cv": 165
+    "cout_par_cv": 148
   },
   "impots": {
     "annee_debut": 1937,

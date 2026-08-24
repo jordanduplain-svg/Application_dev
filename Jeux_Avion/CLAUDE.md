@@ -1545,12 +1545,24 @@ PUIS LA FIABILITÉ, second volet du même déséquilibre (mesuré après la mass
   1943  catalogue 0.84 · maison 0.83 — seule époque où il ne dépassait pas
 De 1930 à 1940, +5 à +12 points sur le meilleur moteur du commerce. Les `mm33` et `mm39` du
 joueur étaient tous deux à 0.88.
-CORRECTIF : `fiab_base` 0.80 → **0.72**. DOSAGE COMPARÉ : à 0.68 le département n'est plus
-supérieur à RIEN (0.80 en 1930 puis toujours en dessous) — combiné à la correction de masse il
-devient inférieur sur tous les axes sauf le prix, et payer 900 k£ + un banc n'a plus de sens :
-du contenu mort. À 0.72 l'arc est juste — 0.84 contre 0.80 en 1930 (le commerce est médiocre),
-0.82 en 1936, 0.77 en 1940, 0.75 en 1943 : **l'industrie te rattrape puis te dépasse**, ce qui
-crée une vraie décision de milieu de partie (continuer ses moteurs ou repasser au catalogue).
+CORRECTIF, EN DEUX TEMPS — ET LE PREMIER ÉTAIT UNE ERREUR DE RÉFÉRENCE. J'ai d'abord posé
+`fiab_base` à 0.72, calibré contre le moteur le plus FIABLE du catalogue (Jupiter, 420 cv,
+0.80). Or celui qu'on monte réellement est le plus PUISSANT (hs_12nb 0.76, hs_12y 0.77,
+gr_14n 0.75). Sonde « que vaut encore le département », à PUISSANCE ÉGALE :
+  1930  catalogue 650 cv fiab 0.76 à 140 000 £ · maison fiab 0.71 à 155 513 £ (+15 513 £ !)
+  1936  catalogue 860 cv fiab 0.77 · maison 0.71 · économie 4 245 £
+  1940  catalogue 1030 cv fiab 0.75 · maison 0.69 · économie 13 572 £
+  à fiabilité égale : −91 à −202 cv sur le catalogue
+Plus cher ET moins fiable, pour 900 k£ de fondation : **contenu mort**. Le joueur l'a demandé
+en une phrase (« c'est quoi l'avantage de dev un moteur du coup ») et la mesure lui a donné
+raison. RETENU : `fiab_base` **0.78** + `cout_par_cv` 165 → **148**. Résultat à puissance égale :
+fiabilité à PARITÉ (0.77/0.77/0.75 contre 0.76/0.77/0.75) et prix −15 % (−25 k£ en 1936,
+−39 k£ en 1940), amortissement des 900 k£ en 23 à 36 appareils. À 0.80 on retombe dans
+l'ancien travers (+2 à +4 pts et +52 à +74 cv sur le catalogue).
+LEÇON DE MÉTHODE : **une calibration se fait contre la référence QU'ON UTILISE, pas contre le
+meilleur d'un axe isolé.** Comparer au moteur le plus fiable du catalogue quand le joueur monte
+le plus puissant fausse le verdict de 5 points — assez pour transformer un rééquilibrage en
+suppression de contenu.
 NEUTRE AU HARNAIS PAR CONSTRUCTION : `Moteurs.specs` n'est appelé que pour un moteur maison, et
 les bots n'en fondent jamais (exit 0, chiffres dans le bruit).
 LEÇON : un sous-système optionnel se vérifie sur TOUS les axes qu'il produit. L'étape 13 avait
