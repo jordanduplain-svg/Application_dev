@@ -257,6 +257,7 @@ func _sur_tick() -> void:
 	if not horloge.is_stopped() and str(state["fin"]) == "":
 		_demarrer_barre_temps()
 	if int(state["tick"]) % 13 == 0:
+		_alerter_series_deficitaires()
 		var livrees: float = float(state["stats"]["livraisons"]) - _livraisons_prec
 		# Marge (prix − coût de production), pas le CA brut : c'est ce qui bouge
 		# réellement la trésorerie, sans quoi le joueur voit "420 000 £" au bilan
@@ -349,6 +350,27 @@ func _verifier_overlays() -> void:
 		var une: Dictionary = state["presse"][0]
 		_toast("%s — %s" % [str(une["titre"]), str(une["corps"])])
 		Sim.appliquer(state, data, {"type": "lire_presse"})
+
+
+# Série d'État livrée SOUS son coût de fabrication : un rappel par trimestre, tant qu'il
+# reste des appareils à sortir. L'avertissement « ⚠ À PERTE » de l'écran Concours ne se voit
+# qu'AU MOMENT DE CANDIDATER, or une série de 120 appareils se livre sur deux ans — le joueur
+# ne découvrait la saignée qu'au bilan annuel (playtest n°13 : −21 M£ sur un seul programme,
+# vus douze mois trop tard). Lecture seule, zéro clé de state, zéro impact sim.
+func _alerter_series_deficitaires() -> void:
+	for c_v: Variant in (state["ao"] as Dictionary).get("contrats", []):
+		var c: Dictionary = c_v
+		var marge: float = float(c.get("solde_unitaire", 0.0)) - float(c.get("cout_unitaire", 0.0))
+		if marge >= 0.0 or float(c.get("restant", 0.0)) <= 0.0:
+			continue
+		var nom: String = str(c.get("ao", ""))
+		if (data["contracts"]["programmes"] as Dictionary).has(nom):
+			nom = str(data["contracts"]["programmes"][nom]["nom"])
+		# `-marge` : « à perte » porte déjà le signe, « à perte : -208 838 £ » serait un
+		# double négatif. On annonce aussi le total restant à saigner, c'est lui qui décide.
+		_toast(tr("⚠ %s livré à perte : %s £ par appareil, %d restants (soit %s £ à venir).")
+			% [nom, _format_francs(-marge), int(float(c["restant"])),
+			_format_francs(-marge * float(c["restant"]))])
 
 
 # Nouvelles ouvertures (concours, courses, raids) → toast discret en bas à droite.

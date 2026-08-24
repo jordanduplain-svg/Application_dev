@@ -533,6 +533,17 @@ static func _rivaux_reagir(state: Dictionary, data: Dictionary) -> void:
 			carnet_total += float(riv["catalogue"][uid]["carnet"])
 		if carnet_total > float(regles["exp_carnet_mult"]) * capa and capa < float(regles["capacite_max"]):
 			capa += 1.0
+		# SECOND SOURCE : la croissance ci-dessus dépend du carnet PROPRE du rival — donc un
+		# joueur qui prend le marché assèche leur carnet, leur capacité ne grandit plus, et il
+		# prend encore plus. Spirale mesurée sur une partie réelle : rival figé à 13/trim contre
+		# 64 au joueur, part joueur 65-81 % de 1932 à 1941. Même défaut que leur R&D, corrigé à
+		# l'étape (F) mais jamais pour les chaînes. Un ministère de l'Air ne laisse pas UN seul
+		# fournisseur tenir l'industrie : il finance l'outil d'un second (shadow factories,
+		# 1936-1940). Le rival rattrape donc jusqu'à `mobilisation_capacite` × la capacité du
+		# PREMIER producteur. 0 = mécanique inactive (comportement historique).
+		var mob: float = float(regles.get("mobilisation_capacite", 0.0))
+		if mob > 0.0 and capa < float(regles["capacite_max"]) 				and capa < Production.capacite(state, data) * mob:
+			capa += 1.0
 		riv["capacite"] = capa
 		for uid: String in Etat.cles_triees(riv["catalogue"]):
 			var p: Dictionary = riv["catalogue"][uid]

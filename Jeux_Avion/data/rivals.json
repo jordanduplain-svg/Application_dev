@@ -107,6 +107,7 @@
       "seuil_part": 0.5,
       "trimestres": 8,
       "capacite_max": 48
-    }
+    },
+    "mobilisation_capacite": 0.5
   }
 }

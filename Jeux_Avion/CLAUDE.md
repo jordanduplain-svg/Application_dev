@@ -1460,6 +1460,57 @@ bloque : sinon le test passerait au vert pour la mauvaise raison). PIÈGE RÉSOL
 y est avancée de 4 ans AVANT la pose du brevet ; l'avancer après le faisait expirer (il est posé
 à `tick + 208`, et 4 ans = 208 semaines).
 
+Retour playtest n°13 — AUDIT COMPLET D'UNE PARTIE (15,46 M£, verdict « pilier » 0.855,
+14 concours gagnés sur 18, réputation militaire 1.000, `alloc_marche` 0.00).
+⚠ ERREUR DE MÉTHODE À NE PAS REFAIRE : j'ai d'abord conclu « le marché fonctionne enfin » sur
+la photo du DERNIER trimestre (joueur 46,2 %, rivaux 53,8 %). Le joueur a corrigé — « je venais
+de sortir un chasseur et de virer tous les autres » — et l'HISTORIQUE lui donne raison : part
+joueur tous segments 33 % (1922) → 68 % (1932) → 71 % (1937) → **81 % (1940)** → 66 % (1941).
+Les 46 % étaient un creux de renouvellement. **Un cliff instantané ne mesure pas une domination :
+lire `marche[seg]["historique"]`, jamais `parts`.**
+CAUSE MESURÉE — SPIRALE DE CAPACITÉ : joueur 64/trim (4e palier), rival fusionné figé à
+**13/trim**, alors que `fusion.capacite_max` valait 48. Le plafond n'a jamais servi : dans
+`_rivaux_reagir`, un rival ne gagne de la capacité que si SON PROPRE carnet dépasse
+`exp_carnet_mult` × sa capacité. Le joueur prend le marché → leur carnet reste vide → ils ne
+grandissent pas → il prend encore plus. EXACTEMENT le défaut de leur R&D corrigé à l'étape (F),
+jamais répercuté sur les chaînes.
+CORRECTIF — SECOND SOURCE : `mobilisation_capacite` (rivals.json, 0 = inactif) ; un rival
+rattrape jusqu'à `mob` × la capacité du PREMIER producteur, indépendamment de son carnet. Un
+ministère de l'Air ne laisse pas un fournisseur unique tenir l'industrie (shadow factories
+1936-1940). PREMIÈRE FORMULATION JETÉE : « grandir quand la demande dépasse la capacité de
+l'industrie » — ne déclenche JAMAIS, la demande totale (150/an en 1940) est bien SOUS la
+capacité (308/an). Le problème n'est pas que l'industrie ne sait pas produire, c'est qu'UNE
+maison détient tout l'outil : c'est la CONCENTRATION qu'il faut mesurer, pas la pénurie.
+DOSAGE (30 graines) : 0.0 équilibre 37.81 / rivaux 62 % · **0.5 → 36.05 / 64 %** · 0.75 → 35.42 /
+67 % mais glouton total 77 % et globales 34 % (plafond 35, trop près du bord). RETENU 0.5.
+VALIDATION 100 graines, exit 0 : équilibre 36.48 M£, pionnier 33.39, rivaux 64 %, glouton crise
+39 %, globales 30 %, victoires 75/0/25, écart +9 %. Effet harnais MODESTE et c'est attendu — les
+bots ne dépassent pas le palier 3 (32/trim), donc le rattrapage vise 16, niveau qu'ils
+atteignaient déjà par leur carnet. **La mécanique ne mord que face à un 4e palier**, situation
+du joueur : son rival passe de 13 à ~32/trim.
+ALERTE DE SÉRIE DÉFICITAIRE (`main.gd _alerter_series_deficitaires`, appelée au trimestre) :
+l'avertissement « ⚠ À PERTE » de l'écran Concours ne se voit qu'AU MOMENT DE CANDIDATER, or une
+série de 120 appareils se livre sur deux ans — le joueur ne découvrait la saignée qu'au bilan
+annuel. Désormais un toast par trimestre : « ⚠ F.6/43 livré à perte : 209 000 £ par appareil,
+47 restants (soit 9 823 000 £ à venir) ». Lecture seule, zéro clé de state, zéro impact sim.
+`-marge` et non `marge` : « à perte : -209 000 £ » serait un double négatif.
+CONTRATS D'ÉTAT SOUS-PAYÉS — CONSTATÉ, NON CORRIGÉ (décision propriétaire : « j'ai déjà trop
+d'argent »). `1940_bataille` paie 300 k£ quand un chasseur conforme de 1940 en coûte 440 k
+(−21,0 M£ d'exposition sur 150 appareils) ; `1943_altitude` paie 450 k pour un cahier à 640 km/h
+qui, MESURÉ par sonde (chasseur sobre, Sabre II) coûte **934 352 £** — exposition −21,2 M£.
+Cumul −45,7 M£, ce qui explique les −40,3 M£ de 1944 (dont 23,0 M£ d'impôt). ORIGINE : la
+référence de coût du marché a été réactualisée à la passe n°10 (450 k → 780 k en 1945) SANS
+toucher à `contracts.json` — avant, `1943_altitude` payait 106 % du coût conforme, il en paie
+72 %. RÉGRESSION ASSUMÉE : ces concours de guerre sont désormais des PIÈGES, rendus LISIBLES par
+l'alerte trimestrielle. Ne pas candidater est le bon jeu — c'est ce que fait `bots.gd`.
+TROIS ISSUES EXAMINÉES ET ÉCARTÉES : relever `prix_unitaire` (enrichit le joueur) ; baisser les
+exigences (un chasseur de haute altitude de 1943 à 470 km/h casse la vraisemblance) ; coût majoré
+à `max(prix, coût × 1.05)` (historiquement juste mais ajoute de l'argent). Proposition joueur
+« ajouter un moteur qui fasse le taf » : ÉCARTÉE sur mesure — le catalogue moteur est cohérent à
+242-272 £/cv sur toute la période, un moteur remplissant le cahier dans son budget devrait coûter
+deux fois moins cher au cheval que tous les autres (outlier qui déséquilibrerait tout le jeu), et
+en 1943 la cellule et l'équipement pèsent autant que le moteur.
+
 Retour playtest n°3 (pivot de direction artistique, demande propriétaire : « ça fait vieux ») :
 abandon de la police pixel au profit de la fonte lisse par défaut du moteur (antialiasée,
 re-rendue net par le stretch canvas_items), habillage « rétro moderne » : canevas charbon
