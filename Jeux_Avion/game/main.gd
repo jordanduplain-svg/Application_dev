@@ -360,7 +360,14 @@ func _verifier_overlays() -> void:
 func _alerter_series_deficitaires() -> void:
 	for c_v: Variant in (state["ao"] as Dictionary).get("contrats", []):
 		var c: Dictionary = c_v
-		var marge: float = float(c.get("solde_unitaire", 0.0)) - float(c.get("cout_unitaire", 0.0))
+		# Le PRIX PLEIN, jamais le solde : l'acompte est déjà encaissé, donc comparer les
+		# 60-70 % restants au coût déclare « à perte » une série parfaitement rentable
+		# (vécu : 300 000 £/appareil, marge réelle +33 835, alerte quand même). Repli sur
+		# le prix du programme en data pour les séries signées avant ce champ.
+		var prix_u: float = float(c.get("prix_unitaire", 0.0))
+		if prix_u <= 0.0 and (data["contracts"]["programmes"] as Dictionary).has(str(c.get("ao", ""))):
+			prix_u = float(data["contracts"]["programmes"][str(c["ao"])]["prix_unitaire"])
+		var marge: float = prix_u - float(c.get("cout_unitaire", 0.0))
 		if marge >= 0.0 or float(c.get("restant", 0.0)) <= 0.0:
 			continue
 		var nom: String = str(c.get("ao", ""))

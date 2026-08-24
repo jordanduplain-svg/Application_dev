@@ -209,6 +209,12 @@ static func _resoudre(state: Dictionary, data: Dictionary, id_ao: String, ao: Di
 			# Le produit vainqueur, pour attribuer les livraisons de série à SA ligne au Marché.
 			"produit": uid_g,
 			"restant": float(ao["volume"]),
+			# Prix PLEIN mémorisé à la signature : le solde seul ne dit pas si la série est
+			# rentable (il vaut 60-70 % du prix, l'acompte ayant déjà été encaissé), et
+			# `part_acompte_de` recalculerait la jauge ministère d'AUJOURD'HUI, pas celle du
+			# jour de la signature. Sans ce champ, toute alerte de marge compare les 70 %
+			# restants au coût des 100 % — le faux avertissement déjà corrigé une fois.
+			"prix_unitaire": float(ao["prix_unitaire"]),
 			"solde_unitaire": float(ao["prix_unitaire"]) * (1.0 - part_acompte),
 			"cout_unitaire": float(specs_g["cout_unitaire"]),
 			"fiabilite": float(specs_g["fiabilite"]),
