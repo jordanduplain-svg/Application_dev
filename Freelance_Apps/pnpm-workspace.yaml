@@ -1,6 +1,0 @@
-# Workspace pnpm — limité à l'app desktop.
-# (apps/api et apps/mobile, vestiges du prototype client/serveur, ont été supprimés
-#  le 14/06 — récupérables via l'historique git si besoin.)
-packages:
-  - 'apps/desktop'
-  - 'packages/*'
