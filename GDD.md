@@ -121,6 +121,32 @@ fois plus cher. Il pousse quand même. Tout le jeu est dans cette phrase.
 
 ### Calibration obligatoire
 
+### Le catalogue — plusieurs recettes à la fois
+
+**Jusqu'à 3 recettes actives simultanément.** Chacune a ses six paramètres, ses sept specs, sa
+ligne de production et son segment visé.
+
+Sans catalogue, le joueur choisit un segment et abandonne les deux autres — deux tiers de
+`market.gd` (§4) ne servent alors à rien, et les critères pondérés des segments deviennent
+décoratifs.
+
+**Ce que le catalogue rend jouable :** les trois segments ont des critères orthogonaux — `rue`
+veut du coût, `haut_de_gamme` veut de la pureté. Les servir tous les trois demande des recettes
+différentes, donc des lignes de production différentes, donc des coûts fixes que le joueur
+n'aura pas les moyens de tripler tôt.
+
+**Le piège, qui est déjà dans les formules :** `instabilite_neuro = puissance^2.2 − …`, et
+`haut_de_gamme` est le segment qui exige la plus forte pureté. **La recette la plus rentable
+est mécaniquement celle qui charge le plus vite** (§8). Le joueur qui diversifie vers le haut
+de gamme accélère son propre acte III sans avoir rien choisi de tel.
+
+Le vieillissement du catalogue vient de `bureau-etudes` — déjà écrit, déjà testé : une recette
+qui n'est pas renouvelée perd son attractivité à mesure que les rivaux rattrapent.
+
+`ponytail:` **3 recettes maximum.** Au-delà, l'écran de conception devient un tableur et les
+bots produisent des combinaisons illisibles.
+### Calibration obligatoire (suite)
+
 Trois produits de référence en `data/calibration.json`, tolérance 5 %, testés dans `tests/run.gd` :
 un produit de rue bon marché, un produit haut de gamme, un produit extrême (`instabilite_neuro > 0.8`).
 Toute modification des formules casse ce test avant de casser l'équilibrage.
@@ -150,13 +176,13 @@ Elles correspondent exactement aux trois piliers du jeu — et aux trois jalons 
 | **Logistique** | jalon 2 | engins, capacités, `−usure`, `−p_saisie`, classes d'arêtes nouvelles (haute mer, corridors aériens) | II |
 | **Influence** | jalon 3 | paliers de contacts, capacité et taux de blanchiment, contre-espionnage (`+decroissance` de visibilité), fiabilité d'élimination | II-III |
 
-**7 nœuds par branche, 21 au total.** C'est une révision du plafond de §17 (12), et elle a un
+**7 nœuds par branche, 22 au total (Chimie en a 8).** C'est une révision du plafond de §17 (12), et elle a un
 coût qu'il faut nommer : **plus de nœuds = un espace de stratégies plus large = des bots plus
 difficiles à lire.** La raison du plafond d'origine reste valable ; 21 est le maximum qui tient
 encore dans un harnais à 4 bots, et il ne doit pas augmenter ensuite.
 
-Si §19.3 est adopté (le remède fabricable par le joueur), il devient le 8ᵉ nœud de Chimie —
-terminal, ruineux, et le seul qui n'ouvre pas un choix mais une fin.
+**Chimie a un 8ᵉ nœud** : le remède fabricable par le joueur (§10) — terminal, ruineux, et le
+seul de l'arbre qui n'ouvre pas un choix mais une fin. 22 nœuds au total.
 
 ### Ce que la recherche ne fait jamais
 
@@ -224,6 +250,27 @@ système de gestion plutôt qu'un menu de prix.
 > les deux fusionnent — un engin dont on ne peut pas énoncer la différence en une phrase
 > est de la décoration.
 
+### Combien d'engins ?
+
+**Autant qu'on peut en payer.** Un engin acheté est une **instance** : son propre `id`, sa
+propre `usure`, son propre nœud d'attache. Trois go-fast sont trois objets distincts, dont
+l'un peut être neuf, l'autre à bout et le troisième saisi la semaine dernière.
+
+**Aucun plafond n'est codé.** Il y en a trois, et ils sont tous économiques :
+
+| Frein | Comment il mord |
+|---|---|
+| **L'entretien** | il est hebdomadaire, en argent propre, et le propre est la ressource rare (§5) |
+| **La visibilité passive** | `Σ visibilite_passive` — chaque unité compte, une flotte est voyante à quai |
+| **L'équipage** | chaque engin réclame des hommes, donc des salaires et de la loyauté (§6) |
+
+Et un quatrième, indirect mais décisif : **un engin de plus n'augmente le revenu que si le
+blanchiment peut absorber ce qu'il rapporte.** Le sixième sous-marin d'un joueur saturé ne
+produit que du liquide sale immobilisé et de la visibilité. Le plafond réel de la flotte n'est
+pas dans `vehicules.json`, il est dans `commerces.json`.
+
+C'est le même mécanisme que partout ailleurs dans ce document : la limite n'est jamais une
+règle, c'est une conséquence.
 ### Usure et entretien
 
 ```
@@ -299,6 +346,16 @@ plafonnée. Un produit très addictif fait croître son propre marché — jusqu
 
 Deux cartels, mêmes formules que le joueur, budget R&D simulé, seed. Ils meurent en acte III
 quand l'instabilité de leur nœud d'origine dépasse 0.6. `ponytail:` pas de faillite avant l'acte III.
+
+**Un troisième emplacement est réservé, vide au départ.** Un lieutenant qui trahit (§6) le
+remplit : il devient un rival **nommé**, avec la recette du joueur **figée au moment de la
+trahison**, le nœud qu'il a emporté, et son stock. Il joue ensuite avec les mêmes formules que
+les deux autres.
+
+Coût technique : un emplacement dans `rivaux.json` initialisé à l'exécution. Effet : la
+trahison cesse d'être une perte comptable oubliée en dix semaines. Un rival qui vend ton
+produit d'il y a trois ans est une punition qui se lit sur la carte pendant tout le reste de
+la partie — et qui vieillit, puisque sa recette ne bouge plus.
 
 ---
 
@@ -493,7 +550,7 @@ affectation), plus deux attributs :
 | Attribut | Effet |
 |---|---|
 | `loyaute` 0-1 | baisse si moral bas, si non payé, si un autre monte trop vite |
-| `ambition` 0-1 | haute ambition + basse loyauté = **trahison** (part avec un nœud et son stock) |
+| `ambition` 0-1 | haute ambition + basse loyauté = **trahison** (part avec un nœud, son stock, et ta recette) |
 
 ### Postes
 
@@ -638,6 +695,28 @@ urgence                   = instabilite / 100
 capacite_institutionnelle = max(0, 1 − instabilite / 80)
 ```
 
+### La troisième voie — le fabriquer soi-même
+
+Le joueur a la formule. Personne n'est mieux placé pour concevoir l'antidote que celui qui a
+conçu le produit.
+
+**8ᵉ nœud de la branche Chimie** (§2bis) : terminal, ruineux, et le seul de l'arbre qui n'ouvre
+pas un choix mais une fin. Une fois pris, il ouvre une ligne de R&D dédiée :
+
+```
+progres_remede += contribution_joueur          -- SANS capacite_institutionnelle
+```
+
+**C'est la seule voie qui fonctionne encore au-dessus d'instabilité 80.** Le point de
+non-retour cesse d'être un mur : il devient une porte dont le responsable de l'effondrement
+détient la seule clé.
+
+Ce que ça coûte : un budget propre écrasant, pendant des dizaines de semaines, alors même que
+l'instabilité détruit les marchés qui alimentent ce budget. Plus le joueur attend, plus c'est
+cher et moins il a de revenus. Il n'y a pas de moment confortable pour s'y mettre.
+
+Réemploi pur : même écran de conception qu'au §2, mêmes paramètres, objectif inversé.
+
 ### La fenêtre — la propriété la plus importante du jeu
 
 Le produit `urgence × capacite_institutionnelle` culmine **exactement à instabilité = 40**
@@ -673,7 +752,7 @@ Aider te dénonce. Saboter te ruine et t'expose à l'arrestation. **Il n'y a pas
 
 ## 11. Les fins
 
-Trois jauges, une matrice, **cinq fins**. Toutes atteignables, aucune scriptée.
+Trois jauges, une matrice, **six fins**. Toutes atteignables, aucune scriptée.
 
 ### Le remède atteint 100 (instabilité restée < 80)
 
@@ -686,6 +765,12 @@ Trois jauges, une matrice, **cinq fins**. Toutes atteignables, aucune scriptée.
   fonctionnent encore. Tu n'as rien conquis — tu es simplement le dernier à pouvoir livrer.
 - `visibilite ≥ 40` → **LE COUPABLE.** Nommé, traqué, dans un monde mort. Tu as tout gagné et
   il n'y a plus personne pour l'acheter.
+
+### Le remède atteint 100 par la R&D du joueur (§10)
+
+- **LE BIENFAITEUR.** Le monde guérit parce que celui qui l'a rendu malade a payé pour le
+  soigner. Personne ne fera jamais le lien entre les deux — ou tout le monde, selon la
+  visibilité, qui ne change pas la fin mais en change la dernière ligne.
 
 ### Aucune épidémie déclenchée (`instabilite_neuro` resté sous le seuil)
 
@@ -1094,6 +1179,17 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
 ```
 
 ```
+21. LE TRAÎTRE PÈSE                                         [JALON 4]
+    un rival issu d'une trahison survit ≥ 40 semaines dans la médiane
+    des campagnes où il apparaît
+    ↳ s'il meurt aussitôt, la punition redevient comptable
+
+22. LE CATALOGUE EST UTILISÉ                                [JALON 1]
+    industriel tient ≥ 2 recettes actives dans ≥ 50 % des graines,
+    et la recette de plus forte instabilite_neuro vise haut_de_gamme
+    ↳ si une seule recette suffit, les segments de §4 sont décoratifs
+    ↳ la seconde moitié vérifie que le piège est bien là où on croit
+
 19. AUCUNE BRANCHE MORTE                                    [JALON 3]
     chaque branche de recherche reçoit ≥ 20 % des dépenses de R&D
     d'au moins un bot, sur la médiane
@@ -1121,10 +1217,18 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
    L'HÉRITIER ≥ 30 % du temps ou il ne mesure rien.
    ↳ la cible est « conforme à son rôle », jamais « gagne autant que les autres »
 
-5. LES CINQ FINS SONT ATTEINTES                             [JALON 6]
+5. LES SIX FINS SONT ATTEINTES                              [JALON 6]
    chacune ≥ 5 % des campagnes, tous bots confondus
    ↳ L'ARTISAN comprise : c'est la fin de discret, et si elle n'est jamais
      atteinte, le bot témoin ne témoigne de rien
+   ↳ LE BIENFAITEUR comprise : voir la cible 20
+
+20. LA TROISIÈME VOIE EST UN PARI, PAS UNE SORTIE                [JALON 6]
+    le remède fabriqué par le joueur aboutit dans 5-20 % des campagnes
+    de industriel
+    ↳ < 5 % : trop cher, c'est un nœud d'arbre mort
+    ↳ > 20 % : c'est la sortie de secours universelle et la fourche
+      de l'acte III n'existe plus
 
 6. LA COURSE EST UNE VRAIE COURSE                           [JALON 6]
    le remède aboutit dans 30-60 % des campagnes
@@ -1165,8 +1269,11 @@ Volontairement absents. Chacun est une ligne à ajouter plus tard, pas une dette
 
 - **Aucun combat, aucune arme, aucun contrôle direct d'unité.** Le joueur décide, il ne pilote pas.
 - **Aucune conquête post-effondrement.** `L'HÉRITIER` est un épilogue calculé, pas une phase.
-- **2 rivaux.** Ils ne font pas faillite avant l'acte III.
-- **21 procédés de recherche maximum** (3 branches × 7 — §2bis). Révisé depuis 12. Au-delà,
+- **2 rivaux simulés + 1 emplacement de traître.** Ils ne font pas faillite avant l'acte III.
+- **3 recettes actives maximum.** Au-delà, l'écran de conception devient un tableur.
+- **Pas de plafond de flotte.** On achète autant d'engins qu'on peut en entretenir ; les trois
+  freins sont économiques, jamais une règle.
+- **22 procédés de recherche maximum** (Chimie 8, Logistique 7, Influence 7 — §2bis). Révisé depuis 12. Au-delà,
   la R&D se dilue et les bots deviennent illisibles ; 21 est ce qui tient encore dans un
   harnais à 4 bots.
 - **Aucune monnaie de recherche.** La recherche se paie en `cash_propre`. Un jeton de type
@@ -1205,12 +1312,11 @@ la meilleure protection disponible, et elles ne coûtent rien au design.
 
 ---
 
-## 19. Suggestions non tranchées
+## 19. Décisions tranchées
 
-**19.1 et 19.2 sont tranchés et intégrés au corps du document** — ils restent listés ici pour
-la trace. **19.3, 19.4 et 19.5 ne sont PAS adoptés** : ils sont consignés parce qu'un document
-qui cache ses options est pire qu'un document incomplet. Chacun se tranche par un oui ou un
-non, pas par une discussion.
+**Les cinq points sont tranchés et intégrés au corps du document.** Cette section ne garde que
+la trace de ce qui a été décidé et pourquoi. Il n'y a plus de dépendance en suspens : chaque
+cible de §16 est portée par un système qui existe.
 
 ### 19.1 — La dette de départ — ✅ ADOPTÉ, voir §1bis
 
@@ -1225,36 +1331,26 @@ le seuil est franchi, plus s'il l'est. Un joueur qui reste sous `instabilite_neu
 déclenche jamais rien — et obtient **L'ARTISAN**, cinquième fin. La cible 13 est désormais
 atteignable, et la cible 5 passe de quatre à cinq fins.
 
-### 19.3 — Le remède fabricable par le joueur
+### 19.3 — Le remède fabricable par le joueur — ✅ ADOPTÉ, voir §10 et §2bis
 
-Il a la formule. Personne n'est mieux placé pour faire l'antidote que celui qui a fait le
-produit. Une branche de R&D ruineuse dans `sim/produit.gd` qui fait progresser `remede`
-**sans passer par `capacite_institutionnelle`** — donc la seule voie qui fonctionne encore
-au-dessus d'instabilité 80. Le point de non-retour devient une porte à un seul jeu de clés.
+Tranché. 8ᵉ nœud terminal de la branche Chimie. Il alimente `progres_remede` **sans passer par
+`capacite_institutionnelle`**, donc c'est la seule voie qui fonctionne encore au-dessus
+d'instabilité 80. Sixième fin : **LE BIENFAITEUR**. Encadré par la cible 20 — 5 à 20 % des
+campagnes de `industriel`, sinon c'est soit un nœud mort, soit une sortie de secours qui
+annule la fourche de l'acte III.
 
-Réemploi pur : même écran de conception, objectif inversé.
+### 19.4 — Le traître devient le troisième rival — ✅ ADOPTÉ, voir §4 et §6
 
-### 19.4 — Le traître devient le troisième rival
+Tranché. Emplacement réservé dans `rivaux.json`, rempli à l'exécution par un lieutenant qui
+trahit, avec la recette du joueur figée à cet instant. Cible 21 : il doit survivre ≥ 40
+semaines, sinon la punition redevient une ligne comptable.
 
-Aujourd'hui la trahison coûte « un nœud et son stock » : une perte comptable, oubliée en dix
-semaines. Un lieutenant qui trahit devrait devenir un **rival nommé**, avec la recette du
-joueur figée au moment de la trahison, pour le reste de la partie.
+### 19.5 — Le catalogue plutôt qu'une recette unique — ✅ ADOPTÉ, voir §2
 
-Coût : un slot dans `rivaux.json` initialisé à l'exécution. Effet : la seule punition du jeu
-dont on se souvient six mois plus tard.
-
-### 19.5 — Le catalogue plutôt qu'une recette unique
-
-Les trois segments ont des critères orthogonaux (`rue` veut du coût, `haut_de_gamme` veut de
-la pureté). Avec une seule recette active, le joueur choisit un segment et abandonne les
-autres — deux tiers de `market.gd` ne servent à rien.
-
-Deux ou trois recettes simultanées, et le piège devient vivant : `haut_de_gamme` est
-mécaniquement la recette à plus forte `instabilite_neuro` (`puissance^2.2`). **Le segment le
-plus rentable est la bombe.** C'est déjà dans les formules ; il manque la possibilité de tenir
-les deux à la fois pour que l'arbitrage existe.
-
-Bonus : rend utilisable le vieillissement du catalogue de `bureau-etudes`, déjà écrit et testé.
+Tranché. Jusqu'à 3 recettes actives simultanément. Cible 22 : deux recettes au moins chez
+`industriel` dans la moitié des graines, et vérification que la recette la plus chargée en
+`instabilite_neuro` est bien celle du haut de gamme — le piège doit être là où le document
+prétend qu'il est.
 
 ---
 
@@ -1277,6 +1373,15 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   campagnes entières sans épidémie, c'est-à-dire sans le sujet du jeu. §8 (la charge) rend le
   déclenchement certain au-dessus du seuil, et §11 ajoute **L'ARTISAN** pour le joueur qui
   reste dessous — c'était §19.2.
+- **Une seule recette à la fois rendait §4 décoratif.** Trois segments aux critères
+  orthogonaux, un seul produit : le joueur en choisissait un et abandonnait les autres. §2 (le
+  catalogue) corrige, et fait apparaître le piège qui était déjà dans les formules — le segment
+  le plus rentable est celui qui charge le plus vite (§8).
+- **La trahison était une perte comptable.** « Part avec un nœud et son stock », oublié en dix
+  semaines. §4 et §6 en font un rival nommé qui joue ta recette d'il y a trois ans.
+- **Le point de non-retour était un mur sans porte.** Au-dessus d'instabilité 80 le remède est
+  mort, et le joueur n'avait plus qu'à regarder. §10 (la troisième voie) lui laisse une clé,
+  et c'est la sienne.
 - **Le `cash_sale` n'avait pas de sortie.** Il ne pouvait qu'être blanchi à débit plafonné,
   donc s'accumuler. Corruption et élimination lui en donnent une, et ferment le circuit de §5.
 - **La non-fongibilité était implicite.** Deux trésoreries étaient décrites, mais rien ne
