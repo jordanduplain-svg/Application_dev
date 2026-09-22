@@ -86,6 +86,47 @@ Toute modification des formules casse ce test avant de casser l'équilibrage.
 
 ---
 
+## 2bis. La recherche — trois branches
+
+**Réemploi de `bureau-etudes/sim/research.gd`, tel quel.** Seules les données changent.
+
+### Pas de monnaie de recherche
+
+La recherche se paie en **`cash_propre` + temps**. Aucun point d'ADN, aucun jeton, aucune
+troisième bourse — ce serait une conversion déguisée et ça contredirait la règle du papier (§5).
+
+Conséquence voulue : **le rythme de la recherche est étranglé par le blanchiment.** Un joueur
+assis sur 40 M$ sales ne recherche pas plus vite qu'un joueur pauvre. C'est le même goulot que
+tout le reste, et il n'a pas fallu l'inventer.
+
+### Les trois branches
+
+Elles correspondent exactement aux trois piliers du jeu — et aux trois jalons qui les ouvrent.
+
+| Branche | Ouvre au | Débloque | Acte |
+|---|---|---|---|
+| **Chimie** | jalon 1 | familles de précurseurs, paliers de `complexite_procede`, stabilisation, plafonds de `purete_visee` | I |
+| **Logistique** | jalon 2 | engins, capacités, `−usure`, `−p_saisie`, classes d'arêtes nouvelles (haute mer, corridors aériens) | II |
+| **Influence** | jalon 3 | paliers de contacts, capacité et taux de blanchiment, contre-espionnage (`+decroissance` de visibilité), fiabilité d'élimination | II-III |
+
+**7 nœuds par branche, 21 au total.** C'est une révision du plafond de §17 (12), et elle a un
+coût qu'il faut nommer : **plus de nœuds = un espace de stratégies plus large = des bots plus
+difficiles à lire.** La raison du plafond d'origine reste valable ; 21 est le maximum qui tient
+encore dans un harnais à 4 bots, et il ne doit pas augmenter ensuite.
+
+Si §19.3 est adopté (le remède fabricable par le joueur), il devient le 8ᵉ nœud de Chimie —
+terminal, ruineux, et le seul qui n'ouvre pas un choix mais une fin.
+
+### Ce que la recherche ne fait jamais
+
+- Elle ne donne **aucun bonus numérique direct** (« +10 % de rendement »). Elle **ouvre des
+  choix** : un précurseur de plus, un palier de complexité, un engin. L'arbitrage reste dans
+  l'écran de conception (§2), il ne remonte pas dans l'arbre.
+- Elle n'est **jamais** un prérequis de survie. Une partie entière est jouable sans rien
+  rechercher — plus pauvre, plus discrète, parfaitement viable. C'est la trajectoire du bot
+  `discret`, et c'est ce qui l'empêche d'être un bot cassé plutôt qu'un témoin.
+
+---
 ## 3. Le graphe, le parc & la logistique (acte II)
 
 **La carte est un graphe, pas un terrain.** Aucun pathfinding, aucune tuile, aucune 3D.
@@ -615,50 +656,90 @@ demande un échantillon, un rival veut fuir avec ta formule, l'armée ferme un c
 L'événement d'amnistie est le seul qui **nomme la fourche à voix haute** — et il n'arrive
 qu'après que le joueur l'ait déjà choisie par ses dépenses.
 
-## 12bis. L'interface — les deux bourses
+## 12bis. L'interface
 
-`game/` ne contient aucune règle (§13). Mais la séparation des deux monnaies est **une règle
-que l'UI doit rendre impossible à oublier**, sans quoi le joueur la découvre par un bouton
-grisé et la vit comme un bug.
+`game/` ne contient aucune règle (§13). Mais deux choses sont des **règles que l'UI doit
+rendre impossibles à oublier** : la non-fongibilité des deux monnaies, et le fait que le
+réseau du joueur est le vecteur de l'épidémie.
 
-### Le HUD permanent
+> **Ce document spécifie la STRUCTURE de l'information, pas le style.** Ce que chaque écran
+> doit contenir, ce qu'il ne doit jamais faire, et pourquoi. La direction artistique — palette,
+> typographie, ambiance, icônes — se décide ailleurs et n'a pas à être devinée ici.
 
-**Jamais un chiffre de fortune totale. Nulle part.** Deux bourses côte à côte, visuellement
-distinctes, jamais additionnées — pas dans le HUD, pas dans l'écran de fin, pas dans une
-infobulle.
+### 12bis.0 — La référence : Plague Inc, son chrome et pas sa structure
+
+Plague Inc a la même colonne vertébrale que Cartel : une carte qui se contamine, une jauge de
+remède qui court après le joueur, un arbre à trois branches. L'emprunt est légitime, et il est
+**partiel**.
+
+**Ce qu'on prend :**
+
+| Élément | Chez Plague Inc | Chez Cartel |
+|---|---|---|
+| Barre de jauges en haut, permanente | infectés / morts / remède | **visibilité / instabilité / remède** |
+| La carte comme écran d'accueil | le monde, des pays qui rougissent | **le graphe, des nœuds qui s'infectent** |
+| Clic sur une entité = panneau latéral | pays : population, climat | **nœud : labo, stocks, cash sale, infection, équipes** |
+| Fil d'actualité en bas | titres de presse | **presse, saisies, arrestations, rumeurs** |
+| Arbre en onglets, nœuds à débloquer | Transmission / Symptômes / Capacités | **Chimie / Logistique / Influence** (§2bis) |
+
+**Ce qu'on ne prend pas :** chez Plague Inc, **tout** se joue sur la carte, et l'arbre est le
+seul verbe du jeu. Chez Cartel, la carte n'est qu'un écran parmi plusieurs — le cœur de
+l'acte I est l'**écran de conception** (§2), qui n'a aucun équivalent chez Plague Inc. Une UI
+qui ferait tout passer par la carte enterrerait le meilleur système du jeu sous son décor.
+
+**Le risque à connaître :** une interface trop fidèle fait lire le jeu comme un clone de
+Plague Inc où l'on jouerait la drogue. Ce n'est pas le jeu, et ce n'est pas la promesse de §18.
+Garde-fou : **l'écran de conception apparaît dans la première minute de jeu et dans la première
+capture d'écran**, avant la carte.
+
+### 12bis.1 — Le HUD permanent
+
+Trois jauges, deux bourses, une horloge. Rien d'autre, et rien qui les additionne.
 
 ```
-┌────────────────────────────┬─────────────────────────────────┐
-│  PROPRE      4 200 000 $   │  SALE      38 400 000 $         │
-│  ▸ entretien  −310 000/sem │  ▸ +2.1 visibilité/sem          │
-│  ▸ blanchi    +180 000/sem │  ▸ réparti sur 6 nœuds          │
-└────────────────────────────┴─────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ VISIBILITÉ ████░░░░ 41 Repéré │ INSTABILITÉ ██░░ 18 │ REMÈDE ░░ 6 % │
+├────────────────────────────┬────────────────────────────────────────┤
+│  PROPRE      4 200 000 $   │  SALE      38 400 000 $                │
+│  ▸ entretien  −310 000/sem │  ▸ +2.1 visibilité/sem                 │
+│  ▸ blanchi    +180 000/sem │  ▸ réparti sur 6 nœuds                 │
+└────────────────────────────┴────────────────────────────────────────┘
 ```
+
+**Les jauges instabilité et remède sont affichées dès la semaine 1**, à zéro, inertes. Même
+raison que `instabilite_neuro` (§2) : un axe qui apparaît au milieu de la partie est un axe que
+le joueur subit. Un axe présent depuis le début est un axe qu'il a vu monter.
+
+### 12bis.2 — L'écran carte (accueil)
+
+Le graphe. Chaque nœud porte, lisible sans clic : son type, sa part de marché, et **sa couleur
+d'infection**. Chaque arête active porte le flux qui la parcourt et l'engin qui l'assure.
+
+**C'est la capture d'écran qui vend le jeu** (§18) : la contamination qui remonte les arêtes
+que le joueur a construites lui-même. Si `infection[n]` n'est pas lisible d'un coup d'œil au
+jalon 5, la page Steam n'a rien à montrer.
+
+Clic sur un nœud → panneau latéral : labo, stocks, **cash sale immobilisé sur place**,
+commerces, contacts actifs, infection, équipes affectées.
+
+### 12bis.3 — Les deux bourses
+
+**Jamais un chiffre de fortune totale. Nulle part.** Pas dans le HUD, pas dans l'écran de fin,
+pas dans une infobulle.
 
 Trois informations obligatoires à côté du stock sale, en permanence :
 
 1. **ce qu'il coûte en visibilité cette semaine** — le passif est chiffré, pas sous-entendu
-2. **où il est** — il est physique, stocké dans des nœuds (§5), et il se transporte par les
-   mêmes engins que le produit
+2. **où il est** — il est physique, stocké dans des nœuds (§5), transporté par les mêmes engins
 3. **à quelle vitesse il s'écoule** — le débit de blanchiment réellement utilisé
 
-### L'argent propre est un nombre. L'argent sale est une carte.
+**L'argent propre est un nombre. L'argent sale est une carte.** C'est la distinction visuelle
+qui porte tout le système. Un tas coincé dans un nœud sous `pression_locale` haute est un
+problème de logistique, pas de comptabilité.
 
-C'est la distinction visuelle qui porte tout le système. Le propre est une trésorerie
-abstraite. Le sale a une **position sur le graphe**, et un tas coincé dans un nœud sous
-`pression_locale` haute est un problème de logistique, pas de comptabilité.
-
-Un clic sur la bourse sale ouvre la répartition par nœud, avec le débit de blanchiment
-disponible localement (§5 — la capacité dépend de `activite_economique` du nœud).
-
-### Chaque prix déclare sa monnaie
-
-Aucune étiquette de prix n'est neutre. Un pictogramme, une couleur, deux familles typographiques —
-le choix est libre, la contrainte ne l'est pas : **on doit savoir quelle bourse un achat
-va vider avant de cliquer.**
-
-Un bouton indisponible n'est jamais seulement grisé. Il dit **pourquoi**, et il dit **combien
-il manque** :
+**Chaque prix déclare sa monnaie.** Aucune étiquette n'est neutre. Un bouton indisponible n'est
+jamais seulement grisé — il dit **pourquoi**, **combien il manque**, et **en combien de
+semaines** :
 
 ```
 [ Sous-marin classe II — 12 400 000 $ PROPRE ]
@@ -670,21 +751,43 @@ Cette dernière ligne est la plus importante de l'interface. Elle transforme une
 (« je ne peux pas acheter ») en **lecture d'une contrainte** (« mon goulot est le blanchiment,
 pas la vente »). C'est le moment où le joueur comprend le jeu.
 
-### L'écran de blanchiment est un débit, pas un guichet
+**L'écran de blanchiment est un débit, pas un guichet.** Pas de champ de saisie, pas de bouton
+« convertir ». Une jauge de capacité utilisée / disponible, commerce par commerce, avec le
+plafond du nœud à côté. Quand c'est saturé — presque toujours (§5) — l'écran le dit en clair :
+**« saturé depuis 23 semaines »**.
 
-Pas de champ de saisie, pas de bouton « convertir ». Une jauge de **capacité utilisée /
-capacité disponible**, commerce par commerce, avec le taux de perte appliqué et le plafond
-du nœud affiché à côté.
+### 12bis.4 — L'écran recherche
 
-Quand la capacité est saturée — ce qui arrivera presque toujours (§5) — l'écran le dit en
-clair : **« saturé depuis 23 semaines »**. C'est la courbe de difficulté du jeu, et elle
-doit être lisible sans calcul mental.
+Trois onglets, 7 nœuds chacun (§2bis). Structure Plague Inc, contenu Cartel.
 
-### Conséquence de vente
+Chaque nœud affiche **avant l'achat** : son coût en `cash_propre`, sa durée en semaines, et
+**ce qu'il ouvre** — jamais un pourcentage abstrait. « Débloque le sous-marin classe II », pas
+« +15 % de capacité logistique ». C'est la même règle que §2bis : la recherche ouvre des choix,
+elle ne distribue pas des bonus.
 
-Les trois jauges (visibilité, instabilité, remède) doivent être visibles sur chaque capture
-d'écran (§18). **Les deux bourses aussi.** « Riche en argent qu'on ne peut pas dépenser » est
-une situation que personne n'a mise sur une capture Steam, et elle se comprend en une seconde.
+Deux contraintes :
+
+- **Les branches non ouvertes sont visibles et grisées dès le jalon 1**, avec leur condition
+  d'ouverture. Le joueur doit savoir que Logistique et Influence existent avant de pouvoir y
+  toucher — c'est ce qui donne à l'acte I une direction, et l'acte I en manque cruellement
+  (§19.1).
+- **Aucune recherche en cours n'est annulable sans perte.** C'est un engagement de trésorerie
+  propre, et le propre est la ressource rare du jeu.
+
+### 12bis.5 — L'écran de conception
+
+Inchangé par rapport à `bureau-etudes/game/design/blueprint.gd` : les six paramètres à gauche,
+les sept specs émergentes à droite, recalcul en direct.
+
+**`instabilite_neuro` y est affiché dès la première minute, inerte pendant tout l'acte I.**
+C'est la contrainte la plus importante du document (§2), et elle est autant une contrainte
+d'interface que de modèle : un axe qu'on n'a pas vu monter est un axe qu'on subit.
+
+### 12bis.6 — Conséquence de vente
+
+Les trois jauges, les deux bourses et l'écran de conception doivent être lisibles sur les
+captures (§18). « Riche en argent qu'on ne peut pas dépenser » est une situation que personne
+n'a mise sur une capture Steam, et elle se comprend en une seconde.
 
 ---
 
@@ -754,7 +857,7 @@ data/
   constants.json      -- toutes les constantes d'équilibrage, zéro dans le code
   calibration.json    -- 3 produits de référence, tolérance 5 %
   precurseurs.json    -- 4 familles fictives
-  procedes.json       -- arbre de recherche (12 nœuds max — ponytail:)
+  procedes.json       -- arbre de recherche : 3 branches × 7 nœuds (§2bis)
   graphe.json         -- nœuds + arêtes (classes, distances, risque)
   vehicules.json      -- les 5 engins : capacité, coût, entretien, usure, équipage
   contacts.json       -- les 6 contacts corrompus
@@ -789,9 +892,9 @@ cette fois à la mesure au lieu du modèle.
 | # | Jalon | Durée | Contenu | Porte | Bots | Jouable ? |
 |---|---|---|---|---|---|---|
 | **0** | **Le harnais** | 1-2 j | `balance.gd`, `bots.gd`, `run.gd`, CI — **portés**, pas réécrits | **levier connecté** | — | — |
-| **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple | 1, 2, 3, **7** | 2 | **oui** |
-| **2** | **Le graphe & le parc** | 4-5 sem | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité | + **8, 9, 15** | 2 | **oui** |
-| **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
+| **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple, **branche Chimie** (§2bis) | 1, 2, 3, **7** | 2 | **oui** |
+| **2** | **Le graphe & le parc** | 4-5 sem | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité, **branche Logistique** | + **8, 9, 15** | 2 | **oui** |
+| **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique, **branche Influence** | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
 | **4** | **Les hommes** | 2 sem | bras droits, loyauté, ambition, trahison, arrestations, équipages | + **12** | 3 | oui |
 | **5** | **L'épidémie** | 3-4 sem | propagation, équipes, instabilité mondiale | + **13, 14** | 4 | oui |
 | **6** | **Le remède** | 2-3 sem | jauge, aide/sabotage, les 4 fins, épilogues | **§16 en entier** | 4 | **complet** |
@@ -920,6 +1023,14 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
     ↳ c'est la seule cible du harnais qui teste une NON-stratégie
 ```
 
+```
+19. AUCUNE BRANCHE MORTE                                    [JALON 3]
+    chaque branche de recherche reçoit ≥ 20 % des dépenses de R&D
+    d'au moins un bot, sur la médiane
+    ↳ une branche que personne n'ouvre est 7 nœuds de contenu mort et
+      7 nœuds d'équilibrage à maintenir pour rien
+```
+
 ### Cibles de l'acte III — jalons 5 et 6
 
 ```
@@ -982,7 +1093,11 @@ Volontairement absents. Chacun est une ligne à ajouter plus tard, pas une dette
 - **Aucun combat, aucune arme, aucun contrôle direct d'unité.** Le joueur décide, il ne pilote pas.
 - **Aucune conquête post-effondrement.** `L'HÉRITIER` est un épilogue calculé, pas une phase.
 - **2 rivaux.** Ils ne font pas faillite avant l'acte III.
-- **12 procédés de recherche maximum.** Au-delà, la R&D se dilue et les bots deviennent illisibles.
+- **21 procédés de recherche maximum** (3 branches × 7 — §2bis). Révisé depuis 12. Au-delà,
+  la R&D se dilue et les bots deviennent illisibles ; 21 est ce qui tient encore dans un
+  harnais à 4 bots.
+- **Aucune monnaie de recherche.** La recherche se paie en `cash_propre`. Un jeton de type
+  ADN serait une conversion déguisée et contredirait la règle du papier (§5).
 - **Pas de multijoueur, pas de co-op.** Le genre s'y prête ; le périmètre non.
 - **Pas de carte dessinée.** Un graphe lisible, des nœuds, des arêtes, des chiffres.
 - **Chimie entièrement fictive.** Contrainte permanente, pas une étape de polish.
@@ -1108,4 +1223,10 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   et §12bis en fait une contrainte d'interface : les deux bourses ne sont jamais additionnées,
   aucun prix n'est affiché sans sa monnaie, aucun bouton indisponible n'est muet.
 - **Le document n'avait aucune spécification d'interface.** §13 posait `game/` = UI sans
-  règles, mais aucun écran n'était décrit. §12bis couvre le seul qui porte une règle.
+  règles, mais aucun écran n'était décrit. §12bis couvre les cinq écrans, et pose la référence
+  Plague Inc en disant explicitement ce qu'on lui emprunte (le chrome) et ce qu'on ne lui
+  emprunte pas (la structure — chez lui tout se joue sur la carte, ici non).
+- **La recherche n'était qu'une ligne.** « `procedes.json` — arbre de recherche (12 nœuds max) »
+  et rien d'autre : ni branches, ni monnaie, ni ce qu'elle débloque. §2bis la définit, et
+  tranche le seul piège de l'emprunt à Plague Inc — **pas de points d'ADN**, la recherche se
+  paie en propre, donc son rythme est étranglé par le blanchiment comme tout le reste.
