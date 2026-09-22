@@ -28,7 +28,7 @@ historique : l'horloge est interne (semaine 1 → fin), l'arc est causal, pas ca
 
 | Acte | Déclencheur | Ce qui change |
 |---|---|---|
-| **I — Le laboratoire** | départ | 1 zone, 1 marché. Concevoir, produire, vendre. |
+| **I — Le laboratoire** | départ | 1 zone, 1 marché. Concevoir, produire, vendre. **L'horloge est la dette** (§1bis). |
 | **II — Le réseau** | premier nœud distant ouvert | Graphe, argent sale, bras droits, visibilité. |
 | **III — La conséquence** | première épidémie déclarée | Instabilité, extermination, remède, fourche. |
 
@@ -40,6 +40,47 @@ tu aurais investi ailleurs. Il n'existe aucune configuration sans dette.
 
 ---
 
+## 1bis. La dette — l'horloge de l'acte I
+
+L'acte III a trois horloges (visibilité, instabilité, remède). L'acte II en a une : le
+blanchiment qui décroche. **L'acte I n'en avait aucune** — rien ne poussait, donc rien ne
+mourait, donc les cibles 1 et 2 de §16 ne mesuraient rien au jalon 1.
+
+### La règle
+
+**Tu commences endetté.** Une somme empruntée à quelqu'un qu'on ne voit jamais, remboursable
+en une fois à la **semaine 60**. `data/constants.json` : `dette_montant`, `dette_echeance`.
+
+```
+si semaine == dette_echeance et cash_propre < dette_montant :
+    → fin courte : SAISIE
+```
+
+Elle se rembourse en **argent propre** — donc elle force à vendre, et vendre force à être
+visible. C'est la première fois que le joueur rencontre la vérité du design de §1, et elle
+arrive avant qu'il ait un réseau pour s'y cacher.
+
+### Ce qu'elle produit
+
+- **Une date.** Même fonction que « mai 1940 » dans `bureau-etudes` : chaque semaine coûte
+  quelque chose parce qu'une date existe.
+- **Une raison de s'étendre.** L'échéance est calibrée pour être **atteignable sur un seul
+  marché, mais serrée.** Le joueur qui reste au labo y arrive ; le joueur qui veut de la marge
+  ouvre un nœud. C'est ce qui fait basculer vers l'acte II sans jamais l'imposer.
+- **Une trajectoire pour `discret`.** Le bot témoin rembourse et s'arrête là. C'est ce qui le
+  rend pauvre et survivant plutôt que cassé.
+
+### Le créancier revient
+
+Une fois remboursé, il ne disparaît pas — il devient le **premier événement de l'acte II** :
+il ne veut plus d'argent, il veut un nœud. Refuser coûte de la visibilité ; accepter coûte un
+nœud et un lieutenant imposé.
+
+`ponytail:` **le créancier n'est jamais montré, jamais nommé, jamais un personnage.** C'est une
+ligne dans un tableau et une échéance. Lui donner un visage serait une quête, et une quête est
+un système narratif que ce jeu n'a pas.
+
+---
 ## 2. Le produit — conception (cœur, acte I)
 
 Même moteur que `bureau-etudes/sim/aircraft.gd` : des paramètres bruts, des specs qui **émergent**.
@@ -500,15 +541,33 @@ elle vient de l'infection — tu ne la contrôles plus, tu paies seulement pour 
 
 ## 8. L'épidémie (acte III)
 
-### Déclenchement
+### Déclenchement — la charge
 
-Chaque trimestre, pour chaque nœud-marché où le joueur a vendu :
+**L'aléa décide QUAND, pas SI.** C'est la différence entre un jeu dont l'acte III est le sujet
+et un jeu dont l'acte III est un bonus que certains joueurs ne verront jamais.
+
+Une **charge cachée** s'accumule, une par nœud-marché où le joueur a vendu :
 
 ```
-p_declenchement = clamp((instabilite_neuro − 0.55) × kg_ecoules_trim / 1000, 0, 0.15)
+charge[n] += max(0, instabilite_neuro − 0.55) × kg_ecoules_sem × k_charge
+p_declenchement_trim = clamp(charge[n] / seuil_charge, 0, 1)
 ```
 
-Sur seed. **Certaines campagnes n'en voient jamais.** Ce n'est pas une cinématique.
+Sur seed. La graine décide de la **date** du franchissement — tôt, tard, sur tel nœud plutôt
+que tel autre. Elle ne décide plus de son existence.
+
+| Le joueur | Ce qui se passe |
+|---|---|
+| pousse la puissance | la charge monte vite, l'épidémie arrive tôt, il a encore de l'argent pour la combattre |
+| reste prudent | la charge monte lentement, l'épidémie arrive tard, il a un réseau à perdre |
+| reste **sous `instabilite_neuro` 0.55** | la charge ne monte **jamais** — pas d'acte III, et c'est une stratégie, pas un bug |
+
+**La charge n'est jamais affichée.** Le joueur lit `instabilite_neuro` dans l'écran de
+conception (§2) et il lit ses tonnages. Il a tout ce qu'il faut pour savoir. Lui montrer une
+barre « progression vers l'épidémie » transformerait une conséquence en objectif.
+
+Ce n'est pas une cinématique : le déclenchement est un événement local sur un nœud, pas une
+bascule mondiale.
 
 ### Propagation — sur ton propre graphe
 
@@ -614,7 +673,7 @@ Aider te dénonce. Saboter te ruine et t'expose à l'arrestation. **Il n'y a pas
 
 ## 11. Les fins
 
-Trois jauges, une matrice. Toutes atteignables, aucune scriptée.
+Trois jauges, une matrice, **cinq fins**. Toutes atteignables, aucune scriptée.
 
 ### Le remède atteint 100 (instabilité restée < 80)
 
@@ -628,9 +687,16 @@ Trois jauges, une matrice. Toutes atteignables, aucune scriptée.
 - `visibilite ≥ 40` → **LE COUPABLE.** Nommé, traqué, dans un monde mort. Tu as tout gagné et
   il n'y a plus personne pour l'acheter.
 
+### Aucune épidémie déclenchée (`instabilite_neuro` resté sous le seuil)
+
+- **L'ARTISAN.** Riche, jamais inquiété, un produit auquel le monde a survécu. Ce n'est pas une
+  absence de fin : c'est la seule qui récompense la retenue, et elle rend les quatre autres
+  lisibles par contraste. Un joueur qui l'obtient a joué le jeu, pas contourné l'acte III.
+
 ### Fins courtes
 
 `cash_propre < 0` pendant 8 semaines → **faillite** (absorbé par un rival).
+Dette non remboursée à l'échéance (§1bis) → **saisie**.
 `visibilite = 100` pendant 4 semaines → **arrestation**.
 Trahison de tous les lieutenants → **destitution**.
 
@@ -772,8 +838,7 @@ Deux contraintes :
 
 - **Les branches non ouvertes sont visibles et grisées dès le jalon 1**, avec leur condition
   d'ouverture. Le joueur doit savoir que Logistique et Influence existent avant de pouvoir y
-  toucher — c'est ce qui donne à l'acte I une direction, et l'acte I en manque cruellement
-  (§19.1).
+  toucher — c'est ce qui donne à l'acte I une direction, et l'acte I a maintenant la sienne (§1bis).
 - **Aucune recherche en cours n'est annulable sans perte.** C'est un engagement de trésorerie
   propre, et le propre est la ressource rare du jeu.
 
@@ -857,7 +922,8 @@ d'usage de `sim/actifs.gd`.
 
 ```
 data/
-  constants.json      -- toutes les constantes d'équilibrage, zéro dans le code
+  constants.json      -- équilibrage, zéro nombre dans le code
+                         (dont dette_montant, dette_echeance, k_charge, seuil_charge)
   calibration.json    -- 3 produits de référence, tolérance 5 %
   precurseurs.json    -- 4 familles fictives
   procedes.json       -- arbre de recherche : 3 branches × 7 nœuds (§2bis)
@@ -895,7 +961,7 @@ cette fois à la mesure au lieu du modèle.
 | # | Jalon | Durée | Contenu | Porte | Bots | Jouable ? |
 |---|---|---|---|---|---|---|
 | **0** | **Le harnais** | 1-2 j | `balance.gd`, `bots.gd`, `run.gd`, CI — **portés**, pas réécrits | **levier connecté** | — | — |
-| **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple, **branche Chimie** (§2bis) | 1, 2, 3, **7** | 2 | **oui** |
+| **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple, **la dette** (§1bis), **branche Chimie** (§2bis) | 1, 2, 3, **7** | 2 | **oui** |
 | **2** | **Le graphe & le parc** | 4-5 sem | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité, **branche Logistique** | + **8, 9, 15** | 2 | **oui** |
 | **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique, **branche Influence** | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
 | **4** | **Les hommes** | 2 sem | bras droits, loyauté, ambition, trahison, arrestations, équipages | + **12** | 3 | oui |
@@ -959,6 +1025,7 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
 ```
 1. MORTALITÉ GLOBALE LISIBLE
    faillites bot entre 15 % et 35 %
+   ↳ mesurable au jalon 1 parce que la dette (§1bis) donne une horloge à l'acte I
 
 2. MORTALITÉ DE DÉMARRAGE BORNÉE
    < 10 % des campagnes meurent avant la semaine 104
@@ -1039,7 +1106,8 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
 ```
 13. L'ÉPIDÉMIE ARRIVE                                       [JALON 5]
     déclenchée dans ≥ 80 % des campagnes de industriel, ≤ 20 % de discret
-    ↳ l'aléa décide QUAND, pas SI — voir §19
+    ↳ atteignable parce que la charge (§8) rend le déclenchement certain
+      au-dessus du seuil : l'aléa décide QUAND, pas SI
 
 14. LA PROPAGATION SUIT LE RÉSEAU                           [JALON 5]
     corrélation positive entre le nombre d'arêtes actives d'un bot et sa
@@ -1053,8 +1121,10 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
    L'HÉRITIER ≥ 30 % du temps ou il ne mesure rien.
    ↳ la cible est « conforme à son rôle », jamais « gagne autant que les autres »
 
-5. LES QUATRE FINS SONT ATTEINTES                           [JALON 6]
+5. LES CINQ FINS SONT ATTEINTES                             [JALON 6]
    chacune ≥ 5 % des campagnes, tous bots confondus
+   ↳ L'ARTISAN comprise : c'est la fin de discret, et si elle n'est jamais
+     atteinte, le bot témoin ne témoigne de rien
 
 6. LA COURSE EST UNE VRAIE COURSE                           [JALON 6]
    le remède aboutit dans 30-60 % des campagnes
@@ -1137,42 +1207,23 @@ la meilleure protection disponible, et elles ne coûtent rien au design.
 
 ## 19. Suggestions non tranchées
 
-**Ces cinq points ne sont PAS adoptés.** Ils sont consignés ici parce que deux cibles de §16
-en dépendent, et qu'un document qui cache ses dépendances est pire qu'un document incomplet.
-Chacun se tranche par un oui ou un non, pas par une discussion.
+**19.1 et 19.2 sont tranchés et intégrés au corps du document** — ils restent listés ici pour
+la trace. **19.3, 19.4 et 19.5 ne sont PAS adoptés** : ils sont consignés parce qu'un document
+qui cache ses options est pire qu'un document incomplet. Chacun se tranche par un oui ou un
+non, pas par une discussion.
 
-### 19.1 — La dette de départ ⚠️ *dont dépendent les cibles 1 et 2 au jalon 1*
+### 19.1 — La dette de départ — ✅ ADOPTÉ, voir §1bis
 
-L'acte I n'a **aucune horloge**. L'acte III en a trois (visibilité, instabilité, remède),
-l'acte II en a une (le blanchiment qui décroche). Le jalon 1 est donc un système où rien ne
-pousse, et **sans pression aucune campagne ne fait faillite** — les cibles 1 et 2 ne
-mesureraient rien.
+Tranché. L'acte I a son horloge : dette remboursable en semaine 60, en argent propre, fin
+courte `SAISIE` si l'échéance passe. Le créancier revient en acte II réclamer un nœud.
+Les cibles 1 et 2 de §16 sont désormais mesurables au jalon 1.
 
-Correctif proposé : tu commences **endetté** envers quelqu'un qu'on ne voit jamais,
-remboursable en semaine N. Même fonction que « mai 1940 » dans `bureau-etudes` : une date qui
-rend chaque semaine coûteuse. Le prêteur devient le premier événement de l'acte II — il ne
-veut plus d'argent, il veut un nœud.
+### 19.2 — L'épidémie garantie — ✅ ADOPTÉ, voir §8 et §11
 
-Coût : un champ dans `state`, un événement, une fin courte.
-
-**Si ce point est refusé, il faut une autre horloge d'acte I, ou retirer les cibles 1 et 2
-du jalon 1.**
-
-### 19.2 — L'épidémie garantie ⚠️ *dont dépend la cible 13*
-
-`p_declenchement ≤ 0.15` par trimestre : certaines campagnes ne voient jamais l'acte III.
-C'est le sujet du jeu, et c'est le seul élément qui le distingue d'un marché encombré.
-
-Correctif proposé : une **charge cachée** qui intègre `instabilite_neuro × kg_écoulés` dans le
-temps. L'aléa décide **quand** on franchit le seuil, pas **si**. Le joueur prudent déclenche
-tard, le joueur avide déclenche tôt, les deux voient l'acte III.
-
-Et si quelqu'un reste vraiment sous le seuil toute la partie, ça mérite une fin plutôt qu'une
-absence de fin : **L'ARTISAN** — riche, jamais inquiété, un produit auquel le monde a survécu.
-Cinquième case de la matrice, elle récompense la retenue et rend les quatre autres lisibles
-par contraste.
-
-**La cible 13 (« l'épidémie arrive ») est inatteignable sans ce correctif.**
+Tranché. Le tirage par trimestre est remplacé par une **charge cachée** : l'aléa décide quand
+le seuil est franchi, plus s'il l'est. Un joueur qui reste sous `instabilite_neuro` 0.55 ne
+déclenche jamais rien — et obtient **L'ARTISAN**, cinquième fin. La cible 13 est désormais
+atteignable, et la cible 5 passe de quatre à cinq fins.
 
 ### 19.3 — Le remède fabricable par le joueur
 
@@ -1219,6 +1270,13 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
 - **§16 était une porte de fin déguisée en porte par jalon.** Les cibles 5 et 6 exigent le jeu
   complet ; la règle « vert avant le jalon suivant » était donc inapplicable aux jalons 1 à 4.
   §15 et §16 échelonnent.
+- **L'acte I n'avait pas d'horloge.** Trois horloges en acte III, une en acte II, zéro au
+  jalon 1 : rien ne poussait, donc rien ne mourait, donc les cibles 1 et 2 ne mesuraient rien.
+  §1bis (la dette) corrige — c'était §19.1.
+- **L'acte III pouvait ne jamais arriver.** Un tirage à 15 % par trimestre laissait des
+  campagnes entières sans épidémie, c'est-à-dire sans le sujet du jeu. §8 (la charge) rend le
+  déclenchement certain au-dessus du seuil, et §11 ajoute **L'ARTISAN** pour le joueur qui
+  reste dessous — c'était §19.2.
 - **Le `cash_sale` n'avait pas de sortie.** Il ne pouvait qu'être blanchi à débit plafonné,
   donc s'accumuler. Corruption et élimination lui en donnent une, et ferment le circuit de §5.
 - **La non-fongibilité était implicite.** Deux trésoreries étaient décrites, mais rien ne
