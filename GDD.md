@@ -127,6 +127,7 @@ terminal, ruineux, et le seul qui n'ouvre pas un choix mais une fin.
   `discret`, et c'est ce qui l'empêche d'être un bot cassé plutôt qu'un témoin.
 
 ---
+
 ## 3. Le graphe, le parc & la logistique (acte II)
 
 **La carte est un graphe, pas un terrain.** Aucun pathfinding, aucune tuile, aucune 3D.
@@ -655,6 +656,8 @@ demande un échantillon, un rival veut fuir avec ta formule, l'armée ferme un c
 
 L'événement d'amnistie est le seul qui **nomme la fourche à voix haute** — et il n'arrive
 qu'après que le joueur l'ait déjà choisie par ses dépenses.
+
+---
 
 ## 12bis. L'interface
 
