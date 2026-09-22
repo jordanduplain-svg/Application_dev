@@ -223,12 +223,35 @@ quand l'instabilité de leur nœud d'origine dépasse 0.6. `ponytail:` pas de fa
 
 **L'argent sale n'est pas un score. C'est un passif.**
 
-Deux trésoreries distinctes :
+### La règle du papier
+
+`cash_sale` **ne peut jamais être dépensé en tant que tel.** Il n'achète rien qui laisse une
+trace écrite : pas de bien enregistré, pas de contrat, pas de virement, pas de salaire déclaré.
+Il n'est pas une monnaie faible — il est une **monnaie séparée**, et le jeu ne les additionne
+jamais, nulle part.
+
+La ligne de partage n'est pas la morale, c'est **l'existence d'un document** :
+
+| | `cash_propre` — il y a un papier | `cash_sale` — il n'y en a pas |
+|---|---|---|
+| **Achète** | labos, **engins**, commerces-façade, recherche, équipes d'extermination | **corruption** (§5bis), **élimination** (§5ter), précurseurs au marché noir |
+| **Paie** | entretien du parc, salaires déclarés | rétributions hebdomadaires des contacts |
+| **Ne peut pas** | — | acheter un actif, payer un entretien, financer la R&D, recruter un lieutenant |
+
+Un sous-marin a un acte de vente, un vendeur et un compte à créditer : il exige du propre.
+Un douanier n'a rien de tout ça : il exige du sale, et il refuserait un virement.
+
+> **Aucun bouton ne convertit l'un en l'autre.** Le blanchiment n'est pas une transaction,
+> c'est un **débit hebdomadaire plafonné** (voir plus bas). Un joueur qui a 40 M$ sales et
+> 0 $ propre ne peut rien faire d'autre qu'attendre — et payer chaque semaine la visibilité
+> que ce tas produit. C'est exactement la situation que le jeu cherche à créer.
+
+Deux trésoreries distinctes, jamais fongibles :
 
 | | Sert à | Contrainte |
 |---|---|---|
-| `cash_sale` | corruption, élimination, précurseurs au marché noir | **occupe de la place**, **produit de la visibilité**, se transporte |
-| `cash_propre` | labos, **engins**, **entretien**, équipes, recherche, salaires déclarés | rare |
+| `cash_sale` | corruption, élimination, marché noir — **rien d'enregistré** | **occupe de la place**, **produit de la visibilité**, **se transporte physiquement** |
+| `cash_propre` | tout ce qui a un papier | **rare** — son seul robinet est le blanchiment, plafonné |
 
 ```
 visibilite_hebdo += (cash_sale / 1_000_000) × k_cash
@@ -592,6 +615,77 @@ demande un échantillon, un rival veut fuir avec ta formule, l'armée ferme un c
 L'événement d'amnistie est le seul qui **nomme la fourche à voix haute** — et il n'arrive
 qu'après que le joueur l'ait déjà choisie par ses dépenses.
 
+## 12bis. L'interface — les deux bourses
+
+`game/` ne contient aucune règle (§13). Mais la séparation des deux monnaies est **une règle
+que l'UI doit rendre impossible à oublier**, sans quoi le joueur la découvre par un bouton
+grisé et la vit comme un bug.
+
+### Le HUD permanent
+
+**Jamais un chiffre de fortune totale. Nulle part.** Deux bourses côte à côte, visuellement
+distinctes, jamais additionnées — pas dans le HUD, pas dans l'écran de fin, pas dans une
+infobulle.
+
+```
+┌────────────────────────────┬─────────────────────────────────┐
+│  PROPRE      4 200 000 $   │  SALE      38 400 000 $         │
+│  ▸ entretien  −310 000/sem │  ▸ +2.1 visibilité/sem          │
+│  ▸ blanchi    +180 000/sem │  ▸ réparti sur 6 nœuds          │
+└────────────────────────────┴─────────────────────────────────┘
+```
+
+Trois informations obligatoires à côté du stock sale, en permanence :
+
+1. **ce qu'il coûte en visibilité cette semaine** — le passif est chiffré, pas sous-entendu
+2. **où il est** — il est physique, stocké dans des nœuds (§5), et il se transporte par les
+   mêmes engins que le produit
+3. **à quelle vitesse il s'écoule** — le débit de blanchiment réellement utilisé
+
+### L'argent propre est un nombre. L'argent sale est une carte.
+
+C'est la distinction visuelle qui porte tout le système. Le propre est une trésorerie
+abstraite. Le sale a une **position sur le graphe**, et un tas coincé dans un nœud sous
+`pression_locale` haute est un problème de logistique, pas de comptabilité.
+
+Un clic sur la bourse sale ouvre la répartition par nœud, avec le débit de blanchiment
+disponible localement (§5 — la capacité dépend de `activite_economique` du nœud).
+
+### Chaque prix déclare sa monnaie
+
+Aucune étiquette de prix n'est neutre. Un pictogramme, une couleur, deux familles typographiques —
+le choix est libre, la contrainte ne l'est pas : **on doit savoir quelle bourse un achat
+va vider avant de cliquer.**
+
+Un bouton indisponible n'est jamais seulement grisé. Il dit **pourquoi**, et il dit **combien
+il manque** :
+
+```
+[ Sous-marin classe II — 12 400 000 $ PROPRE ]
+  ✗ il vous manque 8 200 000 $ propres
+    (38 400 000 $ sales en attente — 180 000 $/sem blanchis, soit ~46 semaines)
+```
+
+Cette dernière ligne est la plus importante de l'interface. Elle transforme une frustration
+(« je ne peux pas acheter ») en **lecture d'une contrainte** (« mon goulot est le blanchiment,
+pas la vente »). C'est le moment où le joueur comprend le jeu.
+
+### L'écran de blanchiment est un débit, pas un guichet
+
+Pas de champ de saisie, pas de bouton « convertir ». Une jauge de **capacité utilisée /
+capacité disponible**, commerce par commerce, avec le taux de perte appliqué et le plafond
+du nœud affiché à côté.
+
+Quand la capacité est saturée — ce qui arrivera presque toujours (§5) — l'écran le dit en
+clair : **« saturé depuis 23 semaines »**. C'est la courbe de difficulté du jeu, et elle
+doit être lisible sans calcul mental.
+
+### Conséquence de vente
+
+Les trois jauges (visibilité, instabilité, remède) doivent être visibles sur chaque capture
+d'écran (§18). **Les deux bourses aussi.** « Riche en argent qu'on ne peut pas dépenser » est
+une situation que personne n'a mise sur une capture Steam, et elle se comprend en une seconde.
+
 ---
 
 # PARTIE II — TECHNIQUE
@@ -697,7 +791,7 @@ cette fois à la mesure au lieu du modèle.
 | **0** | **Le harnais** | 1-2 j | `balance.gd`, `bots.gd`, `run.gd`, CI — **portés**, pas réécrits | **levier connecté** | — | — |
 | **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple | 1, 2, 3, **7** | 2 | **oui** |
 | **2** | **Le graphe & le parc** | 4-5 sem | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité | + **8, 9, 15** | 2 | **oui** |
-| **3** | **L'argent sale** | 2-3 sem | double trésorerie, commerces, **corruption**, **élimination**, cash physique | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
+| **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
 | **4** | **Les hommes** | 2 sem | bras droits, loyauté, ambition, trahison, arrestations, équipages | + **12** | 3 | oui |
 | **5** | **L'épidémie** | 3-4 sem | propagation, équipes, instabilité mondiale | + **13, 14** | 4 | oui |
 | **6** | **Le remède** | 2-3 sem | jauge, aide/sabotage, les 4 fins, épilogues | **§16 en entier** | 4 | **complet** |
@@ -898,6 +992,8 @@ Volontairement absents. Chacun est une ligne à ajouter plus tard, pas une dette
   capacité/coût/délai/visibilité/équipage. La frontière jet-ski / vedette est la seule
   fragile, et la cible 8 la tranchera par la mesure.
 - **Pas de scène d'élimination.** Une décision, un tirage, un texte. Aucune représentation.
+- **Aucun bouton de conversion sale → propre.** Le blanchiment est un débit hebdomadaire
+  plafonné, jamais un guichet. Un joueur riche en sale et sec en propre doit attendre.
 
 ---
 
@@ -1007,3 +1103,9 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   §15 et §16 échelonnent.
 - **Le `cash_sale` n'avait pas de sortie.** Il ne pouvait qu'être blanchi à débit plafonné,
   donc s'accumuler. Corruption et élimination lui en donnent une, et ferment le circuit de §5.
+- **La non-fongibilité était implicite.** Deux trésoreries étaient décrites, mais rien ne
+  disait que le sale ne s'achète rien d'enregistré. La règle du papier (§5) la rend explicite,
+  et §12bis en fait une contrainte d'interface : les deux bourses ne sont jamais additionnées,
+  aucun prix n'est affiché sans sa monnaie, aucun bouton indisponible n'est muet.
+- **Le document n'avait aucune spécification d'interface.** §13 posait `game/` = UI sans
+  règles, mais aucun écran n'était décrit. §12bis couvre le seul qui porte une règle.
