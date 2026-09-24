@@ -1,0 +1,174 @@
+{
+ "_": "GDD §2 : les produits de reference, tolerance 5 %, testes dans tests/run.gd. Toute modification des formules casse ce test AVANT de casser l'equilibrage.",
+ "_intention": "La substance est fictive : aucune verite exterieure a laquelle se caler, contrairement au vmax d'un avion reel. Ces attendus sont une INTENTION DE DESIGN, et le test verifie que les sept formules la servent encore. Un attendu genere depuis le code ne serait pas une calibration, ce serait un detecteur de changement.",
+ "tolerance": 0.05,
+ "references": [
+  {
+   "id": "rue",
+   "nom": "Rue — bon marche, coupe, inoffensif",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.35,
+    "rendement": 0.85,
+    "complexite": 1,
+    "coupe": 0.6,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 0.1148,
+    "cout_unitaire": 540.0,
+    "instabilite_neuro": 0.0
+   }
+  },
+  {
+   "id": "haut_de_gamme",
+   "nom": "Haut de gamme — ce qu'un joueur construit VRAIMENT",
+   "_": "LE PIEGE DE §2 : personne n'a choisi de charger, et c'est la recette la plus rentable du segment le plus rentable. Son `attendu.instabilite_neuro` est juste en dessous.",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.95,
+    "rendement": 0.4,
+    "complexite": 4,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 1.007,
+    "cout_unitaire": 10775.0,
+    "instabilite_neuro": 0.775
+   }
+  },
+  {
+   "id": "haut_de_gamme_stabilise",
+   "nom": "Haut de gamme stabilise — ce que coute la securite",
+   "_": "La MEME recette avec stabilisation : l'instabilite tombe a zero et le cout monte. C'est le prix du piege, et a l'acte I rien ne pousse a le payer. Comparer les deux `attendu`.",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.95,
+    "rendement": 0.4,
+    "complexite": 4,
+    "coupe": 0.0,
+    "stabilisation": 2
+   },
+   "attendu": {
+    "puissance": 1.007,
+    "cout_unitaire": 12575.0,
+    "instabilite_neuro": 0.0
+   }
+  },
+  {
+   "id": "extreme",
+   "nom": "Extreme — l'acte III en bouteille",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.99,
+    "rendement": 0.3,
+    "complexite": 5,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 1.0494,
+    "cout_unitaire": 15270.0,
+    "instabilite_neuro": 0.872
+   }
+  },
+  {
+   "id": "famille_verdal",
+   "nom": "Famille Verdal — meme recette, seule la famille change",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.9,
+    "rendement": 0.55,
+    "complexite": 2,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 0.738,
+    "cout_unitaire": 3987.0,
+    "instabilite_neuro": 0.1325
+   }
+  },
+  {
+   "id": "famille_azurite",
+   "nom": "Famille Azurite — meme recette, seule la famille change",
+   "recette": {
+    "famille": "azurite",
+    "purete": 0.9,
+    "rendement": 0.55,
+    "complexite": 2,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 0.855,
+    "cout_unitaire": 5317.0,
+    "instabilite_neuro": 0.4085
+   }
+  },
+  {
+   "id": "famille_corymbe",
+   "nom": "Famille Corymbe — meme recette, seule la famille change",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.9,
+    "rendement": 0.55,
+    "complexite": 2,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 0.954,
+    "cout_unitaire": 7532.0,
+    "instabilite_neuro": 0.6616
+   }
+  },
+  {
+   "id": "famille_noctal",
+   "nom": "Famille Noctal — meme recette, seule la famille change",
+   "recette": {
+    "famille": "noctal",
+    "purete": 0.9,
+    "rendement": 0.55,
+    "complexite": 2,
+    "coupe": 0.0,
+    "stabilisation": 0
+   },
+   "attendu": {
+    "puissance": 1.035,
+    "cout_unitaire": 10190.0,
+    "instabilite_neuro": 0.8986
+   }
+  }
+ ],
+ "_quatre": "QUATRE references d'archetype et non trois (§2 en demandait trois). La troisieme a ete ajoutee apres un audit : la reference « haut de gamme » etait STABILISEE, donc elle lisait une instabilite nulle — elle montrait l'INVERSE du piege que §2 decrit. Or a l'acte I l'instabilite ne fait rien, donc un joueur rationnel ne paie pas la stabilisation : la recette qu'il construit vraiment charge, et coute MOINS cher. Les deux versions sont donc la, cote a cote — le piege, et son prix. Les `attendu` ci-dessous portent les chiffres ; ce commentaire porte la raison.",
+ "_familles": "Les quatre dernieres references sont la TABLE DES FAMILLES : meme recette, seule la famille change. Elles existent parce que le levier a montre que `seuil_famille` etait DEBRANCHE pour trois familles sur quatre — deux n'etaient touchees par aucune recette, ni bot ni reference, et la troisieme etait clampee a zero. Elles montrent aussi le piege de §2 sur un seul axe : plus la famille est puissante, plus son seuil est bas, donc plus elle charge vite — 0.13 pour le Verdal, 0.90 pour le Noctal, a recette identique.",
+ "_remesure": "LES COUTS ATTENDUS ONT ETE REMESURES le jour ou §2 a donne une contrepartie a ses trois curseurs domines (voir sim/produit.gd) : la complexite divise desormais le carre de la purete, et la coupe divise le cout par kilo VENDU. Le modele de cout a change delibrement, donc l'echelle a baisse de 34 a 60 % selon la recette. Les puissances et les instabilites, elles, n'ont pas bouge d'un chiffre : aucun des trois changements ne les touche, et c'est la premiere verification qu'on a faite. REMESURER UN ATTENDU EST DANGEREUX — une calibration qu'on realigne sur ce que le code produit ne peut plus jamais echouer. C'est pourquoi tests/run.gd verifie EN PLUS les ORDRES, qui expriment l'intention et qu'aucune remesure ne satisfait toute seule : les quatre familles doivent rester strictement croissantes en cout, en puissance et en instabilite, et le produit de rue doit rester moins cher que le haut de gamme, lui-meme moins cher que l'extreme.",
+ "_ordres": "L'INTENTION DE LA CALIBRATION, a cote des references qu'elle concerne. Les `attendu` ont ete remesures le jour ou §2 a donne une contrepartie a ses curseurs, et une calibration realignee sur le code ne peut plus echouer : ces ordres sont ce qu'aucune remesure ne satisfait toute seule. Ils vivaient d'abord dans tests/run.gd, avec les quatre recettes RECOPIEES en dur — deux verites : modifier la recette « rue » ici aurait laisse le test verifier en silence une recette qui n'existait plus. tests/run.gd lit maintenant tout ceci par `id`, et echoue si un id cite n'existe pas.",
+ "ordres": [
+  {
+   "specs": [
+    "cout_unitaire",
+    "puissance",
+    "instabilite_neuro"
+   ],
+   "croissant": [
+    "famille_verdal",
+    "famille_azurite",
+    "famille_corymbe",
+    "famille_noctal"
+   ]
+  },
+  {
+   "specs": [
+    "cout_unitaire"
+   ],
+   "croissant": [
+    "rue",
+    "haut_de_gamme",
+    "extreme"
+   ]
+  }
+ ]
+}

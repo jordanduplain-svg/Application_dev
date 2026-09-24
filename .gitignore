@@ -1,9 +1,12 @@
 .godot/
 tools/
 *.tmp
-# Captures produites par tests/capture.gd — artefacts regénérables, pas des sources.
-capture*.png
-capture*.png.import
 
 # Réglages locaux de l'agent (machine-dépendants).
 .claude/
+
+# Mesures produites par tests/balance.gd : on les rejoue, on ne les versionne pas (GDD 16).
+balance.csv
+levier.csv
+# La mesure « d'avant » d'une comparaison (voir l'en-tete de tests/comparer.gd).
+avant.csv

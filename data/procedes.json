@@ -1,0 +1,104 @@
+{
+ "_": "GDD §2bis : l'arbre de recherche. Trois branches ; SEULE LA CHIMIE existe au jalon 1, les deux autres naissent avec leurs systemes (Logistique au jalon 2 avec le parc, Influence au jalon 3 avec l'argent sale). Ecrire leurs noeuds aujourd'hui produirait des constantes que rien ne peut bouger, c'est-a-dire du bruit qu'on prendrait pour un signal.",
+ "_huitieme_noeud": "GDD §2bis donne 8 noeuds a la Chimie. Le huitieme est le remede fabricable par le joueur (§10) : terminal, ruineux, et le seul de l'arbre qui n'ouvre pas un choix mais une FIN. Il arrive au jalon 5 avec l'acte III, pas ici.",
+ "_ouvre": "CE QU'UN NOEUD PEUT OUVRIR, et la liste est FERMEE : `famille`, `purete_max`, `complexite_max`, `stabilisation_max`. Aucun noeud ne donne de bonus numerique (« +10 % de rendement ») — §2bis l'interdit et tests/run.gd le verifie, parce que c'est la promesse la plus facile a trahir d'une ligne de JSON. La recherche OUVRE DES CHOIX ; l'arbitrage reste dans l'ecran de conception (§2) et ne remonte jamais dans l'arbre.",
+ "_prix": "La recherche se paie en `cash_propre` + temps (§2bis) : aucune monnaie de recherche, aucun point d'ADN, aucune troisieme bourse — ce serait une conversion deguisee et ca contredirait la regle du papier (§5). Consequence voulue : son rythme est etrangle par le blanchiment, comme tout le reste. Un joueur assis sur 40 M$ sales ne cherche pas plus vite qu'un joueur pauvre.",
+ "_cout_paye_d_avance": "Le cout part en UNE FOIS au lancement, pas par semaine. Un paiement etale creerait un etat a moitie paye qu'une insolvabilite pourrait interrompre — une seconde cause de mort, qui appartient a §3bis et au jalon 2, pas a un arbre de recherche.",
+ "ouvertures_depart": {
+  "_": "CE AVEC QUOI ON COMMENCE. §2bis : « une partie entiere est jouable sans rien rechercher — plus pauvre, plus discrete, parfaitement viable ». Ces quatre valeurs sont ce qui rend cette phrase vraie ou fausse, et la cible 23 de §16 la mesure. La recette du bot-temoin `discret` tient entierement dedans : c'est exactement sa trajectoire.",
+  "familles": [
+   "verdal"
+  ],
+  "_famille_defaut": "LA BUTEE, quand on demande une famille qu'on n'a pas encore cherchee. Elle etait `ouvertes[0]` apres un tri alphabetique : le repli CHANGEAIT a mesure qu'on cherchait (verdal, puis azurite des qu'`extraction_azurite` tombait) et ce n'etait ni la famille precedente ni la meilleure disponible — l'alphabet decidait. Meme faute que l'ordre de service des segments, commise dans un fichier neuf le jour meme ou la lecon etait ecrite en §20. Elle est donc DECLAREE, et tests/run.gd verifie qu'elle est ouverte au depart.",
+  "famille_defaut": "verdal",
+  "purete_max": 0.6,
+  "complexite_max": 1,
+  "stabilisation_max": 0
+ },
+ "noeuds": {
+  "extraction_azurite": {
+   "branche": "chimie",
+   "nom": "Extraction azurite",
+   "cout_propre": 80000.0,
+   "semaines": 4.0,
+   "prerequis": [],
+   "ouvre": {
+    "famille": "azurite"
+   }
+  },
+  "raffinage_court": {
+   "branche": "chimie",
+   "nom": "Raffinage court",
+   "cout_propre": 120000.0,
+   "semaines": 6.0,
+   "prerequis": [],
+   "ouvre": {
+    "purete_max": 0.8
+   }
+  },
+  "procede_deux_etapes": {
+   "branche": "chimie",
+   "nom": "Procede en deux etapes",
+   "cout_propre": 160000.0,
+   "semaines": 6.0,
+   "prerequis": [
+    "raffinage_court"
+   ],
+   "ouvre": {
+    "complexite_max": 2
+   }
+  },
+  "synthese_corymbe": {
+   "branche": "chimie",
+   "nom": "Synthese corymbe",
+   "cout_propre": 220000.0,
+   "semaines": 8.0,
+   "prerequis": [
+    "extraction_azurite"
+   ],
+   "ouvre": {
+    "famille": "corymbe"
+   }
+  },
+  "colonne_seche": {
+   "branche": "chimie",
+   "nom": "Colonne seche",
+   "cout_propre": 280000.0,
+   "semaines": 9.0,
+   "prerequis": [
+    "raffinage_court",
+    "procede_deux_etapes"
+   ],
+   "ouvre": {
+    "purete_max": 0.99
+   }
+  },
+  "additifs_stabilisants": {
+   "branche": "chimie",
+   "nom": "Additifs stabilisants",
+   "_": "Le seul noeud qui ouvre un choix DEFENSIF : la stabilisation rachete `instabilite_neuro` a prix fort (§2). Il est volontairement hors du chemin le plus court vers la rentabilite — le piege de §2 veut que la recette la plus rentable soit celle qui charge le plus vite, et un joueur qui veut s'en premunir doit payer un detour.",
+   "cout_propre": 200000.0,
+   "semaines": 8.0,
+   "prerequis": [
+    "procede_deux_etapes"
+   ],
+   "ouvre": {
+    "stabilisation_max": 3
+   }
+  },
+  "culture_noctal": {
+   "branche": "chimie",
+   "nom": "Culture noctal",
+   "cout_propre": 400000.0,
+   "semaines": 12.0,
+   "prerequis": [
+    "synthese_corymbe",
+    "colonne_seche"
+   ],
+   "ouvre": {
+    "famille": "noctal"
+   }
+  }
+ },
+ "_duree": "LE CRITERE DES DUREES, pose avant de les choisir et mesure apres : une branche doit etre grimpable DANS LA DUREE DE VIE DU PROFIL QUI LA GRIMPE, avec du temps pour jouer le resultat. Premiere version (6/8/10/12/14 semaines, 50 au total) : le bot `industriel` posait son dernier noeud semaine 106 et se faisait arreter semaine 111. Sa recette cible existait CINQ semaines sur 260 — une branche entiere decorative pour le seul profil qui l'utilise, c'est-a-dire le levier debranche que §16 existe pour attraper, un etage plus haut. Les COUTS n'ont pas bouge : ce sont eux qui retardent le DEPART (la dette de §1bis mange le budget de la premiere annee, et c'est une contrainte de jeu lisible, pas un defaut). Seules les durees ont ete resserrees d'un tiers."
+}

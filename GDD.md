@@ -101,13 +101,56 @@ Aucun curseur ne contrôle directement une spec affichée.
 
 ```
 puissance        = purete × (1 − coupe) × k_famille                     -- ce qui se vend
-cout_unitaire    = f(famille, purete², 1/rendement, complexite)         -- pureté chère en carré
-debit_kg_sem     = capacite_labo × rendement × (1 − 0.12 × complexite)
-signature        = tracabilite_famille × (1 + 0.5 × complexite) − 0.15 × stabilisation
-fiabilite_lot    = 1 − variance(purete, complexite, competence_chimiste)
-dependance       = puissance^1.3 × (1 − coupe)                          -- fidélise la demande
-instabilite_neuro = clamp(puissance^2.2 − 0.4 × stabilisation − seuil_famille, 0, 1)
+cout_unitaire    = f(famille, purete² / complexite^k, 1/rendement, complexite) × (1 − coupe)
+debit_kg_sem     = capacite_labo × rendement × (1 − k × complexite) / (1 − coupe)
+signature        = tracabilite_famille × (1 + k × complexite) − k × stabilisation
+fiabilite_lot    = 1 − variance(purete, complexite, RENDEMENT, competence_chimiste)
+dependance       = puissance^k × (1 − coupe)                            -- fidélise la demande
+instabilite_neuro = clamp(puissance^k − k × stabilisation − seuil_famille, 0, 1)
 ```
+
+*Les coefficients vivent dans `data/constants.json` et ne sont pas recopiés ici — les chiffres
+d'une formule écrite dans un document périment exactement comme ceux d'un commentaire.*
+
+### Chaque curseur doit avoir un arbitrage — mesuré, pas supposé
+
+**La première version de ces formules avait trois curseurs sur six qui n'en avaient pas.** Un
+parcours de l'espace de conception (972 contextes) l'a montré en une ligne chacun :
+
+- **`complexite` n'améliorait RIEN.** Coût plus cher, débit plus bas, signature plus haute,
+  fiabilité plus basse — quatre specs dégradées, aucune améliorée. La bonne réponse était
+  toujours 1. Le nœud `procede_deux_etapes` (160 000 $) ne débloquait qu'une dégradation, et
+  `colonne_seche` l'exigeait : **on forçait le joueur à acheter une dégradation pour atteindre
+  la pureté maximale.**
+- **`rendement` ne coûtait RIEN.** Le monter baissait le coût et montait le débit, point. La
+  bonne réponse était toujours le maximum.
+- **`coupe` ne rapportait rien à l'acte I** — elle diluait la puissance contre une instabilité
+  qui ne fait encore rien — et il lui manquait la seule chose que le mot décrit.
+
+**Ce qui a été ajouté, et d'où chaque terme vient :**
+
+| Curseur | Ce qu'il gagne | D'où ça vient |
+|---|---|---|
+| `complexite` | divise le carré de la pureté | l'arbre de §2bis le disait déjà : `colonne_seche` exige `procede_deux_etapes`. L'intention « un procédé complexe PERMET la haute pureté » existait dans l'arbre et pas dans la formule. |
+| `coupe` | multiplie les kilos vendables, divise le coût par kilo | ce que le mot décrit. Aucune constante : les deux effets sortent du même fait arithmétique, et puissance × volume reste constant — un échange pur qualité contre quantité. |
+| `rendement` | se paie en variance de lot | pousser un procédé, c'est le pousser tout court. `fiabilite_lot` est la spec que `milieu` et `haut_de_gamme` pondèrent le plus fort : le rendement s'arbitre contre le segment visé. |
+
+**À complexité 1 et sans coupe, rien ne bouge** : c'est ce qui garantit qu'un joueur qui ne
+touche pas à ces curseurs garde exactement le jeu d'avant.
+
+`tests/run.gd` parcourt désormais l'espace et **échoue si un curseur n'a pas de contrepartie
+qui compte** : bouger le curseur dans chaque sens doit améliorer au moins une spec d'**1 % de
+son étendue**. Le seuil est celui que `comparer.gd` utilise déjà pour « un mouvement qui
+compte ». La première version exigeait seulement un gain non nul : elle attrapait un zéro exact
+et laissait passer un terme symbolique — `k_variance_rendement` divisé par 2500 restait vert.
+Le seuil a été posé après mesure : la contrepartie réelle la plus mince (baisser la
+stabilisation) est à ~3 %, le terme symbolique à 0,01 %. Il passe entre les deux. Le rapport
+imprime la contrepartie la plus mince à chaque exécution, pour qu'on voie la marge.
+
+C'est le pendant du levier un étage plus haut. Le levier garde les constantes
+(« est-ce que ça bouge ? ») ; ce test garde les choix (« y a-t-il une raison de bouger le
+curseur ? »). Les constantes qui portaient ces trois défauts bougeaient toutes des métriques :
+le levier les déclarait vertes, à juste titre, et ne pouvait rien voir.
 
 **`instabilite_neuro` est l'axe le plus important du jeu.** Il est affiché dès la première minute,
 il ne fait rien pendant tout l'acte I, et il est la cause de l'acte III.
@@ -147,15 +190,32 @@ qui n'est pas renouvelée perd son attractivité à mesure que les rivaux rattra
 bots produisent des combinaisons illisibles.
 ### Calibration obligatoire (suite)
 
-Trois produits de référence en `data/calibration.json`, tolérance 5 %, testés dans `tests/run.gd` :
-un produit de rue bon marché, un produit haut de gamme, un produit extrême (`instabilite_neuro > 0.8`).
-Toute modification des formules casse ce test avant de casser l'équilibrage.
+**Quatre** produits de référence en `data/calibration.json`, tolérance 5 %, testés dans
+`tests/run.gd`. Toute modification des formules casse ce test avant de casser l'équilibrage.
+
+La quatrième est née d'un audit, et elle mérite d'être expliquée : la référence « haut de
+gamme » était **stabilisée**, donc elle lisait `instabilite_neuro = 0.000` — elle montrait
+l'**inverse** du piège décrit plus haut. Or à l'acte I l'instabilité ne fait rien, donc un
+joueur rationnel ne paie pas la stabilisation. Les deux versions sont désormais côte à côte :
+
+| Référence | `instabilite_neuro` | `cout_unitaire` |
+|---|---|---|
+| Rue — bon marché, coupé | 0.000 | 1 344 |
+| **Haut de gamme — ce qu'un joueur construit vraiment** | **0.775** | **17 256** |
+| Haut de gamme stabilisé — ce que coûte la sécurité | 0.000 | 19 056 |
+| Extrême — l'acte III en bouteille | 0.872 | 26 470 |
+
+Le piège tient dans l'écart entre les deux lignes du milieu : **1 800 $/kg pour ne pas
+charger**, et rien dans l'acte I qui pousse à les payer.
 
 ---
 
 ## 2bis. La recherche — trois branches
 
-**Réemploi de `bureau-etudes/sim/research.gd`, tel quel.** Seules les données changent.
+**Écrit, pas porté** — `sim/recherche.gd`. §13 a tranché depuis que cette ligne a été écrite :
+on ne reprend de `bureau-etudes` que le socle et le marché, et son `research.gd` portait un
+modèle de brevets et de concours qui n'a rien à faire ici. Cette ligne disait le contraire
+jusqu'au jour de l'implémentation.
 
 ### Pas de monnaie de recherche
 
@@ -183,6 +243,50 @@ encore dans un harnais à 4 bots, et il ne doit pas augmenter ensuite.
 
 **Chimie a un 8ᵉ nœud** : le remède fabricable par le joueur (§10) — terminal, ruineux, et le
 seul de l'arbre qui n'ouvre pas un choix mais une fin. 22 nœuds au total.
+
+### Ce qui existe aujourd'hui — `data/procedes.json`, 7 nœuds
+
+**Seule la Chimie est écrite**, et seulement ses 7 nœuds de jalon 1 : le 8ᵉ (le remède) arrive
+avec l'acte III, Logistique avec le parc, Influence avec l'argent sale. Écrire leurs nœuds
+maintenant produirait des constantes que rien ne peut bouger — du bruit qu'on prendrait pour
+un signal, exactement la règle qui tient `opportuniste` et `accelerateur` hors du harnais.
+
+```
+extraction_azurite    →  famille azurite            80 k$ /  4 sem
+raffinage_court       →  purete_max 0.80           120 k$ /  6 sem
+procede_deux_etapes   →  complexite_max 2          160 k$ /  6 sem   [raffinage_court]
+synthese_corymbe      →  famille corymbe           220 k$ /  8 sem   [extraction_azurite]
+colonne_seche         →  purete_max 0.99           280 k$ /  9 sem   [raffinage, deux_etapes]
+additifs_stabilisants →  stabilisation_max 3       200 k$ /  8 sem   [procede_deux_etapes]
+culture_noctal        →  famille noctal            400 k$ / 12 sem   [corymbe, colonne_seche]
+
+kit de départ : verdal seul, purete ≤ 0.60, complexite ≤ 1, aucune stabilisation
+```
+
+**La liste de ce qu'un nœud peut ouvrir est FERMÉE** — `famille`, `purete_max`,
+`complexite_max`, `stabilisation_max` — et `tests/run.gd` la vérifie contre les données.
+C'est ce qui rend vraie la phrase « aucun bonus numérique direct » : elle ne se casse pas
+dans le code, elle se casse dans une ligne de JSON, en silence, et aucune cible ne le verrait.
+
+### Le coût gate le DÉPART, la durée gate la MONTÉE — mesuré
+
+**La dette de l'acte I (§1bis) mange tout le budget de recherche de la première année.**
+800 000 $ dus semaine 60 contre 700 000 $ de départ : un profil qui ne veut pas se faire
+saisir ne pose son premier nœud que vers la semaine 52. Ce n'est pas un défaut, c'est une
+contrainte lisible — année 1 pour survivre et payer, année 2 pour investir — mais elle
+n'était écrite nulle part et c'est la mesure qui l'a révélée.
+
+**Le critère des durées, posé avant de les choisir : une branche doit être grimpable dans la
+durée de vie du profil qui la grimpe, avec du temps pour jouer le résultat.** Première
+version (50 semaines au total) : le profil-témoin `industriel` posait son dernier nœud
+semaine 106 et se faisait arrêter semaine 111. **Sa recette cible existait cinq semaines sur
+260** — une branche entière décorative pour le seul profil qui l'utilise, c'est-à-dire le
+levier débranché que §16 existe pour attraper, un étage plus haut. Durées resserrées d'un
+tiers ; les coûts n'ont pas bougé. Résultat mesuré : sommet semaine 98, mort semaine 109.
+
+**Onze semaines de marge, et c'est mince.** C'est le coût, pas la durée, qui borne désormais
+le dernier nœud — le bot attend seize semaines entre l'avant-dernier et le dernier, le temps
+d'épargner 280 000 $.
 
 ### Ce que la recherche ne fait jamais
 
@@ -318,11 +422,15 @@ Un voyage reste une décision : `(arête, engin, produit, kg)`. Le joueur ne pil
 
 ## 4. Les marchés
 
-**Réemploi direct de `bureau-etudes/sim/market.gd`, formules inchangées.** Seules les données changent.
+**Port au scalpel de `bureau-etudes/sim/market.gd`, formules inchangées** (§13 : ~590 lignes
+gardées sur 989, le reste jeté ou réécrit). Seules les données changent.
 
 ```
-qualite_s     = Σ_i poids_i × clamp(spec_i / besoin_ref_i, 0, 1.4)
-f_prix        = (prix_median_segment / prix)^1.2
+qualite_s     = Σ_i poids_i × clamp(porte_i(spec_i / besoin_ref_i), 0, 1.4)
+porte_i(r)    = 0                         si r <= seuil_i        -- SEUIL, voir plus bas
+              = r × (r − seuil_i)/(1 − seuil_i)   si seuil_i < r < 1
+              = r                         si r >= 1
+f_prix        = (prix_median_segment / prix_du_joueur_DANS_CE_SEGMENT)^exposant_segment
 f_confiance   = 0.7 + 0.6 × fiabilite_livraison          -- remplace f_repu
 f_delai       = 1 / (1 + 0.15 × semaines_rupture)
 attractivite  = qualite_s × f_prix × f_confiance × f_delai
@@ -331,13 +439,63 @@ part_reelle  += (part_cible − part_reelle) × 0.20
 ventes        = demande_trim × part_reelle, plafonné par le stock livré sur place
 ```
 
+### Le seuil — ce qui rend un segment EXCLUSIF
+
+**Ajouté après mesure.** Sans lui le ratio est linéaire : un produit à la moitié de la
+référence obtient la moitié du crédit. Conséquence mesurée au jalon 1 : un produit de rue à
+**pureté 0,45 tenait 30 % du segment `haut_de_gamme`**, à parité avec un produit à 0,95 sur
+trois maisons. Les « critères orthogonaux » annoncés plus haut ne l'étaient pas — ils étaient
+des préférences, pas des portes.
+
+Le `seuil` est **optionnel et par critère**, défaut 0 (= comportement linéaire). Seuls les
+critères qui doivent être exclusifs en portent un ; aujourd'hui c'est la pureté du
+`haut_de_gamme`, à 0,70.
+
+**C'est une rampe et pas une coupure.** Sous le seuil le critère vaut zéro, entre le seuil et
+la référence le crédit monte progressivement, au-dessus rien ne change. Une coupure nette
+ferait basculer un produit entier sur un millième de pureté — et ce document a appris à ses
+dépens (§16, l'équilibrage du jalon 1) qu'une falaise n'est pas un réglage.
+
+**Effet, et ce qu'il faut en retenir** : le seuil rend le `haut_de_gamme` exclusif — le
+producteur à haute pureté y reprend une part majoritaire au producteur de rue, et l'écart de
+richesse entre les deux profils-témoins se resserre. Aucune fixture ni aucun seuil de verdict
+n'a été touché pour l'obtenir : c'est le marché qui a changé, pas le juge.
+
+*Le chiffre du jour se lit en lançant `tests/balance.gd`, et la forme en balayant
+`segments.segments.haut_de_gamme.criteres.0.seuil`. Cette phrase portait deux mesures et un
+verdict (« la cible 3 passe au vert ») : le verdict est devenu faux quand la cible a gagné son
+terme de survie, et les deux chiffres étaient exprimés dans une unité — l'instantané de
+richesse — que §16 a remplacée par une intégrale. Trois façons de vieillir dans une seule
+phrase, dans le document qui sert de source de vérité.*
+
 ### Segments (`data/segments.json`)
 
-| Segment | Critères pondérés | Volume | Prix |
-|---|---|---|---|
-| `rue` | coût .45, disponibilité .30, puissance .25 | énorme | bas |
-| `milieu` | puissance .40, fiabilité .35, coût .25 | moyen | moyen |
-| `haut_de_gamme` | pureté .50, fiabilité .30, discrétion .20 | faible | **très élevé** |
+| Segment | Critères pondérés | Volume | `niveau_prix` | `exposant_prix` |
+|---|---|---|---|---|
+| `rue` | coût .45, disponibilité .30, puissance .25 | énorme | 1.0 (référence) | 1.5 — court après le rabais |
+| `milieu` | puissance .40, fiabilité .35, coût .25 | moyen | 1.25 | 1.1 |
+| `haut_de_gamme` | pureté .50, fiabilité .30, discrétion .20 | faible | **1.6** | 0.45 — n'écoute presque pas |
+
+### UN PRIX PAR SEGMENT — §19.6, et c'est ce qui rend ce marché opérant
+
+**Le joueur pose un prix par segment**, pas un prix unique. Un prix nul l'en retire : se
+retirer d'un marché est une décision, prise avec le même curseur que d'y entrer.
+
+`niveau_prix` et `exposant_prix` ne disent pas la même chose et les deux sont nécessaires :
+le premier est le **niveau** (quel prix est normal ici), le second la **sensibilité** (de
+combien un écart de prix déplace les parts). Le haut de gamme paie 1,6× et ne regarde
+presque pas le prix (0.45) : c'est là que la marge se prend. La rue paie la référence et
+court après le rabais (1.5) : c'est là que le volume est.
+
+**Sans cela, tout ce qui précède était décoratif** — mesuré, pas supposé, voir §16. Le
+joueur est limité par son stock à tous les trimestres ; avec un prix unique, un kilo
+rapportait la même chose partout, donc les parts de marché ne décidaient de rien. Depuis,
+`rue.niveau_prix` est la **2ᵉ constante la plus sensible du jeu** sur 114, et
+`milieu.niveau_prix` fait basculer des **fins de campagne** — ce qu'aucune constante de
+marché n'avait jamais fait.
+
+`ponytail:` **les rivaux gardent un prix unique.** Leur marge est leur stratégie entière ;
+trois marges par cartel serait un système de pilotage de rival que personne ne demande.
 
 **La dépendance** modifie la demande : `demande_t+1 += dependance × ventes_t × k_fidelite`,
 plafonnée. Un produit très addictif fait croître son propre marché — jusqu'à ce qu'il le tue.
@@ -956,22 +1114,63 @@ n'a mise sur une capture Steam, et elle se comprend en une seconde.
 - `data/` = tout le contenu en JSON. **Aucun nombre d'équilibrage dans le code.**
 - `tests/` = headless, exécutables en CI.
 
-### Réemploi de `bureau-etudes`
+### Réemploi de `bureau-etudes` — LE SOCLE, PLUS LE MARCHÉ
+
+**Décision tranchée : on reprend la plomberie et UN modèle, pas douze.** La v1 de ce tableau
+reprenait douze modules « tel quel » ou « données seulement ». Annulé — sauf le marché, pour
+la raison écrite plus bas, et à condition de le porter au scalpel.
+
+**Ce qui a été mesuré avant de trancher**, parce que la question se mesure au lieu de se
+discuter : les 1 815 lignes des modules candidats contiennent **trois** littéraux décimaux
+non triviaux en dehors des commentaires — `/ 4.0` (trimestres dans l'année), `13.0`
+(semaines dans un trimestre), `-999.0` (sentinelle « jamais arrivé »). Trois conversions
+d'unités. **L'équilibrage de `bureau-etudes` n'aurait donc pas suivi** : la règle « aucun
+nombre d'équilibrage dans le code » y a tenu, et les `0.43`, `1.4`, `0.851` qu'on lit dans
+ces fichiers sont tous dans des commentaires qui racontent des mesures.
+
+Ce n'est donc pas l'équilibrage qui est refusé, **c'est le MODÈLE** — l'opinion de design
+qu'un fichier porte avec lui, et l'historique de rustines qui va avec.
+
+**Une exception, et elle se justifie en une ligne : le marché.** §4 a déjà adopté ce
+modèle formule par formule — `attractivite = qualite_s × f_prix × f_confiance × f_delai`,
+`part_cible = attractivité² / Σ attractivité²`, inertie 0.20. Refuser le fichier en gardant
+les formules, ce serait payer la réécriture sans acheter la sécurité, et se donner
+rendez-vous avec des bugs que ce code a déjà rencontrés et corrigés (le renouvellement rival
+qui redistribuait la clientèle gratuitement, entre autres — ses commentaires en tiennent le
+journal).
 
 | Source | Devient | Effort |
 |---|---|---|
-| `sim/market.gd` | marchés, segments, parts, inertie | **données seulement** |
-| `sim/research.gd` | procédés, modes de transport, contacts | **tel quel** |
-| `sim/engineers.gd` | bras droits + équipes d'extermination | + `loyaute`, `ambition` |
-| `sim/reputation.gd` | visibilité | inverser le signe |
+| `sim/rng.gd`, `state.gd`, `sim.gd` | socle | **tel quel** — ✅ fait |
+| `sim/economy.gd` | les deux trésoreries | **dédoubler : sale / propre** — ✅ fait |
+| `sim/reputation.gd` | `sim/visibilite.gd` | inverser le signe — ✅ fait |
+| `sim/events.gd` | événements | **tel quel** |
 | `sim/raids.gd`, `accidents.gd` | saisies, descentes, arrestations | même forme |
-| `sim/production.gd` | capacité des labos | **tel quel** |
-| `sim/economy.gd` | trésorerie | **dédoubler : sale / propre** |
-| `sim/rng.gd`, `state.gd`, `sim.gd`, `events.gd` | socle | **tel quel** |
-| `sim/aircraft.gd` `specs()` | `sim/produit.gd` `specs()` | structure gardée, contenu réécrit |
-| `game/design/blueprint.gd` | écran de conception | labels |
-| `game/market_ui/marche.gd` | écran marché | **tel quel** |
-| `tests/balance.gd`, `bots.gd` | le harnais | **corriger d'abord — voir §16** |
+| `sim/market.gd` | marchés, segments, parts, inertie, rivaux | **port au scalpel — voir ci-dessous** |
+| `tests/run.gd`, `balance.gd`, `bots.gd` | le harnais | **portés** — ✅ fait |
+
+**Le marché se porte au scalpel, pas au `cp`.** Sur ses 989 lignes :
+
+| | lignes | quoi |
+|---|---|---|
+| **jeté d'emblée** | ~290 | concours AO, brevets, fusion des rivaux, filiale coloniale, contrats d'entretien de flotte, dimensionnement de voilure |
+| **réécrit** | ~100 | `_design_rival` et les bouts qui pensent en avions |
+| **gardé** | ~590 | `_allouer`, `qualite_segment`, `_attractivite`, l'inertie, la réaction et le renouvellement des rivaux, leur R&D |
+
+**Tout le reste s'écrit ici.** `research.gd`, `engineers.gd`, `production.gd`, `aircraft.gd`,
+et les écrans `blueprint.gd` et `marche.gd` ne sont plus des sources : des références qu'on
+relit, jamais des fichiers qu'on copie. Le prix de cette décision est au §15, et il est réel.
+
+**Ce qui rend le port du marché plus sûr qu'il ne l'était dans `bureau-etudes` :** le harnais
+existe AVANT lui. `bureau-etudes` a accumulé ses rustines parce que rien ne les voyait venir ;
+ici `levier.gd` dira si les constantes de `segments.json` sont branchées, `balance.gd` si les
+rivaux tiennent leur part, `trace.gd` pourquoi. Porter un modèle sous un harnais qui marche
+est plus sûr que d'en écrire un neuf sans aucune mesure préalable.
+
+**Où le risque est vraiment**, et il n'est pas dans le port : la boucle de §4
+`demande_t+1 += dependance × ventes_t × k_fidelite`. Un produit qui fait grandir son propre
+marché n'a d'équivalent nulle part — c'est une rétroaction positive, elle divergera ou ne
+fera rien, et c'est elle qui mérite la méfiance.
 
 ### Le modèle d'actif — un seul struct pour trois systèmes
 
@@ -989,8 +1188,10 @@ Un module, trois fichiers de données — pas trois modules.
   "effets": { } }
 ```
 
-La maintenance et le vieillissement viennent de `production.gd`, déjà écrit et testé dans
-`bureau-etudes`. Écrire ce système trois fois est l'erreur à ne pas commettre.
+La maintenance et le vieillissement s'écrivent **une fois** dans `sim/actifs.gd` et servent
+les trois. Écrire ce système trois fois est l'erreur à ne pas commettre — c'était vrai quand
+`production.gd` devait le fournir tout fait, ça l'est davantage maintenant qu'il faut
+l'écrire soi-même.
 
 ### Modules nouveaux (les seuls)
 
@@ -1011,7 +1212,8 @@ data/
                          (dont dette_montant, dette_echeance, k_charge, seuil_charge)
   calibration.json    -- 3 produits de référence, tolérance 5 %
   precurseurs.json    -- 4 familles fictives
-  procedes.json       -- arbre de recherche : 3 branches × 7 nœuds (§2bis)
+  procedes.json       -- arbre de recherche (§2bis) — ✅ Chimie, 7 nœuds ; les deux
+                         autres branches naissent avec leurs systèmes
   graphe.json         -- nœuds + arêtes (classes, distances, risque)
   vehicules.json      -- les 5 engins : capacité, coût, entretien, usure, équipage
   contacts.json       -- les 6 contacts corrompus
@@ -1045,18 +1247,28 @@ cette fois à la mesure au lieu du modèle.
 
 | # | Jalon | Durée | Contenu | Porte | Bots | Jouable ? |
 |---|---|---|---|---|---|---|
-| **0** | **Le harnais** | 1-2 j | `balance.gd`, `bots.gd`, `run.gd`, CI — **portés**, pas réécrits | **levier connecté** | — | — |
-| **1** | **Le labo** | 2-3 sem | conception (dont `instabilite_neuro`), 1 nœud, 1 marché, trésorerie simple, **la dette** (§1bis), **branche Chimie** (§2bis) | 1, 2, 3, **7** | 2 | **oui** |
-| **2** | **Le graphe & le parc** | 4-5 sem | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité, **branche Logistique** | + **8, 9, 15** | 2 | **oui** |
+| **0** | **Le harnais** | ✅ **fait** | `run.gd`, `levier.gd`, `balance.gd`, `bots.gd`, `perf.gd`, `trace.gd`, `comparer.gd`, CI — **portés**, pas réécrits | **levier connecté** ✅ | — | — |
+| **1** | **Le labo** | **3-4 sem** | conception (dont `instabilite_neuro`), 1 nœud, **le marché de §4 porté au scalpel** (§13) + la boucle de dépendance, trésorerie simple, **la dette** (§1bis), **branche Chimie** (§2bis) | 2, **7** (1 et 3 → jalon 2, voir §16) | 2 | **oui** |
+| **2** | **Le graphe & le parc** | **5-7 sem** | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité, **branche Logistique** (recherche et production **écrites ici**), **le catalogue de 3 recettes** (§2) | + **1, 3**, 8, 9, 15 | 2 | **oui** |
 | **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique, **branche Influence** | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
-| **4** | **Les hommes** | 2 sem | bras droits, loyauté, ambition, trahison, arrestations, équipages | + **12** | 3 | oui |
+| **4** | **Les hommes** | **3 sem** | bras droits, loyauté, ambition, trahison, arrestations, équipages | + **12** | 3 | oui |
 | **5** | **L'épidémie** | 3-4 sem | propagation, équipes, instabilité mondiale | + **13, 14** | 4 | oui |
 | **6** | **Le remède** | 2-3 sem | jauge, aide/sabotage, les 4 fins, épilogues | **§16 en entier** | 4 | **complet** |
 | **7** | **Le playtest** | ouverte | des humains, pas des bots | qualitatif | humains | — |
 
-**Jalons 0→3 : ~9 à 13 semaines. Jalons 0→6 : ~16 à 22 semaines.** Estimations sur un rythme
-soutenu, à pondérer par le temps réellement disponible. **Le jalon 5 est celui qui glissera** :
-c'est le seul système sans équivalent dans `bureau-etudes`.
+**Jalons 0→3 : ~10 à 14 semaines. Jalons 0→6 : ~18 à 24 semaines.** Estimations sur un rythme
+soutenu, à pondérer par le temps réellement disponible.
+
+**Ces chiffres ont monté, et c'est la décision de §13 qui les a fait monter.** La v1 annonçait
+9-13 et 16-22 en supposant que `market.gd`, `research.gd`, `production.gd` et `engineers.gd`
+arrivaient tout faits. Le marché est finalement porté (au scalpel, pas réécrit), mais les
+trois autres s'écrivent ici : +1 semaine au jalon 1 (le port et la boucle de dépendance),
++1-2 au jalon 2 (recherche et production), +1 au jalon 4 (les bras droits). Une estimation qui
+suppose une décision annulée est pire que pas d'estimation.
+
+**Le jalon 2 est le plus lourd** — le graphe, le parc, plus deux modules à écrire.
+**Le jalon 5 reste celui qui glissera** : propagation et instabilité n'ont d'équivalent nulle
+part, ni dans `bureau-etudes` ni ailleurs dans ce document.
 
 Si le développement s'arrête au jalon 3, **il reste un jeu fini et vendable** : conception,
 réseau, flotte, corruption, blanchiment. C'est le but de cet ordre, et l'ajout du parc le
@@ -1105,23 +1317,79 @@ Reprendre telles quelles les conventions déjà éprouvées dans `bureau-etudes/
 (nombre de graines réglable en argument, verdict de mortalité de démarrage, écart de richesse
 en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinventer.**
 
+**LES TABLEAUX DE MESURES DE CETTE SECTION SONT DES RELEVÉS DATÉS, PAS L'ÉTAT COURANT.**
+Le code du projet interdit depuis longtemps qu'un commentaire porte un chiffre mesuré : il
+garde le raisonnement et nomme la commande, parce que le chiffre périme et que personne ne
+relit un commentaire. **La règle n'avait jamais été appliquée à ce document**, qui est
+pourtant la source de vérité — et une seule session y a ajouté quatre tableaux. L'un d'eux
+était déjà irreproductible : il exprimait l'écart de richesse en instantané, unité que la
+cible 3 a depuis remplacée par une intégrale.
+
+Chaque tableau porte donc ce qui l'a produit et dans quelle unité. Il raconte ce qu'une
+décision a changé — un fait historique, qui reste vrai. Il ne dit pas où en est le jeu
+aujourd'hui, ce qui se lit en lançant `tests/balance.gd`.
+
+**LA PORTÉE PAR BOT — mesure d'abord, verdict au jalon 2.** `tests/levier.gd` demande « au
+moins une métrique bouge » en mettant les bots en commun : une constante qui secoue un seul
+profil passe au vert, et l'autre joue à un jeu dont ce levier n'existe pas. C'est le même
+refuge que celui fermé sur la jauge de visibilité, rouvert un étage plus haut.
+
+Cette mesure a servi **le jour même où elle a été ajoutée** : elle disait que `discret` ne
+sentait que 20 des 92 leviers de campagne, ce qui a mené au diagnostic du marché décoratif
+et à §19.6. Après correction : **91 sur 95**. Le chiffre exact est imprimé à chaque
+exécution et n'est pas recopié ici.
+
+Ce n'est toujours pas un verdict, et le refus reste délibéré : §16 dit « on ajoute la MESURE
+avant d'en faire une CONTRAINTE ». Il le devient au jalon 2, quand les cinq derniers écarts
+auront été regardés un par un — un profil qui ne se fait jamais arrêter ne DOIT pas sentir
+les constantes d'arrestation, et un verdict aveugle à cette distinction serait un poteau
+qu'on déplace. Les six constantes qui ne bougent que les specs de référence sont comptées à part :
+ce sont des constantes de conception (§2), aucune campagne ne peut les atteindre, et les
+confondre avec un angle mort accuserait les bots d'une chose dont ils ne peuvent rien.
+
 ### Cibles permanentes — mesurables dès le jalon 1
 
 ```
 1. MORTALITÉ GLOBALE LISIBLE
    faillites bot entre 15 % et 35 %
    ↳ mesurable au jalon 1 parce que la dette (§1bis) donne une horloge à l'acte I
+   ↳ ⚠ CORRIGÉ PAR LA MESURE : PAS avant le jalon 2. Voir plus bas.
 
 2. MORTALITÉ DE DÉMARRAGE BORNÉE
    < 10 % des campagnes meurent avant la semaine 104
    ↳ garde-fou anti-régression, PAS une cible à atteindre
 
 3. AUCUNE DOMINATION
-   taux de victoire max ≤ 60 %  OU  écart de richesse médiane ≤ 15 %
+   (taux de victoire max ≤ 60 %  OU  écart de richesse MOYENNE ≤ 15 %)
+   ET écart de SURVIE entre bots < 80 points
    ↳ le OU est délibéré : gagner 76 % de photo-finish en finissant 11 % plus riche
      est une égalité, pas une domination. Le taux de victoire seul ne distingue pas
      un écrasement d'un départage.
+   ↳ ⚠ LE TERME DE SURVIE EST UN ET, ajouté après mesure. Le OU avalait le vrai rouge
+     autant que le faux : `discret` survit à 100 %, `industriel` est arrêté dans 100 %
+     des campagnes, et la cible imprimait « aucune domination : victoires max 100 % »
+     parce que l'écart de richesse, pris semaine 200, tombe 27 semaines avant que le
+     perdant meure. Aucun écart de richesse ne rachète 0 % contre 100 % de survie.
+   ↳ la richesse se mesure en INTÉGRALE — le propre moyen tenu jusqu'à la date, pas
+     sa valeur ce jour-là. Depuis §2bis un bot sort 280 000 $ d'un coup pour un nœud,
+     et l'instantané mesurait la semaine du paiement. RELEVÉ du jour où la métrique a
+     changé (`balayage.gd -- colonne_seche.cout_propre 200000 420000 6 20`) : l'instantané
+     balayait de +376 à +1133 % puis repartait à +181 %, six fois d'amplitude et un
+     demi-tour ; l'intégrale descendait de +109 à +99 %, monotone. Le point échantillonnait
+     un accident de trésorerie. Ce relevé compare DEUX MÉTRIQUES entre elles, ce que la
+     commande ne refait plus : elle n'imprime que celle qui a gagné.
+   ↳ CE N'EST PAS UN DOUBLON DE LA CIBLE 1, qui regarde la mortalité MOYENNE : un jeu
+     réglé pour que l'imprudent meure une fois sur deux et le prudent jamais afficherait
+     25 % — dans la fourchette, au vert — en n'ayant qu'un seul chemin jouable.
    ↳ au jalon 1-2, se mesure entre les DEUX bots présents
+
+23. LA RECHERCHE N'EST PAS UN PÉAGE                          [JALON 1]
+    un profil qui ne cherche RIEN survit dans >= 80 % de ses campagnes
+    ↳ écrite le jour où §2bis est née, jamais rétro-ajoutée
+    ↳ c'est la seule phrase de §2bis qui puisse devenir fausse en SILENCE :
+      un arbre qui devient obligatoire ne se voit nulle part ailleurs, et les
+      cibles 1 et 3 resteraient vertes pendant que le jeu perd sa voie pauvre
+    ↳ ne s'applique qu'aux bots à zéro nœud — ce sont eux qui la testent
 
 7. ÉCART SUR instabilite_neuro                              [JALON 1]
    industriel ≥ 0.50, discret ≤ 0.25, sur la médiane des graines
@@ -1129,6 +1397,227 @@ en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinven
      C'est la cible la plus importante du projet : un axe non mesuré à sa
      naissance devient un levier qu'on découvre mort deux ans plus tard.
 ```
+
+### Le marché ne décidait rien — mesuré, diagnostiqué, corrigé (§19.6)
+
+Écrit après la dixième passe de critique du harnais, et c'est la plus grosse correction que
+ce document ait reçue de la mesure. **Le constat ci-dessous est celui d'AVANT §19.6** ; ce
+que sa correction a produit est en fin de section.
+
+**Le joueur est limité par son STOCK à 100 % des trimestres**, sur les deux profils-témoins
+et sur toutes les graines mesurées : `vendu = stock`, toujours. Il ne rencontre jamais sa
+demande — `discret` en sert 34 %, `industriel` 60 %. Et comme le prix du joueur est **un
+seul nombre pour les trois segments**, la recette vaut `stock × prix` quel que soit
+l'acheteur.
+
+Conséquence : les parts de marché sont décoratives pour la recette. `attractivite`,
+`qualite_s`, `f_prix`, l'inertie, les parts au carré, les exposants par segment et le seuil
+d'exclusivité déplacent des parts — **aucune issue de campagne**. Les trois segments sont,
+économiquement, un seul segment.
+
+**Ce n'est pas un problème de taille de marché**, et c'est la mesure qui l'a tranché contre
+l'hypothèse de départ. En réduisant toutes les demandes ensemble :
+
+```
+RELEVÉ — avant §19.6 (prix unique) · 20 graines × 2 bots · écart en INSTANTANÉ de richesse,
+unité abandonnée depuis (la cible 3 compare une intégrale) : non reproductible tel quel.
+échelle    ×1.0   ×0.9   ×0.8   ×0.7   ×0.6   ×0.5   ×0.4   ×0.3   ×0.2
+le marché bride `discret`    0 %    0 %    1 %    4 %   22 %   50 %   78 %   96 %  100 %
+écart de richesse (cible 3) +11 %  +18 %  +27 %  +42 %  +61 % +276 % +224 %  +91 %  +66 %
+```
+
+C'est une **pente** et non une falaise : le marché atteint le profil prudent en dessous de
+×0.6. Mais il détruit la cible 3 en chemin, et même à ×0.2 le joueur ne sert que 77 % de sa
+demande — parce qu'il est bridé ailleurs (sa part de capacité, son débit de blanchiment),
+jamais par le marché. **Le chiffre de `data/` qui devait arbitrer cette question n'existe
+pas.** La capacité du labo ne l'arbitre pas non plus : balayée de 40 à 200 kg/sem, elle est
+un **plateau** au-delà de 80.
+
+Ce qui manque est ailleurs, et ce document le disait déjà sans le voir : le tableau des
+segments ci-dessus donne à chacun un **niveau de prix** (`rue` : bas ; `haut_de_gamme` : très
+élevé) que la simulation n'implémente pas. Avec un prix par segment et un joueur limité par
+son stock, **où vont les kilos devient la décision** — et le marché mord sans qu'on touche à
+une seule demande.
+
+#### Ce que la correction a produit
+
+Tranché en §19.6 : un prix par segment, et un `niveau_prix` par segment dans `data/`. Livré
+en deux temps — le mécanisme d'abord, à résultat **bit-identique** (les trois prix posés
+égaux reproduisent exactement le comportement d'avant), puis la différenciation seule. Deux
+changements mêlés n'auraient rien mesuré.
+
+```
+RELEVÉ — §19.6, avant/après le prix par segment · portée par `tests/levier.gd`, le reste par
+`tests/balance.gd`. Les compteurs du jour s'impriment à chaque exécution.
+                                        avant        après
+leviers de campagne sentis par `discret`   20 / 92     91 / 95
+                        hors de portée      78 %          5 %
+`rue.niveau_prix`                            —      2ᵉ constante la plus sensible sur 114
+fins de campagne basculées par le marché     0        oui (`milieu.niveau_prix`)
+tas de sale médian de `discret`           714 k$       3,0 M$
+visibilité médiane de `discret`              0,0         50,5
+```
+
+**Le refuge est fermé.** Les cinq leviers qui restent hors de portée de `discret` sont
+nommables et défendables : l'échéance de la dette et les trois constantes d'arrestation ne
+l'atteignent pas parce qu'il rembourse et ne se fait pas prendre, et `corymbe.disponibilite`
+parce qu'il travaille le Verdal. Ce n'est plus un trou systémique, c'est un profil.
+
+**Deux choses ont cassé en chemin, et les deux gardes les ont attrapées.** Le garde
+`_soutenable` des bots lisait le prix le plus BAS en se croyant prudent : prudent sur la
+production, mais sa phrase parle du TAS, et le tas grossit au prix encaissé. La mortalité
+est passée de 50 % à 100 % en une mesure. Il lit désormais le prix pondéré par les segments
+qu'il sert, comme `_ecoulable` lit leur volume. Et `SEMAINE_COMPARAISON` s'est retrouvée
+APRÈS la première mort (remontée de la semaine 227 à 185) : la garde `jalon_douteux` a crié
+que l'écart de richesse comparait l'instantané d'un mort, et la date a été **remesurée à
+170**, pas relue.
+
+**`SATUREES` est désormais vide, et c'est le mécanisme qui l'a vidée.** `los_hermanos.marge`
+y était parce que le rabais de ce cartel butait sur `plafond_prix` dans les deux sens. Les
+médianes de segment se sont mises à bouger avec le prix du joueur, la constante s'est remise
+à mordre, et la vérification à double sens a fait échouer la porte en exigeant le retrait.
+Sixième exemption que ce mécanisme retire tout seul.
+
+### L'ordre de service était porté par l'alphabet
+
+Les trois segments puisent dans le **même stock**, donc le premier servi se sert et le
+dernier mange la pénurie. Cet ordre était celui de `sort()` sur les clés — `haut_de_gamme`,
+`milieu`, `rue`. Mesuré en l'inversant : `industriel` perd **54 106 $** semaine 200 et
+l'écart de la cible 3 passe de +11 % à +13 %, soit deux points sur les quinze du seuil.
+Renommer `rue` en `bas_de_gamme` aurait changé l'économie.
+
+Il est maintenant déclaré dans `data/segments.json:ordre_service`, sous forme de **liste**.
+Écrit d'abord en trois nombres (`priorite_service: 1/2/3`), il s'est fait refuser par la
+porte du jalon 0 en trois lignes : perturbés d'un cran entier ils s'égalisaient, le nom
+tranchait, l'ordre ne changeait jamais — **trois leviers débranchés**. Un rang n'est pas une
+grandeur. C'est `tests/run.gd` qui le garde honnête, par un test de couverture : la liste
+doit nommer exactement les segments.
+
+### Ce que §2bis a coûté aux témoins — mesuré
+
+La recherche ne change rien pour qui ne cherche pas : **`discret` est identique au dollar
+près**, ne pose aucun nœud, survit à 100 % — la cible 23 tient, et c'est la promesse centrale
+de §2bis.
+
+Pour `industriel`, le coût est lourd et il faut le nommer. Sa recette cible (corymbe, pureté
+0,95, complexité 2) est **interdite au départ** : il commence en verdal à 0,60, c'est-à-dire
+tout près du témoin prudent, et grimpe. Or le verdal est le précurseur le plus traçable
+(0,55 contre 0,28 au corymbe) et le plus disponible (1,0 contre 0,78) — donc **plus de traces
+sur plus de kilos**. À plein régime, soixante semaines de verdal coûtent 78 semaines de vie :
+
+```
+RELEVÉ — §2bis, avant/après la branche Chimie · 100 graines × 2 bots
+                                   avant §2bis    après
+mort de `industriel`                  sem 187     sem 109
+nœuds posés                                 —     sem 56, 70, 76, 82, 98
+instabilite_neuro (cible 7)             0.667     0.667 — tenue 11 semaines
+`SEMAINE_COMPARAISON` remesurée           170     95
+```
+
+**L'ordre de recherche est une stratégie, et la mesure a corrigé le mien.** J'avais mis la
+pureté en tête, en me disant que le plafond de 0,60 bridait plus fort. Il restait alors 50
+semaines sur le verdal et se faisait arrêter **semaine 62**. En prenant la famille d'abord,
+sa signature tombe de moitié dès la semaine 70. C'est la différence entre un témoin qui joue
+mal — son droit — et un témoin qui joue bête, jamais.
+
+**Une constante est tombée en dormance par effet de bord.** `marche.plafond_fidelite` mordait
+à 3 % sur les seules campagnes longues d'`industriel` ; il meurt 78 semaines plus tôt et n'y
+arrive plus. Aucune mécanique n'a été débranchée : c'est la durée de vie des témoins qui a
+changé. La baseline se remesure, elle ne se cite pas.
+
+**La butée de famille était décidée par `sort()`, et son accident était heureux.** Quand un
+joueur demande une famille verrouillée, `sim/produit.gd` le ramène en butée. Cette butée
+était `ouvertes[0]` après tri alphabétique : `industriel`, qui vise le corymbe, recevait donc
+l'azurite entre ses semaines 56 et 70 — par chance, parce que « a » vient avant « v ». En la
+déclarant (`famille_defaut`, stable), il repartait sur le précurseur le plus traçable et
+mourait dix semaines plus tôt. **Les deux comportements étaient des accidents.** La butée
+reste déclarée — c'est un filet, pas un chemin de jeu — et c'est le BOT qui choisit
+maintenant, en relisant sa propre liste de recherche à l'envers : il prend la dernière
+famille qu'il a ouverte sur son chemin. Un joueur fait de même, et son écran ne lui propose
+que ce qu'il a ouvert (§12bis).
+
+**Et la portée de `discret` est retombée de 5 % à 16 % hors d'atteinte** — 18 leviers sur 110.
+Les 13 nouveaux sont tous des constantes de recherche, et il ne cherche rien. Ce n'est pas un
+trou, c'est la définition du profil ; c'est exactement pourquoi cette mesure n'est pas encore
+un verdict.
+
+### Ce que les trois contreparties de §2 ont coûté aux témoins — mesuré
+
+```
+RELEVÉ — les curseurs de §2 reçoivent leur contrepartie · 100 graines × 2 bots
+                                         avant       après
+mort de `industriel`                    sem 109     sem 162
+`discret` (coupe 0.35, comme avant)     survit      arrêté sem 150 — cible 23 ROUGE
+`discret` (coupe ramenée à 0)           survit      survit — cible 23 verte
+calibration : échelle des coûts           —         −34 à −60 % selon la recette
+```
+
+**`industriel` vit 53 semaines de plus**, parce qu'il payait sa complexité 2 pour rien et
+qu'elle lui rapporte enfin : elle rend sa pureté 0,95 moins chère.
+
+**`discret` s'est retrouvé en contradiction avec lui-même.** Sa recette portait une coupe de
+0,35, choisie à l'époque où couper était un handicap pur — elle voulait dire « produit de rue
+bon marché » et rien d'autre. Couper est devenu un levier de VOLUME : 54 % de kilos en plus, une
+jauge à 103, arrêté semaine 150, et la cible 23 — « la recherche n'est pas un péage » — au rouge.
+Un témoin « petit volume, produit propre » qui coupe à 35 % se contredit. Sa coupe est revenue à
+zéro. **La cible 23 qui repasse au vert est la conséquence, pas la raison** : c'est l'intention
+écrite du témoin qui a été restaurée, et la cible l'a constaté.
+
+**La calibration a été remesurée, et c'est dangereux.** Le modèle de coût a changé délibérément,
+donc l'échelle a baissé ; les puissances et les instabilités n'ont pas bougé d'un chiffre. Mais
+une calibration qu'on réaligne sur ce que le code produit ne peut plus jamais échouer — c'est
+le poteau qu'on déplace. `tests/run.gd` vérifie donc EN PLUS les **ordres**, qui expriment
+l'intention et qu'aucune remesure ne satisfait toute seule : familles strictement croissantes
+en coût, en puissance et en instabilité ; rue < haut de gamme < extrême.
+
+**Les `ref` du segment `rue` ont été réancrées.** La coupe a déplacé l'échelle de coût et de
+débit sous ces références, calibrées sur l'ancienne : le meilleur produit de rue atteignait
+exactement le plafond théorique, avec dix recettes à égalité au sommet — le segment ne
+départageait plus par la qualité. J'avais remesuré `calibration.json` et oublié
+`segments.json`, qui encode la même échelle. Le réancrage retenu est le plus petit qui décolle
+le segment du plafond (coût 2200 → 1760, débit 22 → 27,5) : il ramène son maximum au niveau
+d'avant les contreparties. `milieu` et `haut_de_gamme` étaient restés sous le plafond et n'ont
+pas été touchés. Effet mesuré : `industriel` vit cinq semaines de plus, aucune cible ne change
+de verdict.
+
+**`los_hermanos.marge` a fait un aller-retour dans `SATUREES`.** Entrée la première fois parce
+que le rival le moins cher n'est jamais la médiane de trois maisons ; retirée par le mécanisme
+quand §19.6 a fait bouger les médianes ; revenue quand la baisse des coûts a recreusé l'écart.
+Balayée de 0,8 à 3,2 — un facteur quatre — elle ne déplace pas une seule issue : **la stratégie
+de prix du rival le moins cher est décorative** dans le jeu actuel. Constat de design, qui
+attend le catalogue du jalon 2.
+
+### Les cibles 1 et 3 attendent le jalon 2 — mesuré, pas supposé
+
+Écrit après l'équilibrage du jalon 1, et c'est une correction de ce document par la mesure.
+
+**Tout ce qui existe à l'acte I est LISSE.** Le tas d'argent sale est une intégrale, le bruit
+de demande s'y moyenne, la date d'arrestation est donc identique à la semaine près sur cent
+graines. Conséquence directe : la mortalité ne prend pas de valeurs intermédiaires. Balayage
+de `visibilite.k_cash_sale` de 0.60 à 1.30 en huit points :
+
+```
+0.60 → mortalité  0 %                        (la jauge ne tue jamais)
+0.70 → mortalité 50 %, mort médiane sem 260  (elle tue toujours)
+1.30 → mortalité 50 %, mort médiane sem 215  (seule la DATE glisse)
+```
+
+Il n'y a **aucune valeur** donnant 15-35 %. Ce n'est pas un réglage manqué, c'est l'absence
+d'un **risque grumeleux** : saisies, descentes, pannes (§3bis, §7 — `raids.gd` et
+`accidents.gd`, jalon 2). Tant qu'ils manquent, la cible 1 ne peut valoir que 0 %, 50 % ou
+100 %, et la cible 3 tombe avec elle (un bot qui meurt à toutes les graines n'a pas de
+richesse médiane, donc l'écart n'existe pas).
+
+**Ce que ça change concrètement :** au jalon 1, la porte est **2 et 7**. Les cibles 1 et 3
+restent écrites, mesurées et imprimées à chaque exécution — elles ne sont simplement pas
+tenables avant que le parc n'apporte de quoi mourir autrement qu'à l'heure dite.
+
+**La leçon de méthode, qui vaut plus que la correction :** ces cibles ont été *atteintes*
+un moment, en déplaçant `k_cash_sale` jusqu'à ce que personne ne meure. Le jeu était alors
+pire — l'`industriel` finissait à 92 de visibilité sur 100 sans jamais être arrêté, la
+menace centrale de l'acte II réduite à un décor. **Une cible verte obtenue en éteignant ce
+qu'elle mesure est pire qu'une cible rouge.** C'est le poteau qu'on déplace pour passer,
+nommé en §16, et il a fallu le planter deux fois pour le reconnaître.
 
 ### Cibles du parc et du graphe — jalon 2
 
@@ -1352,12 +1841,93 @@ Tranché. Jusqu'à 3 recettes actives simultanément. Cible 22 : deux recettes a
 `instabilite_neuro` est bien celle du haut de gamme — le piège doit être là où le document
 prétend qu'il est.
 
+### 19.6 — Un prix par segment — ✅ ADOPTÉ, voir §4 et §16
+
+Tranché par le designer après mesure. Le joueur pose **un prix par segment** ; un prix nul
+l'en retire. Le niveau que chaque segment tolère vit dans `data/segments.json:niveau_prix`,
+comme déclaration du tableau de §4 — donc balayé par `tests/levier.gd` comme le reste, et
+non comme un réglage de témoin.
+
+**C'est la décision qui rend le marché opérant.** Avec un prix unique, un kilo rapportait la
+même chose partout et les parts de marché ne décidaient de rien (§16). Les deux autres
+formes envisagées ont été écartées : « un seul prix, et on gèle le marché » aurait demandé
+de déclarer dormantes une trentaine de constantes jusqu'au jalon 2 ; « le prix posé par le
+segment » aurait retiré une décision au joueur pour économiser trois lignes.
+
+---
+
+## 19bis. Décisions de design EN ATTENTE — elles appartiennent au designer
+
+§19 dit qu'il n'y a plus de dépendance en suspens. C'est vrai des systèmes ; ça ne l'est pas
+de tous les **chiffres de rythme**. Ceux-ci ont une valeur qui marche, posée pendant
+l'équilibrage par celui qui implémentait, et qui n'est l'expression d'aucune intention
+écrite. Ils sont listés ici plutôt que laissés dans `constants.json` comme s'ils étaient
+tranchés.
+
+### `visibilite.k_cash_sale` — combien de temps tient l'imprudent ?
+
+**Valeur posée : 0.35.** Ce qu'elle produit : un producteur à plein régime qui ne se couvre
+de rien est arrêté **semaine 227 sur 260**, soit ~33 semaines de traque jouables.
+
+Ce que le balayage dit (`-s res://tests/balayage.gd -- visibilite.k_cash_sale 0.25 0.55 7`) :
+
+```
+0.25 → mort sem 244
+0.35 → mort sem 227                    ← posé ici
+0.45 → mort sem 214
+0.55 → mort sem 204
+```
+
+**Troisième remesure de cette constante, et à chaque fois pour la même raison.** Elle est
+passée de 1.0 à 0.5 quand `k_volume` a corrigé §1, puis de 0.5 à 0.35 quand le seuil de §4
+a rendu son segment au producteur haut de gamme — il vend davantage, son tas grossit plus
+vite, et l'arrestation est remontée à la semaine 209. Cette constante ne porte pas une
+valeur, elle porte une INTENTION (~230 semaines) : toute mécanique qui change le débit
+d'argent sale la déplace, et il faut la remesurer plutôt que la relire.
+
+Il n'y a pas de bon chiffre à trouver : il y a un **rythme à choisir**. 0.5 est un pari sur
+« assez tôt pour que le joueur ait le temps de réagir, assez tard pour qu'il ait cru s'en
+sortir ». Un autre pari est légitime, et c'est une décision de design, pas d'implémentation.
+
+**Les deux termes de §7 se partagent un budget.** `k_volume` (ce que l'activité coûte) et
+`k_cash_sale` (ce que le tas coûte) alimentent la même jauge contre la même décroissance.
+`k_volume` n'est PAS en attente — sa valeur sort d'une affirmation écrite de §1 (« tout ce
+qui rapporte te rend visible ») qui était fausse à 0.012, où la production pesait 4 % de la
+décroissance. Mais l'avoir corrigée a déplacé le rythme, et `k_cash_sale` a dû être
+redescendue de 1.0 à 0.5 pour retenir l'intention ci-dessus. **Retoucher l'un oblige à
+remesurer l'autre.**
+
+`ponytail:` la jauge n'a pas d'équilibre, elle a un **seuil** : sous ~0.24 de `k_volume`
+elle reste clouée à zéro pour toujours, au-dessus elle monte sans fin. Ce qui créera un
+vrai point de repos, c'est la décroissance achetable des contacts (§5bis, jalon 3). D'ici
+là, le joueur prudent est posé sur l'arête — 2 ou 41 de jauge selon des écarts minimes
+ailleurs — et c'est une propriété du jeu d'aujourd'hui, pas un réglage à trouver.
+
+`ponytail:` tant que cette ligne est ici, la valeur est **provisoire** — et personne n'a le
+droit de la tourner pour faire passer une cible de §16.
+
 ---
 
 ## 20. Ce que ce document a appris en route
 
 Trace des corrections apportées à la v1, pour ne pas les refaire.
 
+- **Le réemploi promettait plus qu'il ne pouvait tenir.** §13 v1 reprenait douze modules de
+  `bureau-etudes`, dont `market.gd` et ses 989 lignes. Vérification faite avant de trancher :
+  l'équilibrage n'aurait PAS suivi (trois littéraux non triviaux en code sur 1 815 lignes,
+  tous des conversions d'unités) — mais le modèle, si, avec l'historique de ses rustines.
+  Décision : **le socle seulement**, plus **le marché**, qui est l'exception qui se justifie —
+  §4 avait déjà adopté ses formules une par une, et refuser le fichier en gardant les formules
+  aurait payé la réécriture sans acheter la sécurité. Il se porte au scalpel : ~590 lignes
+  gardées sur 989. §13, §4 et §15 corrigent, et le planning passe de 16-22 à **18-24 semaines**.
+  Le coût est réel et il est écrit ; c'est la condition pour qu'il soit un choix et pas une
+  surprise.
+- **La méfiance était au bon endroit, pas sur le bon objet.** Ce qu'il y avait à craindre
+  dans `market.gd` n'était ni ses chiffres (mesurés : absents du code) ni ses formules
+  (mesurées : déjà adoptées par §4), c'est la boucle que §4 lui AJOUTE —
+  `demande_t+1 += dependance × ventes_t × k_fidelite`. Une rétroaction positive sans
+  équivalent nulle part, qui divergera ou ne fera rien. Le harnais du jalon 0 existe pour
+  s'en apercevoir au jalon 1 et pas au jalon 5.
 - **Le parc n'existait pas.** Les routes étaient des arêtes tarifées ; on n'achetait rien, on
   n'entretenait rien, une saisie ne coûtait qu'une cargaison. §3bis corrige.
 - **La corruption était un fantôme.** `protection_contact` apparaissait dans la formule de
@@ -1396,3 +1966,134 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   et rien d'autre : ni branches, ni monnaie, ni ce qu'elle débloque. §2bis la définit, et
   tranche le seul piège de l'emprunt à Plague Inc — **pas de points d'ADN**, la recherche se
   paie en propre, donc son rythme est étranglé par le blanchiment comme tout le reste.
+- **Le marché ne décidait rien, et trois passes de critique ne l'avaient pas vu.** Neuf
+  critiques successives ont porté sur le harnais — ses exemptions, ses commentaires, ses
+  compteurs — pendant que la simulation vendait 100 % du stock à un prix unique, ce qui rend
+  décoratifs les 262 lignes de §4. Un harnais peut être irréprochable et ne rien mesurer :
+  ce qu'il surveillait était vrai, et sans importance. La leçon n'est pas « critiquer moins »,
+  c'est **changer d'étage** — les défauts d'un outil se trouvent en le lisant, ceux d'un jeu
+  en le mesurant.
+- **Une règle de jeu vivait dans un `sort()`.** L'ordre de service des segments décidait qui
+  mange la pénurie, et il était donné par l'alphabet des clés — 54 000 $ et deux points de la
+  cible 3. Le code ne mentait pas : il ne disait rien, ce qui est pire, parce qu'un silence
+  ne se relit pas. Tout ce qui décide doit être **déclaré quelque part où un test regarde**.
+- **Un rang n'est pas une grandeur.** L'ordre de service, écrit d'abord `priorite_service:
+  1/2/3`, a été refusé par la porte du jalon 0 : perturbés d'un cran ils s'égalisaient, le
+  nom tranchait, l'ordre ne changeait jamais. Le levier a rejeté ma propre addition en trois
+  lignes, ce qui est exactement son travail. Une liste se garde par un test de couverture,
+  pas par un balayage.
+- **Un test qui crie faux est pire qu'un test absent.** L'élargissement du test des commandes
+  citées a d'abord accusé trois lignes parfaitement saines, parce que son contexte persistait
+  d'une ligne à l'autre. Un test qui crie faux se fait désactiver ; celui qui se tait, au
+  moins, ne coûte que ce qu'il ne trouve pas.
+- **Une colonne du document n'était pas implémentée, et c'est elle qui bloquait tout.** §4
+  donnait depuis toujours un niveau de prix à chaque segment (`rue` : bas, `haut_de_gamme` :
+  très élevé) ; la simulation n'avait qu'un prix. Trois mesures ont cherché la réponse dans
+  la taille du marché et dans la capacité du labo — une pente qui détruisait la cible 3, un
+  plateau — avant que la relecture du tableau donne la réponse. **Ce document savait déjà.**
+  Un écart entre ce qui est écrit et ce qui est codé ne se voit pas en lisant le code.
+- **Livrer un mécanisme et son réglage séparément est ce qui rend la mesure lisible.** Le
+  prix par segment a été livré d'abord à résultat BIT-IDENTIQUE (les trois prix posés
+  égaux), puis différencié seul. Les deux mêlés, on n'aurait su attribuer ni la mortalité à
+  100 % ni les 91 leviers réveillés. Le premier temps ne mesure rien — c'est précisément à
+  ça qu'il sert.
+- **Un garde peut se tromper « du bon côté » sur la mauvaise grandeur.** `_soutenable`
+  lisait le prix le plus bas : prudent sur la production, mais sa phrase parle du tas
+  d'argent sale, et le tas grossit au prix encaissé. Le bot gagnait 1,6× ce qu'il croyait et
+  la mortalité a doublé. La prudence n'est pas une direction, c'est une direction **sur une
+  grandeur nommée**.
+- **Une branche de recherche peut être décorative pour le seul profil qui la grimpe.** Écrite
+  d'un jet, la Chimie posait son dernier nœud cinq semaines avant l'arrestation du bot qui la
+  montait : 50 semaines d'arbre pour cinq semaines de jeu. C'est le levier débranché de §16,
+  un étage plus haut — pas une constante que rien ne lit, mais un SYSTÈME que personne
+  n'atteint. Le critère qui manquait : **une branche doit tenir dans la durée de vie du profil
+  qui la grimpe, avec du temps pour jouer le résultat.**
+- **J'ai tourné trois fois un nombre de fixture avant de m'en apercevoir.** La garde de dette
+  des bots a eu trois versions (immobiliser la dette / projeter le blanchiment / projeter
+  depuis la première rentrée), dont deux réfutées par la mesure, et `tests/bots.gd` interdit
+  en toutes lettres de tourner ses nombres. La version retenue est la plus bête des trois.
+  Sa conséquence — pas de recherche avant la semaine 60 — n'est pas un défaut du garde : c'est
+  un **constat sur le jeu**, §1bis contre §2bis, et il appartient à ce document.
+- **Le premier trimestre est un désert de trésorerie**, et deux gardes s'y sont cassées. On
+  fabrique treize semaines avant la première vente (§4 trimestriel contre §2 hebdomadaire),
+  donc on ne blanchit rien et les précurseurs se paient en propre. Toute projection qui
+  l'ignore surestime d'un trimestre entier.
+- **Une fixture écrivait dans le state du jeu, et ça partait dans les sauvegardes.**
+  `tests/bots.gd` rangeait un mémo (`cout_pose`) dans l'état, que la sérialisation emportait
+  et que l'empreinte de déterminisme hachait — §13 dit que `sim/` est le seul à y écrire.
+  Rien ne l'a vu pendant une manche entière parce que **rien ne regardait la FORME de
+  l'état**, seulement ses valeurs. `tests/run.gd` compare désormais les clés du state après
+  une campagne de chaque bot à celles que `Etat.nouvelle_partie` déclare ; la garde vaudra
+  aussi pour `game/` le jour où un écran voudra y mémoriser un repli d'interface.
+- **J'ai écrit l'aveu à la place du test.** Mon commentaire dans `run.gd` annonçait « ce test
+  ne garde PAS l'arithmétique de `sim/recherche.gd` » — et le test manquant n'a jamais été
+  écrit. Cent dix lignes de simulation neuve n'étaient exercées que par la survie des bots,
+  c'est-à-dire par un signal qui aurait aussi bien pu venir d'ailleurs. Un aveu dans un
+  commentaire n'est pas une dette enregistrée : personne ne relit un commentaire.
+- **Un test élargi peut rester aveugle à ce qu'il vient d'être élargi pour couvrir.**
+  `save/load` a été étendu aux deux bots puis a annoncé « 0 en cours de chantier » : il
+  sauvegardait à un tick fixe où le bot était entre deux nœuds. Il cherche maintenant le
+  moment, et **échoue s'il n'en trouve aucun**. Un test qui ne dit rien doit le dire.
+- **Le mécanisme anti-péremption était périmé.** `JALON_COURANT` est resté à 0 pendant tout le
+  jalon 1 — donc la seule chose qui faisait expirer les dérogations datées tournait sur une
+  date que personne ne maintenait, dans le fichier dont le commentaire dit « une dérogation
+  sans date n'est pas une dérogation, c'est une suppression ». **Deux erreurs s'annulaient** :
+  ce nombre était trop bas et le jalon déclaré d'`empilement_maison` trop tôt. La première
+  mise à jour a fait rougir la porte, ce qui est la seule preuve qu'elle savait refuser — et
+  la re-justification a révélé que **le catalogue de §2 n'était daté dans aucun jalon** de
+  §15. Une exemption bien datée force un trou de planning à se montrer.
+- **Une dérogation qui vit hors du mécanisme n'est surveillée par personne.** La CI portait
+  un `continue-on-error` avec « à retirer au jalon 1, en même temps que `sim/produit.gd` » :
+  échéance dépassée d'un jalon entier, dans le fichier que personne n'ouvre sauf quand la CI
+  rougit. Elle avait raison par accident — la dérogation reste justifiée, mais par §16 et
+  jusqu'au jalon 2, pas par ce qu'elle disait. Elle porte maintenant un `jalon:` que
+  `tests/run.gd` confronte à `JALON_COURANT`, comme les dormantes du levier.
+- **Un test que rien ne lance est vert pour toujours**, et c'est la forme la plus silencieuse
+  de test mort : pire qu'un test cassé, qui au moins crie. Tout script de `tests/` qui étend
+  `SceneTree` doit désormais apparaître dans un workflow, sinon `run.gd` échoue.
+- **La règle « aucun chiffre mesuré dans un commentaire » n'avait jamais été appliquée à ce
+  document.** Dix passes l'ont imposée au code — `balayage.gd`, `levier.gd`, `balance.gd`, le
+  lanceur, la CI — pendant qu'une seule session ajoutait ici quatre tableaux de mesures, dont
+  un déjà irreproductible (il exprimait l'écart de richesse en instantané, unité remplacée
+  depuis par une intégrale). §4 est allé plus loin : il affirmait « la cible 3 passe au vert »
+  alors qu'elle est rouge. **La source de vérité était le seul artefact non surveillé.** Les
+  tableaux portent maintenant ce qui les a produits et dans quelle unité : un relevé daté
+  reste vrai, c'est le confondre avec l'état courant qui ne l'est pas.
+- **Une énumération dans un commentaire pourrit comme un chiffre.** L'en-tête de `balance.gd`
+  annonçait « cibles 1, 2 et 3 » pendant que le fichier en tenait cinq — les deux autres
+  étaient arrivées le jour de leur axe, exactement comme la règle l'exige, et l'en-tête ne les
+  avait pas vues passer. Il garde la RÈGLE et laisse `verdicts()` produire la liste.
+- **Trois fichiers frères, une phrase fausse, une seule corrigée.** `trace.gd` et
+  `comparer.gd` ont affirmé pendant des mois ne pas être dans la CI, qui les lance deux fois
+  chacun ; la même phrase avait été corrigée dans `balayage.gd` sans que personne aille voir
+  ses voisins. C'était une contradiction entre deux fichiers du dépôt, donc lisible par une
+  machine — et elle a survécu à douze passes de relecture. `tests/run.gd` la refuse désormais.
+  Corollaire assumé : le contrôle cherche une chaîne littérale, donc les commentaires qui
+  racontent l'histoire ne la recopient pas, sous peine de se dénoncer eux-mêmes.
+- **Trois curseurs de conception sur six n'avaient qu'une bonne position, et 3217 lignes de
+  harnais ne pouvaient pas le voir.** `complexite` dégradait quatre specs et n'en améliorait
+  aucune ; `rendement` en améliorait deux et n'en dégradait aucune ; `coupe` ne rapportait rien
+  à l'acte I. Le levier les déclarait verts, à juste titre : les constantes qui les portent
+  bougent toutes des métriques. **Il testait les constantes ; rien ne testait les choix.** Le
+  défaut était dans les formules elles-mêmes — le seul étage que douze passes de critique
+  n'avaient jamais regardé, parce qu'elles relisaient le harnais.
+- **L'intention était déjà écrite, dans l'arbre et pas dans la formule.** `colonne_seche` exige
+  `procede_deux_etapes` : quelqu'un avait décidé qu'un procédé complexe permettait la haute
+  pureté. La formule ne le savait pas. Quand deux parties d'un même document disent deux choses,
+  la plus récente n'a pas forcément raison — ici c'était l'arbre.
+- **Un changement de design fait apparaître les fixtures qui encodaient l'ancien.** La coupe de
+  `discret` voulait dire « bon marché » sous un modèle, et « gros volume » sous le suivant. Rien
+  dans le code n'avait bougé : c'est le SENS du nombre qui avait changé sous lui.
+- **Un test qui exige « pas zéro » accepte n'importe quel epsilon.** Le test de conception
+  attrapait un curseur sans contrepartie, mais un coefficient divisé par 2500 le laissait vert —
+  et c'est justement la régression réaliste, celle de quelqu'un qui baisse un coefficient pour
+  régler autre chose. Un garde-fou doit avoir un seuil, et ce seuil doit venir de la mesure.
+- **Deux leçons écrites sont revenues en une passe** : le compteur qui relit ses propres
+  messages, documenté comme anti-pattern 260 lignes plus haut dans le même fichier, et une
+  seconde vérité — des recettes recopiées dans le test qui garde l'intention de la calibration.
+  Elles sont corrigées, et l'intention d'ordre vit maintenant dans `calibration.json`, lue par
+  `id`. La leçon d'une leçon : **quand elle revient, elle mérite une garde, pas un paragraphe.**
+- **Remesurer une échelle, c'est remesurer TOUT ce qui l'encode.** Le changement de modèle de
+  coût a été propagé à `calibration.json` et oublié dans `segments.json`, dont les `ref` portent
+  la même échelle. Un fichier de données qui contient des nombres en dollars ou en kilos est
+  calibré sur une échelle, même quand rien ne le dit.
