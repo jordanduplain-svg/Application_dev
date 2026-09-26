@@ -56,3 +56,16 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/IM ""SAM Tracker.exe"" /F"; Flags:
 [UninstallDelete]
 ; Anything left in the program folder (never the user's data, which is elsewhere).
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+// Update over a running copy: the app has no visible window, so Windows' "close
+// applications" feature cannot stop it. Stop it here, before files are replaced.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM "SAM Tracker.exe" /F', '', SW_HIDE,
+       ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+  Result := '';
+end;

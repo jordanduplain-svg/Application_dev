@@ -16,13 +16,13 @@ Windows 10 ou 11. Aucun droit administrateur, aucun Python à installer.
 **1. Télécharger l'installateur sur le Bureau** (à coller dans PowerShell) :
 
 ```powershell
-curl.exe -L -o "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.1.exe" https://github.com/jordanduplain-svg/Application_dev/releases/download/sam-tracker-v1.0.1/SAM-Tracker-Setup-1.0.1.exe
+curl.exe -L -o "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.2.exe" https://github.com/jordanduplain-svg/Application_dev/releases/download/sam-tracker-v1.0.2/SAM-Tracker-Setup-1.0.2.exe
 ```
 
 **2. Lancer l'installation** (ou double-cliquer sur le fichier arrivé sur le Bureau) :
 
 ```powershell
-& "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.1.exe"
+& "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.2.exe"
 ```
 
 Sans ligne de commande : télécharger `SAM-Tracker-Setup-x.y.z.exe` sur la page
@@ -133,7 +133,7 @@ La variable `SAM_TRACKER_HOME` permet d'utiliser un autre dossier.
 ```
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.1 installer.iss
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.2 installer.iss
 ```
 
 L'installateur est écrit dans `Output\`. La seconde étape nécessite
