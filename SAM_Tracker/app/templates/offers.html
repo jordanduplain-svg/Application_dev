@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% set view = filters.status %}
+{% set view_param = None if view == 'active' else view %}
+{% set headings = {'active': 'Offers', 'discarded': 'Discarded offers', 'filtered': 'Filtered out'} %}
+{% set empty_messages = {
+  'active': 'No offers match. Run the tool from the Dashboard or change the filters.',
+  'discarded': 'Nothing discarded.',
+  'filtered': 'Nothing filtered out.'} %}
+{% block title %}{{ headings[view] }} - SAM.gov Tracker{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>{{ headings[view] }}</h1>
+  <p class="muted">
+    <b id="total-count">{{ total }}</b> offer(s){% if total > offers|length %}, showing the first {{ offers|length }}{% endif %}.
+    Click a row to see details.
+  </p>
+</div>
+{% if view == 'filtered' %}
+<p class="notice">Offers the tool rejected (score too low or excluded keyword). Click <b>Keep</b> to move one to your Offers.</p>
+{% endif %}
+
+<form class="card" method="get">
+  <h2>Filters</h2>
+  <div class="filters">
+  {% if view_param %}<input type="hidden" name="view" value="{{ view_param }}">{% endif %}
+  <label>Search <input type="search" name="q" value="{{ filters.q or '' }}" class="field" placeholder="Title, agency, text"></label>
+  <label>Type
+    <select name="type" class="field">
+      <option value="">All types</option>
+      {% for t in types %}<option value="{{ t }}" {{ 'selected' if t == filters.type }}>{{ t }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Posted
+    <select name="posted" class="field">
+      <option value="">Any time</option>
+      {% for days, label in posted_choices.items() %}
+      <option value="{{ days }}" {{ 'selected' if filters.posted_within == days }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Show
+    <select name="show" class="field">
+      <option value="open" {{ 'selected' if filters.open_only }}>Open only</option>
+      <option value="all" {{ 'selected' if not filters.open_only }}>All (incl. expired / awarded)</option>
+    </select>
+  </label>
+  <label>Sort by
+    <select name="sort" class="field">
+      <option value="score" {{ 'selected' if filters.sort == 'score' }}>Score (highest first)</option>
+      <option value="date" {{ 'selected' if filters.sort == 'date' }}>Date (newest first)</option>
+    </select>
+  </label>
+  <label>Min score <input type="number" step="0.5" min="0" name="min_score" value="{{ filters.min_score if filters.min_score is not none else '' }}" class="field small"></label>
+  <div class="filter-actions">
+    <button class="btn btn-primary" type="submit">Apply</button>
+    <a class="btn btn-ghost" href="{{ url_for('offers', view=view_param) }}">Reset</a>
+  </div>
+  </div>
+</form>
+
+{% if not offers %}
+  <p class="empty">{{ empty_messages[view] }}</p>
+{% endif %}
+
+{% for group in offers|groupby('type') %}
+<section class="card offer-group">
+  <h2>{{ group.grouper or '(no type)' }} <span class="count-pill group-count">{{ group.list|length }}</span></h2>
+  <div class="table-wrap">
+  <table class="table offers">
+    <thead>
+      <tr><th>Title</th><th>Posted</th><th>Deadline</th><th class="num">Score</th><th>Keywords</th><th></th></tr>
+    </thead>
+    {% for o in group.list %}
+    <tbody class="offer" data-id="{{ o.notice_id }}">
+      <tr class="summary" tabindex="0">
+        <td class="title-cell">
+          <div>
+            {% if o.type in filters.closed_types %}<span class="badge badge-muted">Awarded</span>
+            {% elif o.deadline_passed %}<span class="badge badge-muted">Expired</span>
+            {% elif o.archived %}<span class="badge badge-muted">Archived</span>
+            {% elif view == 'active' and o.group_new_run == last_run_id %}<span class="badge badge-new">New</span>{% endif %}
+            <span class="offer-title">{{ o.title }}</span>
+            {% if o.versions > 1 %}<span class="badge" title="Amendments or reposts of the same offer">{{ o.versions }} versions</span>{% endif %}
+          </div>
+          <div class="muted small">{{ o.agency }}</div>
+        </td>
+        <td class="nowrap">{{ o.posted_date[:10] or '-' }}</td>
+        <td class="nowrap">{{ o.deadline|short_date }}</td>
+        <td class="num"><span class="score">{{ o.score|round(1) }}</span></td>
+        <td class="keywords">
+          {% for k in (o.matched_keywords or '').split(', ') if k %}<span class="chip">{{ k }}</span>{% endfor %}
+        </td>
+        <td class="actions">
+          {% if view == 'discarded' %}
+            <button class="btn btn-small action" data-action="restore" type="button">Restore</button>
+          {% elif view == 'filtered' %}
+            <button class="btn btn-small action" data-action="keep" type="button">Keep</button>
+          {% else %}
+            <button class="btn btn-small btn-ghost action" data-action="discard" type="button">Discard</button>
+          {% endif %}
+        </td>
+      </tr>
+      <tr class="detail" hidden>
+        <td colspan="6">
+          <dl class="details">
+            <div><dt>Agency</dt><dd>{{ o.agency }}{% if o.sub_agency %} / {{ o.sub_agency }}{% endif %}</dd></div>
+            <div><dt>Type</dt><dd>{{ o.type }}</dd></div>
+            <div><dt>Posted</dt><dd>{{ o.posted_date|short_date }}</dd></div>
+            <div><dt>Deadline</dt><dd>{{ o.deadline|short_date }}</dd></div>
+            <div><dt>NAICS</dt><dd>{{ o.naics or '-' }}</dd></div>
+            <div><dt>Set aside</dt><dd>{{ o.set_aside or '-' }}</dd></div>
+            <div><dt>Place</dt><dd>{{ o.place or '-' }}</dd></div>
+            <div><dt>Contact</dt><dd>{{ o.contact_name or '-' }}{% if o.contact_email %}<br><a href="mailto:{{ o.contact_email }}">{{ o.contact_email }}</a>{% endif %}</dd></div>
+            <div><dt>Solicitation #</dt><dd class="mono">{{ o.solicitation_number or '-' }}</dd></div>
+            <div><dt>Notice ID</dt><dd class="mono">{{ o.notice_id }}</dd></div>
+            {% if o.discarded_at %}<div><dt>Discarded</dt><dd>{{ o.discarded_at|short_date }}</dd></div>{% endif %}
+          </dl>
+          {% if o.url|safe_url %}<p><a class="btn btn-small" href="{{ o.url|safe_url }}" target="_blank" rel="noopener">Open on SAM.gov &#8599;</a></p>{% endif %}
+          {% if o.other_versions %}
+          <div class="versions">
+            <b>Older versions</b> <span class="muted small">(shown above: the latest, posted {{ o.posted_date[:10] }})</span>
+            <ul>
+              {% for v in o.other_versions %}
+              <li>{{ v.posted_date[:10] }} &middot; {{ v.type }} &middot; deadline {{ v.deadline|short_date }}
+                {% if v.url|safe_url %}&middot; <a href="{{ v.url|safe_url }}" target="_blank" rel="noopener">open</a>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          <div class="description" data-src="{{ url_for('offer_description', notice_id=o.notice_id) }}">
+            <p class="muted">Loading the description...</p>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+    {% endfor %}
+  </table>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

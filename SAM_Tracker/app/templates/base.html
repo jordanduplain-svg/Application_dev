@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SAM.gov Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="{{ asset('style.css') }}">
+  <link rel="icon" type="image/png" href="{{ asset('icon.png') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('dashboard') }}">SAM.gov Tracker <span class="version">v{{ version }}</span></a>
+      <nav class="tabs">
+        {% set nav_view = request.args.get('view') %}
+        <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+        <a href="{{ url_for('offers') }}" class="{{ 'active' if request.endpoint == 'offers' and nav_view not in ('discarded', 'filtered') }}">Offers</a>
+        <a href="{{ url_for('offers', view='discarded') }}" class="{{ 'active' if nav_view == 'discarded' }}">Discarded</a>
+        <a href="{{ url_for('offers', view='filtered') }}" class="{{ 'active' if nav_view == 'filtered' }}">Filtered out</a>
+        <a href="{{ url_for('settings_page') }}" class="{{ 'active' if request.endpoint == 'settings_page' or request.endpoint == 'save_settings' }}">Settings</a>
+      </nav>
+      <button id="quit-button" class="quit-button" type="button" title="Stop the app">Quit</button>
+    </div>
+  </header>
+
+  <main class="page">
+    {% if config_error %}
+      <div class="notice notice-error"><b>Settings problem:</b> {{ config_error }}
+        The app uses default settings until this is fixed on the <a href="{{ url_for('settings_page') }}">Settings</a> page.</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="status-text" class="toast" role="status" aria-live="polite">{% block status %}{% endblock %}</div>
+  <script src="{{ asset('app.js') }}"></script>
+</body>
+</html>

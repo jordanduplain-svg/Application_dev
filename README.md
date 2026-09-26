@@ -18,6 +18,12 @@ Application d'automatisation de bout en bout avec intégration d'un LLM : collec
 
 `TypeScript` · `React` · `Electron` · `Prisma` · `Vitest`
 
+### [SAM.gov Tracker](SAM_Tracker)
+
+Application Windows installable qui repère les appels d'offres fédéraux américains publiés sur SAM.gov correspondant à des mots-clés (marketing, communication, branding, web design et développement). Téléchargement quotidien des données publiques, score par mots-clés pondérés, regroupement des versions d'une même offre, seules les offres encore ouvertes affichées par défaut, et page de réglages pour modifier les mots-clés. Installateur généré automatiquement par GitHub Actions.
+
+`Python` · `Flask` · `SQLite` · `PyInstaller` · `Inno Setup` · `pytest`
+
 ## Projets d'apprentissage
 
 ### [SpaceCenter](SpaceCenter)

@@ -1,0 +1,81 @@
+# SAM Tracker (folder SAM_Tracker/): tests on every change, Windows installer on a release tag.
+#
+# To publish a new version:
+#   1. set __version__ in SAM_Tracker/app/__init__.py (e.g. "1.1.0")
+#   2. commit, then:  git tag sam-tracker-v1.1.0  &&  git push origin sam-tracker-v1.1.0
+# A few minutes later SAM-Tracker-Setup-1.1.0.exe is on the Releases page.
+name: SAM Tracker
+
+on:
+  push:
+    branches: [main]
+    paths: ["SAM_Tracker/**", ".github/workflows/sam-tracker.yml"]
+    tags: ["sam-tracker-v*"]
+  pull_request:
+    paths: ["SAM_Tracker/**", ".github/workflows/sam-tracker.yml"]
+  workflow_dispatch:  # manual build from the Actions tab (installer kept as an artifact)
+
+permissions:
+  contents: write  # needed to create the release
+
+defaults:
+  run:
+    working-directory: SAM_Tracker
+
+jobs:
+  windows:
+    name: Tests + Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          version=$(python -c "import app; print(app.__version__)")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "sam-tracker-v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app/__init__.py version $version"
+            exit 1
+          fi
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Build the app (PyInstaller)
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        run: pyinstaller sam_tracker.spec --noconfirm
+
+      - name: Build the installer (Inno Setup)
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        with:
+          name: SAM-Tracker-Setup-${{ steps.version.outputs.version }}
+          path: SAM_Tracker/Output/*.exe
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SAM Tracker ${{ steps.version.outputs.version }}
+          files: SAM_Tracker/Output/*.exe
+          body: |
+            **Download `SAM-Tracker-Setup-${{ steps.version.outputs.version }}.exe` below, then double-click it.**
+
+            Windows may show "Windows protected your PC" because the app is not signed:
+            click **More info**, then **Run anyway**.

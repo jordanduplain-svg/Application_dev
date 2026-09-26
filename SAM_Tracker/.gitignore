@@ -1,0 +1,9 @@
+data/
+.venv/
+__pycache__/
+.pytest_cache/
+settings.yaml
+build/
+dist/
+Output/
+*.spec.bak
