@@ -7,6 +7,7 @@ running, it only opens a window. The "Quit" button in the app stops it.
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import shutil
 import subprocess
@@ -27,6 +28,19 @@ def is_running() -> bool:
             return True
     except OSError:
         return False
+
+
+def running_home() -> str | None:
+    """Data folder of the app answering on our port (None if nothing answers)."""
+    try:
+        with urllib.request.urlopen(f"{URL}/api/whoami", timeout=2) as response:
+            return json.load(response).get("home")
+    except (OSError, ValueError):
+        return "" if is_running() else None  # an older version, or another program
+
+
+def same_home(home: str) -> bool:
+    return os.path.normcase(os.path.abspath(home)) == os.path.normcase(os.path.abspath(config.USER_DIR))
 
 
 def find_edge() -> str | None:
@@ -63,9 +77,15 @@ def open_when_ready() -> None:
 
 
 def main() -> int:
-    if is_running():
-        open_window()
-        return 0
+    home = running_home()
+    if home is not None:
+        if home and same_home(home):
+            open_window()  # already running: just open a window
+            return 0
+        show_error(f"Another copy of {config.APP_NAME} is already running on port {config.PORT}"
+                   + (f"\n(data in {home})" if home else "") +
+                   ".\n\nClose it with its Quit button, then start the app again.")
+        return 1
     # Wait a little in case a copy that was just quit is still stopping.
     if not single_instance.acquire(wait=5):
         open_when_ready()  # another copy is starting right now

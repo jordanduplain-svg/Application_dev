@@ -19,9 +19,11 @@ import yaml
 from .models import KeywordRule
 
 APP_NAME = "SAM Tracker"
-PORT = 8765  # uncommon port, less likely to be used by another program
 
 FROZEN = getattr(sys, "frozen", False)  # True in the installed .exe
+# Uncommon ports, less likely to be used by another program. The installed app
+# and a copy run from source get different ports so they never mix their data.
+PORT = 8765 if FROZEN else 8766
 BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 
 

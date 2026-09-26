@@ -47,3 +47,12 @@ Name: "{autodesktop}\SAM Tracker"; Filename: "{app}\SAM Tracker.exe"; Tasks: des
 
 [Run]
 Filename: "{app}\SAM Tracker.exe"; Description: "{cm:LaunchProgram,SAM Tracker}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Stop the app first: Windows cannot delete the files of a running program,
+; and the uninstaller would silently leave them behind.
+Filename: "{sys}\taskkill.exe"; Parameters: "/IM ""SAM Tracker.exe"" /F"; Flags: runhidden; RunOnceId: "StopApp"
+
+[UninstallDelete]
+; Anything left in the program folder (never the user's data, which is elsewhere).
+Type: filesandordirs; Name: "{app}"

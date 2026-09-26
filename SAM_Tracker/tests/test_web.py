@@ -164,3 +164,30 @@ def test_only_the_csv_source_exists():
     assert isinstance(get_source("csv", settings), CsvSource)
     with pytest.raises(FetchError):
         get_source("api", settings)
+
+
+def test_whoami_gives_the_data_folder(client):
+    from app import config
+    data = client.get("/api/whoami").get_json()
+    assert data == {"app": "SAM Tracker", "home": str(config.USER_DIR)}
+
+
+def test_source_and_installed_copies_use_different_ports():
+    import importlib
+    import sys as _sys
+    from app import config
+    assert config.PORT == 8766  # tests run from source
+    _sys.frozen = True
+    try:
+        assert importlib.reload(config).PORT == 8765  # the installed app
+    finally:
+        del _sys.frozen
+        importlib.reload(config)
+
+
+def test_launcher_only_reuses_its_own_copy(monkeypatch, tmp_path):
+    import launcher
+    from app import config
+    monkeypatch.setattr(config, "USER_DIR", tmp_path)
+    assert launcher.same_home(str(tmp_path))
+    assert not launcher.same_home(str(tmp_path / "other"))

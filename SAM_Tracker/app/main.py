@@ -237,6 +237,11 @@ def create_app() -> Flask:
     def status():
         return jsonify(runner.snapshot())
 
+    @app.get("/api/whoami")
+    def whoami():
+        """Lets the launcher check that the app on this port uses *its* data folder."""
+        return jsonify(app=config.APP_NAME, home=str(config.USER_DIR))
+
     @app.post("/api/quit")
     def quit_app():
         """Stop the server (it runs hidden when started from the desktop shortcut)."""
