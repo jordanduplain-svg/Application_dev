@@ -62,12 +62,12 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      # Same app without Setup.exe, installed by install.ps1: for PCs where Windows
-      # "Smart App Control" blocks the (unsigned) installer but not the app itself.
-      - name: Build the ZIP
+      # The app's code, installed by install.ps1 and run with the official (signed) Python:
+      # works on PCs where Windows "Smart App Control" blocks unsigned programs.
+      - name: Build the source ZIP
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
-        shell: pwsh
-        run: Compress-Archive -Path "dist\SAM Tracker\*" -DestinationPath "Output\SAM-Tracker-${{ steps.version.outputs.version }}-windows.zip"
+        shell: bash
+        run: git archive --format=zip -o "Output/SAM-Tracker-${{ steps.version.outputs.version }}-source.zip" HEAD:SAM_Tracker
 
       - uses: actions/upload-artifact@v4
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
@@ -86,7 +86,7 @@ jobs:
             SAM_Tracker/Output/*.exe
             SAM_Tracker/Output/*.zip
           body: |
-            **Install**: paste this in PowerShell (works even when Windows blocks unsigned installers):
+            **Install**: paste this in PowerShell (works even when Windows "Smart App Control" blocks unsigned programs):
 
             ```powershell
             irm https://raw.githubusercontent.com/jordanduplain-svg/Application_dev/main/SAM_Tracker/install.ps1 | iex

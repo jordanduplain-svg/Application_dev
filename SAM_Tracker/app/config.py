@@ -5,6 +5,9 @@ Two places:
 - the user folder (their settings.yaml, database, downloaded CSV, log):
   %LOCALAPPDATA%\\SAM Tracker for the installed app, the project folder when
   running from source. SAM_TRACKER_HOME overrides it.
+
+"Installed" means either the .exe built by PyInstaller (Setup.exe), or the source
+code set up by install.ps1, which leaves an `installed.flag` file next to the code.
 """
 from __future__ import annotations
 
@@ -20,17 +23,25 @@ from .models import KeywordRule
 
 APP_NAME = "SAM Tracker"
 
-FROZEN = getattr(sys, "frozen", False)  # True in the installed .exe
+FROZEN = getattr(sys, "frozen", False)  # True in the .exe built by PyInstaller
+BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+INSTALLED_FLAG = "installed.flag"  # written by install.ps1
+
+
+def is_installed(bundle_dir: Path = BUNDLE_DIR, frozen: bool = FROZEN) -> bool:
+    return frozen or (bundle_dir / INSTALLED_FLAG).exists()
+
+
+INSTALLED = is_installed()
 # Uncommon ports, less likely to be used by another program. The installed app
 # and a copy run from source get different ports so they never mix their data.
-PORT = 8765 if FROZEN else 8766
-BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+PORT = 8765 if INSTALLED else 8766
 
 
 def _user_dir() -> Path:
     if os.environ.get("SAM_TRACKER_HOME"):
         return Path(os.environ["SAM_TRACKER_HOME"])
-    if FROZEN:
+    if INSTALLED:
         return Path(os.environ.get("LOCALAPPDATA", Path.home())) / APP_NAME
     return BUNDLE_DIR
 

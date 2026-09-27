@@ -11,7 +11,7 @@
 
 ## Installation
 
-Windows 10 ou 11. Aucun droit administrateur, aucun Python à installer.
+Windows 10 ou 11. Aucun droit administrateur.
 
 **Coller cette commande dans PowerShell** (menu Démarrer > « PowerShell ») :
 
@@ -19,10 +19,12 @@ Windows 10 ou 11. Aucun droit administrateur, aucun Python à installer.
 irm https://raw.githubusercontent.com/jordanduplain-svg/Application_dev/main/SAM_Tracker/install.ps1 | iex
 ```
 
-Elle télécharge la dernière version, l'installe dans `%LOCALAPPDATA%\Programs\SAM Tracker`,
-crée les raccourcis sur le Bureau et dans le menu Démarrer, puis lance l'application.
-Elle fonctionne même quand le **Contrôle intelligent des applications** de Windows 11
-bloque les installateurs non signés (erreur 4551). Pour **mettre à jour**, relancer la même
+Elle installe Python (version officielle de python.org) s'il n'est pas déjà présent,
+télécharge la dernière version de l'application dans `%LOCALAPPDATA%\Programs\SAM Tracker`,
+crée les raccourcis sur le Bureau et dans le menu Démarrer, puis lance l'application
+(une à deux minutes, connexion internet nécessaire). Elle fonctionne même quand le
+**Contrôle intelligent des applications** de Windows 11 bloque les programmes non signés
+(erreur 4551) : l'application tourne avec Python, qui est signé. Pour **mettre à jour**, relancer la même
 commande. Pour **désinstaller** : Paramètres Windows > Applications > SAM Tracker.
 
 **Autre méthode, avec un installateur classique** (si ce contrôle n'est pas actif sur le PC) :

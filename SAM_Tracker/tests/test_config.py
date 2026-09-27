@@ -90,3 +90,10 @@ def test_shipped_defaults_keep_all_the_keywords():
     texts = {k.text for k in s.keywords}
     assert len(s.keywords) >= 130
     assert {"marketing", "web development", "branding", "software design", "reactjs"} <= texts
+
+
+def test_installed_by_script_or_exe(tmp_path):
+    assert not config.is_installed(tmp_path, frozen=False)  # plain source folder
+    assert config.is_installed(tmp_path, frozen=True)       # Setup.exe version
+    (tmp_path / config.INSTALLED_FLAG).write_text("", encoding="utf-8")
+    assert config.is_installed(tmp_path, frozen=False)      # set up by install.ps1
