@@ -89,6 +89,7 @@ if ($env:SAM_TRACKER_SOURCE_ZIP) {
 if (Test-Path $appDir) { Remove-Item $appDir -Recurse -Force }
 Expand-Archive $zip -DestinationPath $appDir -Force
 Remove-Item $zip
+if (-not (Test-Path $launcher)) { throw 'The download is incomplete. Run the command again in a few minutes.' }
 New-Item (Join-Path $appDir 'installed.flag') -ItemType File -Force | Out-Null  # installed mode: data in %LOCALAPPDATA%\SAM Tracker
 
 Write-Host 'Preparing the app (about one minute)...'

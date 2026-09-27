@@ -67,7 +67,10 @@ jobs:
       - name: Build the source ZIP
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         shell: bash
-        run: git archive --format=zip -o "Output/SAM-Tracker-${{ steps.version.outputs.version }}-source.zip" HEAD:SAM_Tracker
+        working-directory: .  # "HEAD:SAM_Tracker" is resolved from the repository root
+        run: |
+          git archive --format=zip -o "SAM_Tracker/Output/SAM-Tracker-${{ steps.version.outputs.version }}-source.zip" HEAD:SAM_Tracker
+          unzip -l "SAM_Tracker/Output/SAM-Tracker-${{ steps.version.outputs.version }}-source.zip" | grep -q launcher.py || { echo "::error::source ZIP is incomplete"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
