@@ -13,19 +13,20 @@
 
 Windows 10 ou 11. Aucun droit administrateur, aucun Python à installer.
 
-**1. Télécharger l'installateur sur le Bureau** (à coller dans PowerShell) :
+**Coller cette commande dans PowerShell** (menu Démarrer > « PowerShell ») :
 
 ```powershell
-curl.exe -L -o "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.2.exe" https://github.com/jordanduplain-svg/Application_dev/releases/download/sam-tracker-v1.0.2/SAM-Tracker-Setup-1.0.2.exe
+irm https://raw.githubusercontent.com/jordanduplain-svg/Application_dev/main/SAM_Tracker/install.ps1 | iex
 ```
 
-**2. Lancer l'installation** (ou double-cliquer sur le fichier arrivé sur le Bureau) :
+Elle télécharge la dernière version, l'installe dans `%LOCALAPPDATA%\Programs\SAM Tracker`,
+crée les raccourcis sur le Bureau et dans le menu Démarrer, puis lance l'application.
+Elle fonctionne même quand le **Contrôle intelligent des applications** de Windows 11
+bloque les installateurs non signés (erreur 4551). Pour **mettre à jour**, relancer la même
+commande. Pour **désinstaller** : Paramètres Windows > Applications > SAM Tracker.
 
-```powershell
-& "$([Environment]::GetFolderPath('Desktop'))\SAM-Tracker-Setup-1.0.2.exe"
-```
-
-Sans ligne de commande : télécharger `SAM-Tracker-Setup-x.y.z.exe` sur la page
+**Autre méthode, avec un installateur classique** (si ce contrôle n'est pas actif sur le PC) :
+télécharger `SAM-Tracker-Setup-x.y.z.exe` sur la page
 **[Releases](https://github.com/jordanduplain-svg/Application_dev/releases)** (dernière
 version **SAM Tracker**) et double-cliquer dessus.
 
@@ -159,6 +160,7 @@ nouvelle release. Les tests tournent aussi à chaque modification de ce dossier.
 
 ```
 SAM_Tracker/
+├─ install.ps1            Installation sans Setup.exe (commande PowerShell)
 ├─ launcher.py            Point d'entrée : démarre le serveur local une seule fois, ouvre la fenêtre
 ├─ app/
 │  ├─ main.py             Routes web uniquement

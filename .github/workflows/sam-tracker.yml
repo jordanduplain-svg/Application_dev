@@ -62,20 +62,35 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # Same app without Setup.exe, installed by install.ps1: for PCs where Windows
+      # "Smart App Control" blocks the (unsigned) installer but not the app itself.
+      - name: Build the ZIP
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: Compress-Archive -Path "dist\SAM Tracker\*" -DestinationPath "Output\SAM-Tracker-${{ steps.version.outputs.version }}-windows.zip"
+
       - uses: actions/upload-artifact@v4
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         with:
-          name: SAM-Tracker-Setup-${{ steps.version.outputs.version }}
-          path: SAM_Tracker/Output/*.exe
+          name: SAM-Tracker-${{ steps.version.outputs.version }}
+          path: |
+            SAM_Tracker/Output/*.exe
+            SAM_Tracker/Output/*.zip
 
       - name: Publish the release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           name: SAM Tracker ${{ steps.version.outputs.version }}
-          files: SAM_Tracker/Output/*.exe
+          files: |
+            SAM_Tracker/Output/*.exe
+            SAM_Tracker/Output/*.zip
           body: |
-            **Download `SAM-Tracker-Setup-${{ steps.version.outputs.version }}.exe` below, then double-click it.**
+            **Install**: paste this in PowerShell (works even when Windows blocks unsigned installers):
 
-            Windows may show "Windows protected your PC" because the app is not signed:
-            click **More info**, then **Run anyway**.
+            ```powershell
+            irm https://raw.githubusercontent.com/jordanduplain-svg/Application_dev/main/SAM_Tracker/install.ps1 | iex
+            ```
+
+            Or download `SAM-Tracker-Setup-${{ steps.version.outputs.version }}.exe` below and double-click it.
+            If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
