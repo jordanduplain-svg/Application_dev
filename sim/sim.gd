@@ -23,10 +23,6 @@ static func tick(state: Dictionary, data: Dictionary) -> void:
 	if str(state["fin"]) != "":
 		return
 	state["tick"] = float(state["tick"]) + 1.0
-	# LA RECHERCHE AVANCE EN TETE DE TICK (§2bis) : un noeud livre cette semaine elargit
-	# l'ecran de conception pour la decision de la semaine SUIVANTE, parce que le joueur
-	# decide avant que la semaine ne s'ecoule. L'ordre est une regle de jeu.
-	Recherche.tick_hebdo(state, data)
 	# Les sept specs, calculées UNE fois par tick et passées à qui en a besoin. Les
 	# recalculer dans chaque module donnerait deux vérités pour une recette le jour où une
 	# formule bouge, et la seconde serait découverte par un joueur.
@@ -34,6 +30,9 @@ static func tick(state: Dictionary, data: Dictionary) -> void:
 	if not (state["recette"] as Dictionary).is_empty():
 		specs = Produit.specs(state["recette"], data)
 	var kg: float = Economie.tick_hebdo(state, data, specs)
+	# LE SAVOIR-FAIRE S'APPREND APRES LA PRODUCTION (§2bis) : c'est la semaine qu'on vient
+	# de faire tourner qui enseigne, avec la recette qu'on vient d'utiliser.
+	Recherche.apprendre(state, data)
 	# La visibilité lit le tas de sale APRÈS le blanchiment de la semaine : ce qui est parti
 	# au lavage ne t'accuse plus. L'ordre est une règle de jeu, pas un détail d'implémentation.
 	Visibilite.tick_hebdo(state, data, kg, float(specs.get("signature", 0.0)))
@@ -58,7 +57,7 @@ static func appliquer(state: Dictionary, data: Dictionary, intention: Dictionary
 		"prix":
 			return _prix(state, data, intention)
 		"recherche":
-			return Recherche.lancer(state, data, str(intention["noeud"]))
+			return Recherche.acheter(state, data, str(intention["noeud"]))
 	return false
 
 

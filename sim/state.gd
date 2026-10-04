@@ -15,6 +15,7 @@ const CHEMINS_DATA: Dictionary = {
 	"segments": "res://data/segments.json",
 	"rivaux": "res://data/rivaux.json",
 	"procedes": "res://data/procedes.json",
+	"conception": "res://data/conception.json",
 }
 
 
@@ -71,15 +72,26 @@ static func nouvelle_partie(graine: int, data: Dictionary) -> Dictionary:
 		# Les deux cartels (§4). Le troisième emplacement reste vide jusqu'à la première
 		# trahison (§6, jalon 4).
 		"rivaux": {},
-		# LA RECHERCHE (§2bis) : un chantier a la fois, paye d'avance en propre. `acquis`
+		# LA RECHERCHE (§2bis) : les cases acquises de la grille, et rien d'autre — l'achat
+		# est instantane, il n'y a plus de chantier en cours a sauvegarder. `acquis`
 		# est un dictionnaire et non une liste pour que la serialisation canonique le trie
 		# — deux campagnes identiques doivent produire deux textes identiques, et l'ordre
 		# d'acquisition ne fait pas partie de l'etat du jeu.
-		"recherche": {"acquis": {}, "en_cours": "", "semaines_restantes": 0.0},
+		# `savoir` : une reserve de savoir-faire par BRAS de la grille, nommes dans
+		# data/procedes.json. Ce n'est pas une bourse : rien ne la convertit en argent.
+		"recherche": {"acquis": {}, "savoir": _savoir_vide(data)},
 		"stats": {"kg_produits": 0.0, "kg_vendus": 0.0, "sale_encaisse": 0.0,
 			"propre_blanchi": 0.0, "precurseurs_sale": 0.0, "precurseurs_propre": 0.0,
 			"propre_recherche": 0.0},
 	}
+
+
+static func _savoir_vide(data: Dictionary) -> Dictionary:
+	var savoir: Dictionary = {}
+	for bras: String in data["procedes"]["savoir"]["bras"]:
+		if not bras.begins_with("_"):
+			savoir[bras] = 0.0
+	return savoir
 
 
 static func cles_triees(d: Dictionary) -> Array:
@@ -150,11 +162,38 @@ static func valider(state: Dictionary) -> void:
 		for uid: String in parts:
 			somme += float(parts[uid])
 		assert(absf(somme - 1.0) < 0.001, "somme des parts != 1 dans " + nom_seg)
-	assert(float(state["recherche"]["semaines_restantes"]) >= 0.0, "recherche à semaines négatives")
 	assert(float(state["cash_propre"]) > -1e12, "trésorerie propre absurde")
+	for bras: String in state["recherche"]["savoir"]:
+		assert(float(state["recherche"]["savoir"][bras]) >= 0.0, "savoir-faire négatif : " + bras)
 
 
+# DEUX PASSES, et la premiere ne fabrique aucune chaine. La version d'une seule passe
+# construisait le chemin (« state.marche.rue.parts.joueur ») de CHAQUE valeur a CHAQUE tick
+# pour ne s'en servir qu'en cas d'echec : c'etait la moitie du cout d'un tick. Le parcours
+# detaille ne tourne plus que si le rapide a trouve quelque chose — meme verdict, meme
+# message. Le mesurer : `perf.gd`, colonne us/tick.
 static func _sain(valeur: Variant, chemin: String) -> void:
+	if _sain_rapide(valeur):
+		return
+	_sain_detail(valeur, chemin)
+
+
+static func _sain_rapide(valeur: Variant) -> bool:
+	match typeof(valeur):
+		TYPE_FLOAT:
+			return not is_nan(valeur) and not is_inf(valeur)
+		TYPE_DICTIONARY:
+			for cle: Variant in valeur:
+				if not _sain_rapide(valeur[cle]):
+					return false
+		TYPE_ARRAY:
+			for v: Variant in (valeur as Array):
+				if not _sain_rapide(v):
+					return false
+	return true
+
+
+static func _sain_detail(valeur: Variant, chemin: String) -> void:
 	match typeof(valeur):
 		TYPE_FLOAT:
 			assert(not is_nan(valeur), "NaN : " + chemin)

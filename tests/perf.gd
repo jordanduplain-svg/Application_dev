@@ -22,7 +22,7 @@ const Levier := preload("res://tests/levier.gd")
 # pour la porte du jalon 0. On extrapole leur coût au lieu de les relancer ici — les
 # relancer doublerait le temps de CI pour mesurer ce qu'on vient de mesurer.
 const GRAINES_BALANCE: int = 100
-const GRAINES_LEVIER: int = 6
+const GRAINES_LEVIER: int = Levier.N_GRAINES_DEFAUT
 const BUDGET_BALANCE_SEC: float = 300.0
 const BUDGET_LEVIER_SEC: float = 300.0
 # Le budget attrape la catastrophe ; l'ALERTE attrape la derive. §16 ne dit pas « 5 minutes

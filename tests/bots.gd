@@ -119,8 +119,79 @@ static func strategies() -> Dictionary:
 			# d'abord, sa signature tombe de moitie des la semaine 18.
 			# Ce n'est pas un reglage pour faire passer une cible : c'est la difference
 			# entre un temoin qui joue mal (son droit) et un temoin qui joue bete (jamais).
-			"recherche": ["extraction_azurite", "synthese_corymbe", "raffinage_court",
-				"procede_deux_etapes", "colonne_seche"],
+			# DANS LA GRILLE (§2bis), le meme ordre devient un CHEMIN : chaque case doit
+			# toucher le centre ou une case deja prise. Le plus court vers purete 0.99 passe
+			# par les quatre cases de la veine Purete — Filtration et Recristallisation
+			# sont les deux paliers que l'arbre n'avait pas.
+			"recherche": ["extraction_azurite", "synthese_corymbe", "filtration",
+				"raffinage_court", "procede_deux_etapes", "recristallisation",
+				"colonne_seche"],
+			"reserve_propre": 60000.0,
+		},
+		# LES DEUX TEMOINS DES CHOIX DE CONCEPTION (data/conception.json). Ils sont nes le
+		# jour ou la grille a gagne ses cases de jonction : vingt cases sur vingt-sept ne
+		# servaient a aucun temoin, donc le harnais ne voyait plus que le tiers de la
+		# recherche. Leur INTENTION est ecrite ici avant toute mesure, et c'est elle qui
+		# fixe leurs nombres — pas les cibles. Un temoin qui perd fait son travail (§16).
+		#
+		# « La rue en gros : coupe, fidelise, vendu pas cher. » Il pousse tout ce qui fait du
+		# kilo — rendement, coupe, gros lots — et prend l'agent exaltant pour que la coupe
+		# fidelise au lieu de diluer. Il ne regarde ni son tas ni sa jauge.
+		"grossiste": {
+			"recette": {
+				"famille": "verdal",
+				"purete": 0.45,
+				"rendement": 0.95,
+				"complexite": 1,
+				"coupe": 0.70,
+				"stabilisation": 0,
+				"cadence": "gros_lots",
+				"agent": "exaltant",
+			},
+			# MARGE GELEE, meme regle que les deux autres. x3 : il casse les prix de la rue,
+			# le multiple d'un grossiste qui vit de son volume.
+			"marge": 3.00,
+			"part_capacite": 1.0,
+			"part_apres_dette": 1.0,
+			"plafonne_sur_blanchiment": false,
+			# Le CHEMIN de la veine Volume, puis les deux jonctions qui la touchent. L'agent
+			# enrobant n'est pas son choix : c'est la case par laquelle on atteint l'exaltant
+			# depuis son bras, et il la paie comme un joueur la paierait.
+			"recherche": ["cuves_larges", "charges_neutres", "gros_lots", "charges_lourdes",
+				"cuves_en_serie", "agent_enrobant", "agent_exaltant"],
+			"reserve_propre": 60000.0,
+		},
+		# « Petit volume haut de gamme, qui se protege de tout. » Le contraire
+		# d'`industriel` sur le seul axe qui les separe : il stabilise, il signe peu
+		# (cristaux), il dose regulierement (petits lots) et il tamponne ses lots pour
+		# fideliser une clientele rare. Il va moins haut en purete parce qu'il paie sa
+		# protection avant sa puissance.
+		"orfevre": {
+			"recette": {
+				"famille": "corymbe",
+				"purete": 0.90,
+				"rendement": 0.45,
+				"complexite": 2,
+				"coupe": 0.0,
+				"stabilisation": 2,
+				"forme": "cristaux",
+				"cadence": "petits_lots",
+				"marquage": 1,
+			},
+			# MARGE GELEE. x2.5 : entre l'industriel (x2, haut de gamme en volume) et la rue
+			# (x4) — un artisan qui vend peu et cher.
+			"marge": 2.50,
+			"part_capacite": 0.50,
+			"part_apres_dette": 0.50,
+			"plafonne_sur_blanchiment": true,
+			# LA PROTECTION D'ABORD, toute la protection : le Liant gris (instabilite) puis la
+			# Cristallisation (signature), atteinte par le procede en deux etapes. La
+			# premiere version mettait les cristaux en fin de liste, contre l'intention ecrite
+			# deux lignes plus haut — et la mesure a montre qu'il ne les atteignait jamais.
+			# Puis la famille, la purete, et ce qui fidelise.
+			"recherche": ["liant_gris", "procede_deux_etapes", "cristallisation",
+				"extraction_azurite", "synthese_corymbe", "filtration", "raffinage_court",
+				"recristallisation", "liant_ambre", "petits_lots", "tampon_de_maison"],
 			"reserve_propre": 60000.0,
 		},
 	}
@@ -216,7 +287,8 @@ static func _prix_a_jour(state: Dictionary, data: Dictionary, strat: Dictionary,
 	return true
 
 
-# LA RECHERCHE (§2bis) : le prochain noeud de la liste, lance des qu'il est payable.
+# LA RECHERCHE (§2bis) : les prochaines cases de la liste, achetees des qu'elles sont
+# payables.
 #
 # LA DETTE N'EST JAMAIS DEPENSEE. C'est la meme regle que `_payable` pour les precurseurs,
 # appliquee a la seule autre depense en propre qui existe : on ne lance pas un chantier
@@ -238,20 +310,22 @@ static func _prix_a_jour(state: Dictionary, data: Dictionary, strat: Dictionary,
 # pas un defaut de ce garde, c'est un CONSTAT SUR LE JEU : la dette de l'acte I (§1bis)
 # mange tout le budget de recherche de la premiere annee. C'est une phrase sur §1bis contre
 # §2bis, et elle appartient au GDD, pas a un reglage de temoin.
+#
+# L'ACHAT EST INSTANTANE depuis la grille (§2bis) : le bot prend dans l'ordre de sa liste
+# autant de cases qu'il peut en payer cette semaine, et s'arrete a la premiere qu'il ne
+# peut pas s'offrir. Il ne saute pas une case trop chere pour prendre la suivante : sa
+# liste est un chemin, et la case suivante ne touche peut-etre rien de ce qu'il possede.
 static func _chercher(state: Dictionary, data: Dictionary, strat: Dictionary) -> void:
-	var liste: Array = strat["recherche"]
-	if liste.is_empty() or str(state["recherche"]["en_cours"]) != "":
-		return
 	var acquis: Dictionary = state["recherche"]["acquis"]
-	for id: Variant in liste:
+	for id: Variant in (strat["recherche"] as Array):
 		if acquis.has(str(id)):
 			continue
-		var cout: float = float(data["procedes"]["noeuds"][str(id)]["cout_propre"])
+		var cout: float = Recherche.cout(state, data, str(id))
 		var garde: float = float(strat["reserve_propre"]) + float(state["dette"])
 		if float(state["cash_propre"]) - cout < garde:
 			return
-		Sim.appliquer(state, data, {"type": "recherche", "noeud": str(id)})
-		return
+		if not Sim.appliquer(state, data, {"type": "recherche", "noeud": str(id)}):
+			return
 
 
 # LE PRIX, un par segment (§19bis) : cout x marge GELEE du bot x niveau_prix du segment.

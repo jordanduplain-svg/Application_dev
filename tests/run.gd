@@ -34,6 +34,7 @@ func _initialize() -> void:
 	_test_conception(data)
 	_test_recherche(data)
 	_test_recherche_comportement(data)
+	_test_savoir(data)
 	_test_calibration(data)
 	_test_determinisme(data)
 	_test_save_load(data)
@@ -371,7 +372,7 @@ func _sources() -> PackedStringArray:
 # declarait vertes — a juste titre.
 #
 # LES SEPT DIRECTIONS sont celles de §2 et ne sont pas negociables : le cout et la signature
-# se veulent BAS, le debit, la fiabilite, la puissance et la dependance se veulent HAUTS,
+# se veulent BAS, le debit, la regularite, la puissance et la dependance se veulent HAUTS,
 # `instabilite_neuro` se veut BASSE. Aucune fonction de score n'est inventee ici — c'est ce
 # qui rend le verdict solide : on ne demande pas si un reglage est BON, on demande s'il
 # existe une raison de bouger le curseur.
@@ -380,14 +381,14 @@ func _sources() -> PackedStringArray:
 # de ce test exigeait un gain > 1e-9 : elle attrapait un zero EXACT, et laissait passer un
 # terme SYMBOLIQUE. Mesure : `k_variance_rendement` divise par 2500 (0.25 -> 0.0001) et le
 # test restait vert, alors que baisser le rendement ne gagnait plus que 0.01 % de l'etendue
-# de la fiabilite. Or c'est la regression realiste — quelqu'un qui baisse un coefficient pour
+# de la regularite. Or c'est la regression realiste — quelqu'un qui baisse un coefficient pour
 # regler un probleme d'equilibrage. Le seuil est pose APRES la mesure : la contrepartie la
 # plus mince du jeu (baisser la stabilisation, qui ne fait qu'economiser) est a ~3 %, le terme
 # symbolique a 0.01 % — deux ordres de grandeur d'ecart, et le seuil passe entre les deux.
 const SEUIL_ARBITRAGE: float = 0.01
 const DIRECTIONS: Dictionary = {
 	"cout_unitaire": -1.0, "signature": -1.0, "instabilite_neuro": -1.0,
-	"debit_kg_sem": 1.0, "fiabilite_lot": 1.0, "puissance": 1.0, "dependance": 1.0,
+	"debit_kg_sem": 1.0, "regularite_lot": 1.0, "puissance": 1.0, "dependance": 1.0,
 }
 
 
@@ -400,6 +401,7 @@ func _test_conception(data: Dictionary) -> void:
 		"complexite": [1.0, 2.0, 3.0, 4.0, 5.0],
 		"coupe": [0.0, 0.25, 0.45, 0.70],
 		"stabilisation": [0.0, 1.0, 2.0, 3.0],
+		"marquage": [0.0, 1.0, 2.0],
 	}
 	var contextes: Array = _contextes(familles, axes)
 	var morts: PackedStringArray = []
@@ -443,6 +445,12 @@ func _test_conception(data: Dictionary) -> void:
 				echecs.append("§2 : %s `%s` n'ameliore aucune spec de plus de %.2f%% de son etendue (seuil %.0f%%) — la contrepartie existe peut-etre, mais elle est symbolique : ce curseur n'a qu'une bonne position"
 					% [sens, axe, maxf(g2, 0.0) * 100.0, SEUIL_ARBITRAGE * 100.0])
 	_test_familles(data, familles, contextes, morts)
+	# LES TROIS CHOIX A OPTIONS (data/conception.json) : meme question que les familles —
+	# aucune option ne doit etre dominee par une autre sur les sept specs dans tous les
+	# contextes, sinon c'est un choix que personne n'a de raison de faire.
+	for groupe: Array in [["forme", "formes"], ["agent", "agents"], ["cadence", "cadences"]]:
+		_test_options(data, str(groupe[0]),
+			Etat.cles_triees(data["conception"][str(groupe[1])]["options"]), contextes)
 	# Le compte se prend sur la TAILLE de `echecs`, avec `avant` capture EN TETE de la
 	# fonction. La version precedente le capturait apres la boucle des axes, puis rattrapait
 	# les echecs manques en relisant les messages par prefixe (`_compte_axes`) — l'anti-pattern
@@ -488,6 +496,30 @@ func _test_familles(data: Dictionary, familles: Array, contextes: Array,
 					% [a, b])
 
 
+func _test_options(data: Dictionary, cle: String, options: Array, contextes: Array) -> void:
+	for a: String in options:
+		for b: String in options:
+			if a == b:
+				continue
+			var domine: bool = true
+			for ctx: Dictionary in contextes:
+				var ca: Dictionary = ctx.duplicate()
+				ca[cle] = a
+				var cb: Dictionary = ctx.duplicate()
+				cb[cle] = b
+				var sa: Dictionary = Produit.specs(ca, data)
+				var sbb: Dictionary = Produit.specs(cb, data)
+				for spec: String in DIRECTIONS:
+					if (float(sbb[spec]) - float(sa[spec])) * float(DIRECTIONS[spec]) < -1e-9:
+						domine = false
+						break
+				if not domine:
+					break
+			if domine:
+				echecs.append("§2 : l'option `%s` de `%s` est dominee par `%s` sur les sept specs et dans tous les contextes : personne n'a de raison de la choisir"
+					% [a, cle, b])
+
+
 # Un echantillon de recettes completes, une par combinaison des AUTRES axes. On ne teste pas
 # la grille entiere : on teste qu'un axe garde une raison d'etre bouge DANS DES CONTEXTES
 # VARIES, ce qui est la question.
@@ -510,41 +542,81 @@ func _contextes(familles: Array, axes: Dictionary) -> Array:
 # TROIS PROMESSES de §2bis, dont aucune ne se casse dans le code. Elles se cassent toutes
 # les trois dans une ligne de data/procedes.json, en silence, et aucune cible ne le verrait.
 #
-#   1. « aucun bonus numerique direct » — la liste de ce qu'un noeud peut ouvrir est FERMEE.
+#   1. « aucun bonus numerique direct » — la liste de ce qu'une case peut ouvrir est FERMEE.
 #      Une cle `rendement_bonus` ajoutee un soir et la recherche cesse d'ouvrir des choix
 #      pour distribuer des points. C'est la promesse la plus facile a trahir du document.
 #   2. « une partie entiere est jouable sans rien rechercher » — le kit de depart doit
 #      produire une recette qui SORT des kilos. Un plafond de purete mal pose et le jeu
 #      devient injouable au tick 0, ce qu'aucun bot ne dirait puisqu'ils meurent tous.
-#   3. l'arbre est un ARBRE — prerequis existants, aucun cycle, aucun noeud inatteignable.
-#      Un cycle ne plante pas : il rend deux noeuds invisibles pour toujours.
+#   3. la grille est UNE grille — cases lisibles, distinctes, hors du centre, et toutes
+#      atteignables depuis le centre de proche en proche. Une case isolee ne plante pas :
+#      elle reste invisible pour toujours, comme un cycle dans l'ancien arbre.
 func _test_recherche(data: Dictionary) -> void:
 	var noeuds: Dictionary = data["procedes"]["noeuds"]
 	var familles: Dictionary = data["precurseurs"]["familles"]
+	var centre: String = str(data["procedes"]["centre"])
+	var occupees: Dictionary = {}
 	for id: String in Etat.cles_triees(noeuds):
 		var n: Dictionary = noeuds[id]
 		if (n["ouvre"] as Dictionary).is_empty():
-			echecs.append("le noeud `%s` n'ouvre rien" % id)
+			echecs.append("la case `%s` n'ouvre rien" % id)
 		for cle: String in (n["ouvre"] as Dictionary):
 			if not Recherche.OUVERTURES.has(cle):
-				echecs.append("le noeud `%s` ouvre `%s`, qui n'est pas dans la liste fermee de §2bis — la recherche donnerait un bonus numerique au lieu d'ouvrir un choix"
+				echecs.append("la case `%s` ouvre `%s`, qui n'est pas dans la liste fermee de §2bis — la recherche donnerait un bonus numerique au lieu d'ouvrir un choix"
 					% [id, cle])
 			if cle == "famille" and not familles.has(str(n["ouvre"][cle])):
-				echecs.append("le noeud `%s` ouvre la famille `%s`, absente de precurseurs.json"
+				echecs.append("la case `%s` ouvre la famille `%s`, absente de precurseurs.json"
 					% [id, str(n["ouvre"][cle])])
-		for req: Variant in (n["prerequis"] as Array):
-			if not noeuds.has(str(req)):
-				echecs.append("le noeud `%s` exige `%s`, qui n'existe pas" % [id, str(req)])
-		if _ancetres(noeuds, id).has(id):
-			echecs.append("le noeud `%s` est son propre prerequis : deux noeuds au moins sont inatteignables pour toujours"
-				% id)
+			var groupe: String = {"forme": "formes", "agent": "agents",
+				"cadence": "cadences"}.get(cle, "")
+			if groupe != "" and not (data["conception"][groupe]["options"] as Dictionary) \
+					.has(str(n["ouvre"][cle])):
+				echecs.append("la case `%s` ouvre l'option `%s` de `%s`, absente de conception.json"
+					% [id, str(n["ouvre"][cle]), groupe])
+		var texte: String = str(n.get("case", ""))
+		var morceaux: PackedStringArray = texte.split(",")
+		if morceaux.size() != 2 or not morceaux[0].is_valid_int() \
+				or not morceaux[1].is_valid_int():
+			echecs.append("la case `%s` a une coordonnee illisible (`%s`) : attendu `q,r`"
+				% [id, texte])
+			continue
+		var cle_case: String = "%d,%d" % [int(morceaux[0]), int(morceaux[1])]
+		if cle_case == centre:
+			echecs.append("la case `%s` est posee sur le centre de la grille" % id)
+		if occupees.has(cle_case):
+			echecs.append("les cases `%s` et `%s` occupent le meme hexagone %s"
+				% [str(occupees[cle_case]), id, cle_case])
+		occupees[cle_case] = id
+		var bras_c: String = str(n.get("bras", ""))
+		var bras_ok: Dictionary = data["procedes"]["savoir"]["bras"]
+		if bras_c.begins_with("_") or not bras_ok.has(bras_c):
+			echecs.append("la case `%s` appartient au bras `%s`, absent de procedes.savoir.bras" % [id, bras_c])
+		if float(n.get("cout_savoir", -1.0)) < 0.0:
+			echecs.append("la case `%s` n'a pas de `cout_savoir` valide" % id)
+	# LA CONNEXITE, verifiee sur le code du jeu et pas recalculee ici : on prend tout ce
+	# qui est disponible, sans regarder l'argent, jusqu'a ce que plus rien ne s'ouvre. Ce
+	# qui reste hors d'atteinte est une case qu'aucun joueur ne verra jamais.
+	var tout: Dictionary = Sim.nouvelle_partie(1, data)
+	var ouvertes: Array = Recherche.disponibles(tout, data)
+	while not ouvertes.is_empty():
+		for id2: Variant in ouvertes:
+			(tout["recherche"]["acquis"] as Dictionary)[str(id2)] = 1.0
+		ouvertes = Recherche.disponibles(tout, data)
+	for id3: String in Etat.cles_triees(noeuds):
+		if not (tout["recherche"]["acquis"] as Dictionary).has(id3):
+			echecs.append("la case `%s` n'est reliee au centre par aucun chemin : elle est inatteignable"
+				% id3)
 	var depart: Dictionary = data["procedes"]["ouvertures_depart"]
+	for borne: String in Recherche.BORNES:
+		if not depart.has(borne):
+			echecs.append("ouvertures_depart n'a pas de `%s` : la borne de depart n'est pas declaree"
+				% borne)
 	for f: Variant in (depart["familles"] as Array):
 		if not familles.has(str(f)):
 			echecs.append("ouvertures_depart nomme la famille `%s`, absente de precurseurs.json"
 				% str(f))
 	# LA BUTEE DECLAREE doit etre OUVERTE AU DEPART. Une butee verrouillee donnerait au
-	# joueur, par accident, exactement ce que l'arbre lui refuse — et c'est un accident
+	# joueur, par accident, exactement ce que la grille lui refuse — et c'est un accident
 	# silencieux : la recette part normalisee sur une famille qu'il n'a pas cherchee.
 	var defaut: String = str(depart["famille_defaut"])
 	if not (depart["familles"] as Array).has(defaut):
@@ -555,93 +627,107 @@ func _test_recherche(data: Dictionary) -> void:
 	var etat: Dictionary = Sim.nouvelle_partie(1, data)
 	var limites: Dictionary = Recherche.ouvertures(etat, data)
 	var au_max: Dictionary = {"famille": str((depart["familles"] as Array)[0]),
-		"purete": 9.0, "rendement": 0.95, "complexite": 9, "coupe": 0.0, "stabilisation": 9}
+		"purete": 9.0, "rendement": 9.0, "complexite": 9, "coupe": 0.0, "stabilisation": 9}
 	var debit: float = float(Produit.specs(Produit.normaliser(au_max, data, limites),
 		data)["debit_kg_sem"])
 	if debit <= 0.0:
 		echecs.append("le kit de depart ne produit AUCUN kilo : §2bis promet qu'une partie entiere est jouable sans rien rechercher")
 	# Le repli ne doit pas DERIVER quand on cherche : on demande une famille verrouillee
-	# depuis trois etats d'avancement differents et on exige la meme reponse. C'est la
+	# depuis plusieurs etats d'avancement differents et on exige la meme reponse. C'est la
 	# regression exacte qui a existe — `ouvertes[0]` apres tri alphabetique.
 	var verrouillee: Dictionary = {"famille": "___aucune___", "purete": 0.5, "rendement": 0.5,
 		"complexite": 1, "coupe": 0.0, "stabilisation": 0}
 	var replis: Dictionary = {}
-	for id: String in Etat.cles_triees(noeuds):
-		(etat["recherche"]["acquis"] as Dictionary)[id] = 1.0
+	for id4: String in Etat.cles_triees(noeuds):
+		(etat["recherche"]["acquis"] as Dictionary)[id4] = 1.0
 		replis[str(Produit.normaliser(verrouillee, data,
 			Recherche.ouvertures(etat, data))["famille"])] = true
 	if replis.size() > 1 or not replis.has(defaut):
 		echecs.append("la butee de famille DERIVE au fil de la recherche (%s) : elle doit rester `%s`"
 			% [" ".join(PackedStringArray(Etat.cles_triees(replis))), defaut])
-	print("recherche    | %d noeuds, arbre sain, kit de depart a %.1f kg/sem, butee `%s` stable"
+	print("recherche    | %d cases, grille connexe, kit de depart a %.1f kg/sem, butee `%s` stable"
 		% [noeuds.size(), debit, defaut])
 
 
 # L'ARITHMETIQUE DE sim/recherche.gd. Le test structurel ci-dessus garde les promesses de
-# §2bis contre une ligne de JSON ; celui-ci garde le code contre lui-meme, et il manquait.
-# Mon propre commentaire annoncait « ce test ne garde PAS l'arithmetique de recherche.gd » :
-# l'aveu etait ecrit, le test ne l'etait pas, et cent dix lignes de simulation neuve
-# n'etaient exercees que par la survie des bots — c'est-a-dire par un signal qui aurait
-# aussi bien pu venir d'ailleurs.
+# §2bis contre une ligne de JSON ; celui-ci garde le code contre lui-meme.
 func _test_recherche_comportement(data: Dictionary) -> void:
 	var noeuds: Dictionary = data["procedes"]["noeuds"]
-	# UN NOEUD DE CHAQUE GENRE D'OUVERTURE, et pas « le moins cher ». La premiere version
-	# prenait le noeud libre le moins cher : c'etait toujours celui qui ouvre une FAMILLE,
-	# donc la branche `purete_max` de la derniere assertion ne tournait JAMAIS. Les deux
-	# genres existaient, un seul etait exerce — le refuge exact que ce projet passe son
-	# temps a fermer, rouvert dans le test cense le fermer.
+	var libres: Array = Recherche.disponibles(Sim.nouvelle_partie(1, data), data)
+	# UNE CASE DE CHAQUE GENRE D'OUVERTURE parmi celles qui touchent le centre, et pas « la
+	# moins chere ». La premiere version de ce test prenait le noeud libre le moins cher :
+	# c'etait toujours celui qui ouvre une FAMILLE, donc la branche des bornes ne tournait
+	# JAMAIS. Les deux genres existaient, un seul etait exerce.
 	var cibles: Dictionary = {}
-	for id: String in Etat.cles_triees(noeuds):
-		if not (noeuds[id]["prerequis"] as Array).is_empty():
-			continue
-		for genre: String in (noeuds[id]["ouvre"] as Dictionary):
+	for id: Variant in libres:
+		for genre: String in (noeuds[str(id)]["ouvre"] as Dictionary):
 			if not cibles.has(genre):
-				cibles[genre] = id
-	if cibles.is_empty():
-		echecs.append("recherche : aucun noeud sans prerequis, ce test ne mesure rien")
-		return
+				cibles[genre] = str(id)
 	var verrou: String = ""
 	for id2: String in Etat.cles_triees(noeuds):
-		if not (noeuds[id2]["prerequis"] as Array).is_empty():
+		if not libres.has(id2):
 			verrou = id2
 			break
-	if verrou == "":
-		echecs.append("recherche : l'arbre n'a aucun noeud a prerequis, ce test ne mesure rien")
+	if cibles.is_empty() or verrou == "":
+		echecs.append("recherche : la grille n'a pas a la fois des cases libres et des cases verrouillees au depart, ce test ne mesure rien")
 		return
 	var vus: PackedStringArray = []
-	for genre: String in Etat.cles_triees(cibles):
-		_eprouver_noeud(data, str(cibles[genre]), verrou, genre)
-		vus.append("%s (%s)" % [str(cibles[genre]), genre])
-	print("recherche+   | %s : cout debite une fois, duree exacte, borne reculee"
-		% " + ".join(vus))
+	for genre2: String in Etat.cles_triees(cibles):
+		_eprouver_noeud(data, str(cibles[genre2]), verrou, genre2)
+		vus.append("%s (%s)" % [str(cibles[genre2]), genre2])
+	print("recherche+   | %d genres : cout debite une fois, achat instantane, borne reculee, voisines ouvertes, inflation"
+		% vus.size())
 
 
-# Une passe complete sur UN noeud : les cinq assertions. `genre` dit quelle ouverture ce
-# noeud porte, donc laquelle des bornes doit avoir recule a la fin.
+# Une passe complete sur UNE case. `genre` dit quelle ouverture elle porte, donc laquelle
+# des bornes doit avoir recule a la fin.
 func _eprouver_noeud(data: Dictionary, cible: String, verrou: String, genre: String) -> void:
 	var noeuds: Dictionary = data["procedes"]["noeuds"]
 	var cout: float = float(noeuds[cible]["cout_propre"])
-	var duree: int = int(noeuds[cible]["semaines"])
+	var bras: String = str(noeuds[cible]["bras"])
+	var exige: float = float(noeuds[cible]["cout_savoir"])
 
-	# 1. UN PREREQUIS NON TENU REFUSE, ET NE DEPENSE RIEN. La structure du JSON est verifiee
-	# ailleurs ; ici c'est l'EXECUTION qui doit refuser.
+	# 1. UNE CASE QUI NE TOUCHE RIEN REFUSE, ET NE DEPENSE RIEN. La structure du JSON est
+	# verifiee ailleurs ; ici c'est l'EXECUTION qui doit refuser. Le savoir-faire est mis
+	# au plein dans les trois premiers cas : c'est l'ADJACENCE puis l'ARGENT qui doivent
+	# refuser, pas lui.
 	var e: Dictionary = Sim.nouvelle_partie(1, data)
+	_remplir_savoir(e, 1e6)
 	var avant: float = float(e["cash_propre"])
 	if Sim.appliquer(e, data, {"type": "recherche", "noeud": verrou}):
-		echecs.append("recherche : `%s` a demarre sans ses prerequis" % verrou)
+		echecs.append("recherche : `%s` achete sans toucher ni le centre ni une case acquise" % verrou)
 	if not is_equal_approx(float(e["cash_propre"]), avant):
-		echecs.append("recherche : un lancement REFUSE a quand meme debite le propre")
+		echecs.append("recherche : un achat REFUSE a quand meme debite le propre")
 
-	# 2. UN LANCEMENT IMPAYABLE REFUSE, ET NE DEPENSE RIEN.
+	# 2. UN ACHAT IMPAYABLE REFUSE, ET NE DEPENSE RIEN.
 	e["cash_propre"] = cout - 1.0
 	if Sim.appliquer(e, data, {"type": "recherche", "noeud": cible}):
-		echecs.append("recherche : `%s` a demarre avec un dollar de moins que son cout" % cible)
+		echecs.append("recherche : `%s` achete avec un dollar de moins que son cout" % cible)
 	if not is_equal_approx(float(e["cash_propre"]), cout - 1.0):
-		echecs.append("recherche : un lancement impayable a quand meme debite le propre")
+		echecs.append("recherche : un achat impayable a quand meme debite le propre")
 
-	# 3. LE COUT EST DEBITE EXACTEMENT, ET UNE SEULE FOIS.
+	# 2bis. LE SAVOIR-FAIRE MANQUANT REFUSE AUSSI, argent plein ou pas. Et celui des AUTRES
+	# bras n'aide pas : c'est la promesse des reserves separees (§2bis).
+	if exige > 0.0:
+		e = Sim.nouvelle_partie(1, data)
+		_remplir_savoir(e, 1e6)
+		(e["recherche"]["savoir"] as Dictionary)[bras] = exige - 0.01
+		avant = float(e["cash_propre"])
+		if Sim.appliquer(e, data, {"type": "recherche", "noeud": cible}):
+			echecs.append("recherche : `%s` achete sans le savoir-faire de son bras `%s`, avec celui des autres"
+				% [cible, bras])
+		if not is_equal_approx(float(e["cash_propre"]), avant):
+			echecs.append("recherche : un achat refuse faute de savoir-faire a quand meme debite le propre")
+
+	# 3. LE COUT EST DEBITE EXACTEMENT, ET UNE SEULE FOIS — la premiere case de la branche
+	# paie son prix de base, sans inflation, et exactement son savoir-faire, dans son bras.
 	e = Sim.nouvelle_partie(1, data)
+	(e["recherche"]["savoir"] as Dictionary)[bras] = exige + 5.0
 	avant = float(e["cash_propre"])
+	var avant_lim: float = 0.0
+	if not Recherche.LISTES.has(genre):
+		avant_lim = float(Recherche.ouvertures(e, data).get(genre, 0.0))
+	var avant_libres: Array = Recherche.disponibles(e, data)
 	if not Sim.appliquer(e, data, {"type": "recherche", "noeud": cible}):
 		echecs.append("recherche : `%s` refuse alors qu'il est libre et payable" % cible)
 		return
@@ -650,50 +736,116 @@ func _eprouver_noeud(data: Dictionary, cible: String, verrou: String, genre: Str
 			% [cible, String.num(cout, 2), String.num(avant - float(e["cash_propre"]), 2)])
 	if not is_equal_approx(float(e["stats"]["propre_recherche"]), cout):
 		echecs.append("recherche : la statistique `propre_recherche` ne suit pas le debit")
+	if not is_equal_approx(float(e["recherche"]["savoir"][bras]), 5.0):
+		echecs.append("recherche : `%s` exige %s de savoir-faire mais en a debite %s"
+			% [cible, String.num(exige, 2), String.num(exige + 5.0 - float(e["recherche"]["savoir"][bras]), 2)])
 
-	# 4. UN SEUL CHANTIER A LA FOIS (§2bis : la recherche ouvre des CHOIX, pas une file).
-	var pendant: float = float(e["cash_propre"])
-	if Sim.appliquer(e, data, {"type": "recherche", "noeud": cible}):
-		echecs.append("recherche : deux chantiers ont demarre en meme temps")
-	if not is_equal_approx(float(e["cash_propre"]), pendant):
-		echecs.append("recherche : un second chantier refuse a quand meme debite le propre")
-
-	# 5. LA DUREE EST EXACTE — acquis au tick `duree`, pas avant, et la borne a recule.
-	var avant_lim: float = 0.0
-	if genre != "famille":
-		avant_lim = float(Recherche.ouvertures(e, data).get(genre, 0.0))
-	for t: int in range(duree):
-		if (e["recherche"]["acquis"] as Dictionary).has(cible):
-			echecs.append("recherche : `%s` acquis a la semaine %d au lieu de %d"
-				% [cible, t, duree])
-			break
-		Recherche.tick_hebdo(e, data)
+	# 4. L'ACHAT EST INSTANTANE — acquis dans le meme appel, pas au tick suivant, et la
+	# borne a deja recule.
 	if not (e["recherche"]["acquis"] as Dictionary).has(cible):
-		echecs.append("recherche : `%s` toujours pas acquis apres %d semaines" % [cible, duree])
-	if str(e["recherche"]["en_cours"]) != "":
-		echecs.append("recherche : le chantier termine n'a pas libere `en_cours`")
+		echecs.append("recherche : `%s` paye mais pas acquis sur-le-champ" % cible)
 	var ouvre: Dictionary = noeuds[cible]["ouvre"]
 	var apres: Dictionary = Recherche.ouvertures(e, data)
-	if genre == "famille":
-		if not (apres["familles"] as Array).has(str(ouvre["famille"])):
-			echecs.append("recherche : `%s` acquis mais la famille `%s` reste fermee"
-				% [cible, str(ouvre["famille"])])
+	if Recherche.LISTES.has(genre):
+		if not (apres[str(Recherche.LISTES[genre])] as Array).has(str(ouvre[genre])):
+			echecs.append("recherche : `%s` acquis mais l'option `%s` reste fermee"
+				% [cible, str(ouvre[genre])])
 	elif float(apres[genre]) <= avant_lim:
 		echecs.append("recherche : `%s` acquis mais la borne `%s` n'a pas recule (%s)"
 			% [cible, genre, String.num(float(apres[genre]), 3)])
 
+	# 5. ON NE RACHETE PAS UNE CASE ACQUISE.
+	var pendant: float = float(e["cash_propre"])
+	if Sim.appliquer(e, data, {"type": "recherche", "noeud": cible}):
+		echecs.append("recherche : `%s` achete deux fois" % cible)
+	if not is_equal_approx(float(e["cash_propre"]), pendant):
+		echecs.append("recherche : un rachat refuse a quand meme debite le propre")
 
-func _ancetres(noeuds: Dictionary, id: String) -> Array:
-	var vus: Array = []
-	var pile: Array = (noeuds[id]["prerequis"] as Array).duplicate()
-	while not pile.is_empty():
-		var courant: String = str(pile.pop_back())
-		if vus.has(courant) or not noeuds.has(courant):
+	# 6. L'ADJACENCE OUVRE : une case voisine de celle qu'on vient de prendre, et qui ne
+	# touchait rien avant, est devenue achetable. Sans ca la grille serait un catalogue.
+	var ici: Array = Recherche.lire_case(str(noeuds[cible]["case"]))
+	for id: String in Etat.cles_triees(noeuds):
+		if avant_libres.has(id) or id == cible:
 			continue
-		vus.append(courant)
-		for req: Variant in (noeuds[courant]["prerequis"] as Array):
-			pile.append(str(req))
-	return vus
+		if Recherche.voisines(ici, Recherche.lire_case(str(noeuds[id]["case"]))) \
+				and not Recherche.disponibles(e, data).has(id):
+			echecs.append("recherche : `%s` acquis mais sa voisine `%s` reste verrouillee"
+				% [cible, id])
+
+	# 7. L'INFLATION : toute autre case de la branche coute desormais sa base majoree d'UNE
+	# case acquise. C'est elle qui remplace la duree comme frein de la montee (§2bis).
+	var k: float = float(data["procedes"]["inflation_par_acquis"])
+	var branche: String = str(noeuds[cible]["branche"])
+	for id5: String in Etat.cles_triees(noeuds):
+		if id5 == cible or str(noeuds[id5]["branche"]) != branche:
+			continue
+		var attendu: float = float(noeuds[id5]["cout_propre"]) * (1.0 + k)
+		if not is_equal_approx(Recherche.cout(e, data, id5), attendu):
+			echecs.append("recherche : apres une case, `%s` coute %s au lieu de %s"
+				% [id5, String.num(Recherche.cout(e, data, id5), 2), String.num(attendu, 2)])
+
+
+func _remplir_savoir(e: Dictionary, valeur: float) -> void:
+	for b: String in (e["recherche"]["savoir"] as Dictionary):
+		e["recherche"]["savoir"][b] = valeur
+
+
+# LE SAVOIR-FAIRE (§2bis). Ce que ce test garde, ce sont les trois promesses qui le
+# separent d'une monnaie de recherche deguisee :
+#   1. chaque bras n'apprend QUE de ses curseurs — une recette en butee de coupe n'apprend
+#      pas la purete. C'est ce qui empeche de farmer le curseur le moins cher ;
+#   2. un plafond encore egal au minimum n'apprend rien (complexite 1 au depart) ;
+#   3. il ne touche a aucune bourse, et un labo a l'arret n'apprend rien. La part de
+#      production le pondere : produire un filet en butee rapporte moins qu'un labo plein.
+func _test_savoir(data: Dictionary) -> void:
+	var base: Dictionary = {"famille": "verdal", "purete": 0.40, "rendement": 0.40,
+		"complexite": 1, "coupe": 0.0, "stabilisation": 0}
+	var cas: Array = [
+		["purete", 0.60, "purete_procede"],
+		["coupe", 0.30, "volume"],
+		["rendement", 0.75, "volume"],
+	]
+	for c: Array in cas:
+		var e: Dictionary = Sim.nouvelle_partie(1, data)
+		var r: Dictionary = base.duplicate()
+		r[str(c[0])] = float(c[1])
+		Sim.appliquer(e, data, {"type": "recette", "recette": r})
+		e["part_capacite"] = 1.0
+		var propre: float = float(e["cash_propre"])
+		var sale: float = float(e["cash_sale"])
+		Recherche.apprendre(e, data)
+		var sv: Dictionary = e["recherche"]["savoir"]
+		for b: String in Etat.cles_triees(sv):
+			var attendu_positif: bool = b == str(c[2]) or b == "familles_stabilisation"
+			if attendu_positif and float(sv[b]) <= 0.0:
+				echecs.append("savoir : `%s` en butee n'apprend rien au bras `%s`" % [str(c[0]), b])
+			if not attendu_positif and float(sv[b]) > 0.0:
+				echecs.append("savoir : `%s` en butee fait apprendre le bras `%s`, qui n'est pas le sien — on pourrait farmer un curseur pour en acheter un autre"
+					% [str(c[0]), b])
+		if not is_equal_approx(float(e["cash_propre"]), propre) 				or not is_equal_approx(float(e["cash_sale"]), sale):
+			echecs.append("savoir : apprendre a touche une bourse — le savoir-faire ne s'echange jamais contre de l'argent")
+	# 2. la recette de base est sous tous les seuils : seul le bras Familles apprend (on
+	# produit la famille la plus avancee), et la complexite 1 — plafond = minimum — non.
+	var e2: Dictionary = Sim.nouvelle_partie(1, data)
+	Sim.appliquer(e2, data, {"type": "recette", "recette": base})
+	e2["part_capacite"] = 1.0
+	Recherche.apprendre(e2, data)
+	if float(e2["recherche"]["savoir"]["purete_procede"]) > 0.0:
+		echecs.append("savoir : complexite 1 au depart (plafond = minimum) fait apprendre le bras Purete/Procede")
+	if float(e2["recherche"]["savoir"]["familles_stabilisation"]) <= 0.0:
+		echecs.append("savoir : produire la famille la plus avancee n'apprend rien au bras Familles")
+	# 3. la part pondere, et un labo a l'arret n'apprend rien.
+	var gains: Array = []
+	for part: float in [0.0, 0.2, 1.0]:
+		var e3: Dictionary = Sim.nouvelle_partie(1, data)
+		Sim.appliquer(e3, data, {"type": "recette", "recette": base})
+		e3["part_capacite"] = part
+		Recherche.apprendre(e3, data)
+		gains.append(float(e3["recherche"]["savoir"]["familles_stabilisation"]))
+	if float(gains[0]) > 0.0 or not (float(gains[1]) < float(gains[2])):
+		echecs.append("savoir : la part de production ne pondere pas le gain (%s)"
+			% str(gains))
+	print("savoir       | chaque bras n'apprend que de ses curseurs, aucune bourse touchee, pondere par la part")
 
 
 # --- 1bis. calibration : 3 produits de référence, specs à ±5 % ----------------
@@ -729,7 +881,7 @@ func _test_calibration(data: Dictionary) -> void:
 
 # LES DEUX BOTS, et pas seulement `discret`. Ce test et save/load codaient tous les deux
 # `discret` en dur — le seul profil qui ne cherche RIEN. Le seul etat mutable que §2bis a
-# ajoute (`en_cours`, `semaines_restantes`, `acquis`) ne passait donc jamais par une
+# ajoute (`acquis`) ne passait donc jamais par une
 # empreinte ni par un aller-retour JSON. `_campagne_avec` prenait deja une strategie en
 
 
@@ -822,21 +974,25 @@ func _test_determinisme(data: Dictionary) -> void:
 # --- 3. save/load : reprise sans divergence -----------------------------------
 
 func _test_save_load(data: Dictionary) -> void:
-	var chantiers: int = 0
+	var en_montee: int = 0
 	for nom: String in Etat.cles_triees(Bots.strategies()):
 		var strat: Dictionary = Bots.strategies()[nom]
-		# ON S'ARRETE AU MILIEU D'UN CHANTIER, on ne l'espere pas. Premiere version : elle
-		# sauvegardait au tick 60 en dur et annoncait « 0 en cours de chantier » — le bot
-		# etait entre deux noeuds, donc `en_cours` et `semaines_restantes` etaient vides et
-		# le test restait aveugle a l'etat meme qu'il venait d'etre elargi pour couvrir.
+		# ON S'ARRETE EN PLEINE MONTEE, on ne l'espere pas : au moins une case acquise, pas
+		# toute la liste. La version de l'arbre sauvegardait au tick 60 en dur et annoncait
+		# « 0 en cours de chantier » — le bot etait entre deux noeuds, et le test restait
+		# aveugle a l'etat meme qu'il venait d'etre elargi pour couvrir. L'achat est devenu
+		# instantane (§2bis) : ce qui doit traverser le JSON est un `acquis` PARTIEL.
 		var s1: Dictionary = Sim.nouvelle_partie(7, data)
+		var voulu: int = (strat["recherche"] as Array).size()
 		for t: int in range(140):
-			if str(s1["recherche"]["en_cours"]) != "" and t >= 60:
+			var n_acq: int = (s1["recherche"]["acquis"] as Dictionary).size()
+			if n_acq > 0 and n_acq < voulu and t >= 60:
 				break
 			Bots.agir(s1, data, strat)
 			Sim.tick(s1, data)
-		if str(s1["recherche"]["en_cours"]) != "":
-			chantiers += 1
+		var n_fin: int = (s1["recherche"]["acquis"] as Dictionary).size()
+		if n_fin > 0 and n_fin < voulu:
+			en_montee += 1
 		var s2: Dictionary = JSON.parse_string(Etat.serialiser(s1))
 		if not Etat.equivalents(s1, s2):
 			echecs.append("save/load (%s) : etat non equivalent des la sauvegarde" % nom)
@@ -851,13 +1007,13 @@ func _test_save_load(data: Dictionary) -> void:
 				echecs.append("save/load (%s) : divergence au tick de reprise %d" % [nom, i + 1])
 				_imprimer_diff(s1, s2, "state", 5)
 				return
-	# Le test doit AVOIR TROUVE un chantier, sinon il ne dit rien de §2bis et il faut le
+	# Le test doit AVOIR TROUVE une montee, sinon il ne dit rien de §2bis et il faut le
 	# savoir. Zero ici veut dire soit que plus aucun bot ne cherche, soit que la fenetre de
-	# 140 ticks ne croise plus l'arbre — dans les deux cas quelqu'un doit regarder.
-	if chantiers == 0:
-		echecs.append("save/load : aucun bot n'avait de chantier en cours, donc l'etat de recherche (§2bis) n'a jamais traverse un aller-retour JSON")
-	print("save/load    | roundtrip + 60 ticks sur %d bots, dont %d en cours de chantier"
-		% [Bots.strategies().size(), chantiers])
+	# 140 ticks ne croise plus la grille — dans les deux cas quelqu'un doit regarder.
+	if en_montee == 0:
+		echecs.append("save/load : aucun bot n'etait en pleine montee de la grille, donc un etat de recherche partiel (§2bis) n'a jamais traverse un aller-retour JSON")
+	print("save/load    | roundtrip + 60 ticks sur %d bots, dont %d en pleine montee de la grille"
+		% [Bots.strategies().size(), en_montee])
 
 
 # Diff récursif : imprime les premiers chemins qui diffèrent entre deux states.

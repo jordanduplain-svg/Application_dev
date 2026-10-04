@@ -50,7 +50,7 @@ const METRIQUES: PackedStringArray = ["issue", "fin_sem", "propre", "sale", "vis
 # deplace aucune campagne, et serait donc declare mort par un harnais qui ne regarde que
 # les campagnes. Il serait mort pour de vrai deux ans plus tard.
 const SPECS: PackedStringArray = ["cout_unitaire", "debit_kg_sem", "dependance",
-	"fiabilite_lot", "instabilite_neuro", "puissance", "signature"]
+	"regularite_lot", "instabilite_neuro", "puissance", "signature"]
 
 # LA LISTE DORMANTE — et le seul endroit de ce fichier où une constante a le droit de ne
 # rien bouger. Une constante y entre quand son SOUS-SYSTÈME n'est pas né, jamais parce
@@ -79,29 +79,22 @@ const JALON_COURANT: int = 1
 #
 # Verifiee dans les deux sens comme les dormantes : si une saturee se remet a bouger, la
 # borne a change et l'entree doit partir.
-# ELLE A FAIT UN ALLER-RETOUR, et c'est le mecanisme qui l'a conduit dans les deux sens.
+# `los_hermanos.marge` A FAIT TROIS ALLERS-RETOURS, et c'est le mecanisme qui l'a conduite
+# a chaque fois. Le rival le moins cher n'etait jamais la mediane de trois maisons : sourde,
+# entree ici, ressortie quand §19.6 a bouge les medianes, revenue quand §2 a fait baisser
+# les couts. Elle est sortie pour de bon le jour ou `grossiste` est entre dans le harnais :
+# un temoin qui casse les prix de la rue rend enfin la marge du rival le moins cher
+# decisive. Ce qu'un balayage a facteur quatre ne voyait pas, un PROFIL l'a reveille.
 #
-# `los_hermanos.marge` : ce cartel vend un Verdal coupe a 0.52, de loin le produit le moins
-# cher du marche. Il n'est donc JAMAIS la mediane de trois maisons, et son propre `f_prix`
-# bute sur `plafond_prix` : sa marge ne touche ni la mediane ni sa propre attractivite.
-#
-#   1. Elle y est entree la premiere fois pour cette raison.
-#   2. §19.6 (le prix par segment) a fait bouger les medianes : la constante s'est remise a
-#      mordre, la verification a double sens a fait echouer la porte, on l'a retiree.
-#   3. §2 a donne une contrepartie a ses curseurs domines (la coupe divise le cout par kilo
-#      vendu, la complexite divise le carre de la purete) : tous les couts ont baisse, les
-#      ecarts de prix se sont recreuses, et elle est redevenue sourde — debranchee, porte
-#      rouge, retour ici.
-#
-# PROFONDEMENT sourde, et ca merite d'etre dit : un balayage de 0.8 a 3.2 — un facteur
-# QUATRE, pas ±30 % — ne deplace pas une seule issue. La strategie de prix du rival le
-# moins cher est decorative dans le jeu actuel. Ce n'est pas un defaut de cablage, c'est un
-# constat de design, et il attend le catalogue du jalon 2 (quand un rival pourra aligner
-# plusieurs produits, sa marge redeviendra un choix).
-# Le retrouver : `balayage.gd -- los_hermanos.marge 0.8 3.2 7 10`.
+# LE SAVOIR-FAIRE DES PREMIERES CASES DE LA VEINE DEFENSIVE, sature comme l'etait celui de
+# l'Azurite (qui en est ressorti avec `orfevre`). `orfevre` apprend le bras Familles /
+# Stabilisation en produisant sa famille la plus avancee depuis la semaine 1 ; quand son
+# propre lui permet le Liant ambre, il a deja bien plus d'experience que la case n'en
+# demande. Le monter pour le faire mordre serait tourner un nombre pour passer le levier.
+# Le retrouver : `trace.gd -- 7 orfevre 13`, colonne note.
 const SATUREES: Dictionary = {
-	"rivaux.maisons.los_hermanos.marge":
-		"saturee par marche.plafond_prix (§4) : le rival le moins cher n'est jamais la mediane",
+	"procedes.noeuds.liant_ambre.cout_savoir":
+		"saturee par l'argent : quand `orfevre` peut payer le Liant ambre, il a deja l'experience",
 }
 
 const DORMANTES: Dictionary = {
@@ -130,30 +123,54 @@ const DORMANTES: Dictionary = {
 	"constants.eco.semaines_faillite": {"jalon": 2,
 		"pourquoi": "les saisies (§3bis) : sans risque grumeleux, personne ne passe dans le rouge"},
 
-	# LES DEUX NOEUDS QUE PERSONNE NE POUSSE (§2bis). Ce n'est PAS le cas des deux autres
-	# branches, absentes de data/procedes.json parce que leur sous-systeme n'existe pas :
-	# ici le sous-systeme existe et tourne, il manque un JOUEUR qui s'en serve. C'est
-	# exactement l'aveu imprime en tete de ce fichier — « un levier que personne ne pousse
-	# ressort debranche sans que le jeu l'ignore pour autant » — et la premiere fois que
-	# l'aveu se transforme en exemption.
+	# LES CASES QUE PERSONNE NE PREND (§2bis). Ici le sous-systeme existe et tourne : il
+	# manque un JOUEUR qui s'en serve. C'est l'aveu imprime en tete de ce fichier — « un
+	# levier que personne ne pousse ressort debranche sans que le jeu l'ignore pour autant ».
 	#
-	# `additifs_stabilisants` est le noeud DEFENSIF : il rachete `instabilite_neuro` a prix
-	# fort (§2). Aucun des deux temoins ne s'en sert — `discret` ne cherche rien, et toute
-	# la definition d'`industriel` est qu'il ne se protege de rien. Le profil qui le
-	# poussera est `accelerateur` (jalon 5), dont c'est la seule contre-mesure.
-	# `culture_noctal` est le sommet de la branche : la famille la plus puissante et la plus
-	# chargee. Meme profil, meme jalon.
+	# LA LISTE A RETRECI, et c'est la porte qui l'a fait. La grille a jonctions laissait
+	# vingt cases sur vingt-sept a aucun temoin ; `grossiste` et `orfevre` sont nes pour ca,
+	# et le levier a fait echouer chaque exemption qu'ils ont reveillee — veine Volume,
+	# Liant gris et ambre, Cristallisation, Gros lots, et les planchers de coupe, de
+	# marquage et de stabilisation. Treize cases dorment encore, chacune datee du profil qui
+	# la reveillera :
 	#
-	# J'AI FAILLI LES RETIRER DU JSON PLUTOT QUE LES ENDORMIR, pour respecter la phrase que
-	# je venais d'ecrire dans ce meme fichier de donnees au sujet des deux autres branches.
-	# La difference qui a tranche : leurs effets sont deja CABLES et mesures ailleurs — la
-	# stabilisation et le Noctal vivent dans les references de data/calibration.json, donc
-	# dans la colonne « specs » de ce fichier. Ce qui dort n'est pas la mecanique, c'est le
-	# seul chemin par lequel une CAMPAGNE peut y arriver.
-	"procedes.noeuds.additifs_stabilisants": {"jalon": 5, "couvre": 3,
-		"pourquoi": "le noeud defensif : aucun temoin ne stabilise avant `accelerateur` (§8)"},
+	#   - le NOCTAL, la MATRICE FROIDE et le haut de la veine PROCEDE (complexite 3 a 5) :
+	#     la recette extreme de data/calibration.json — `accelerateur` (jalon 5).
+	#   - le bout de la veine Volume et les AGENTS : `grossiste` est arrete avant de les
+	#     atteindre. C'est son temoignage, pas un defaut a corriger dans sa liste.
+	#   - les PETITS LOTS et le MARQUAGE : `orfevre` n'en a jamais les moyens. Meme raison.
+	#   - le GEL et les GALETS : aucun profil n'en a l'intention aujourd'hui.
+	# Pour ces deux dernieres familles de raisons, le profil qui les reveillera est
+	# `opportuniste` (jalon 3) ; s'il ne le fait pas, ces dates mentent et la porte le dira.
+	#
+	# Ce qui dort n'est pas la mecanique : les effets de toutes ces options vivent dans les
+	# references de data/calibration.json, donc dans la colonne « specs » de ce fichier.
+	"procedes.noeuds.matrice_froide": {"jalon": 5, "couvre": 3,
+		"pourquoi": "le bout de la veine defensive : aucun temoin ne stabilise a 3 avant `accelerateur` (§8)"},
 	"procedes.noeuds.culture_noctal": {"jalon": 5, "couvre": 2,
-		"pourquoi": "le sommet de la branche : aucun temoin ne monte au Noctal avant `accelerateur`"},
+		"pourquoi": "le sommet des familles : aucun temoin ne monte au Noctal avant `accelerateur`"},
+	"procedes.noeuds.reflux": {"jalon": 5, "couvre": 3,
+		"pourquoi": "complexite 3 : aucun temoin ne depasse 2 avant `accelerateur`"},
+	"procedes.noeuds.cascade": {"jalon": 5, "couvre": 3,
+		"pourquoi": "complexite 4 : aucun temoin ne depasse 2 avant `accelerateur`"},
+	"procedes.noeuds.synthese_continue": {"jalon": 5, "couvre": 3,
+		"pourquoi": "complexite 5 : aucun temoin ne depasse 2 avant `accelerateur`"},
+	"procedes.noeuds.cuves_en_serie": {"jalon": 3, "couvre": 3,
+		"pourquoi": "le bout de la veine volume : `grossiste` est arrete avant, `opportuniste` le reveillera"},
+	"procedes.noeuds.agent_enrobant": {"jalon": 3, "couvre": 2,
+		"pourquoi": "les agents : `grossiste` est arrete avant, `opportuniste` les reveillera"},
+	"procedes.noeuds.agent_exaltant": {"jalon": 3, "couvre": 2,
+		"pourquoi": "les agents : `grossiste` est arrete avant, `opportuniste` les reveillera"},
+	"procedes.noeuds.petits_lots": {"jalon": 3, "couvre": 2,
+		"pourquoi": "`orfevre` n'en a jamais les moyens, `opportuniste` le reveillera"},
+	"procedes.noeuds.tampon_de_maison": {"jalon": 3, "couvre": 3,
+		"pourquoi": "`orfevre` n'en a jamais les moyens, `opportuniste` le reveillera"},
+	"procedes.noeuds.marque_deposee": {"jalon": 3, "couvre": 3,
+		"pourquoi": "aucun temoin ne va jusqu'a la marque, `opportuniste` le reveillera"},
+	"procedes.noeuds.galets": {"jalon": 3, "couvre": 2,
+		"pourquoi": "aucun profil ne vise les galets aujourd'hui"},
+	"procedes.noeuds.gelification": {"jalon": 3, "couvre": 2,
+		"pourquoi": "aucun profil ne vise le gel aujourd'hui"},
 	# LE PLAFOND DE FIDELITE, endormi PAR EFFET DE BORD et c'est ce qui le rend interessant.
 	# Il etait branche avant §2bis, a 3 % d'amplitude sur le seul `industriel` : il ne mordait
 	# que sur des campagnes longues, ou `demande_fidele` a le temps de s'accumuler jusqu'au
@@ -166,8 +183,6 @@ const DORMANTES: Dictionary = {
 	"constants.marche.plafond_fidelite": {"jalon": 3,
 		"pourquoi": "il faut un profil durable ET addictif pour saturer la fidelite : `opportuniste`"},
 
-	"procedes.ouvertures_depart.stabilisation_max": {"jalon": 5,
-		"pourquoi": "le plancher du meme levier : personne ne stabilise, donc son plafond de depart ne borne rien"},
 
 	# L'EMPLACEMENT DU TRAITRE, endormi par PREFIXE : ses neuf nombres n'existent pas encore
 	# dans la partie. `fusion_only` sort la maison de init_rivaux, et elle n'y entrera qu'a
@@ -206,7 +221,14 @@ const DORMANTES: Dictionary = {
 # bots divergent assez pour qu'une compensation entre eux devienne possible.
 const CHEMIN_CSV: String = "res://levier.csv"
 
-var n_graines: int = 6
+# 4 ET NON PLUS 6, et ce n'est pas la precision qu'on a echangee contre du temps. La
+# puissance de ce test est le nombre de CAMPAGNES par mesure, bots x graines : il etait de
+# 2 x 6 = 12, il est de 4 x 4 = 16 depuis l'arrivee de `grossiste` et `orfevre`. Garder 6
+# graines a quatre bots faisait passer le levier au-dessus du budget de perf.gd pour en
+# voir PLUS qu'avant. Lu aussi par perf.gd : une seule source pour ce chiffre.
+const N_GRAINES_DEFAUT: int = 4
+
+var n_graines: int = N_GRAINES_DEFAUT
 
 var echecs: Array[String] = []
 # Rempli une seule fois, sur la mesure de BASE : les bots dont toutes les graines racontent

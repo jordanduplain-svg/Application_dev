@@ -224,7 +224,7 @@ static func attractivite(data: Dictionary, seg: Dictionary, e: Dictionary,
 	# `f_confiance` remplace la réputation de `bureau-etudes` : ici ce qui rassure le
 	# client, c'est que les lots se ressemblent.
 	var f_confiance: float = float(cm["confiance_base"]) \
-		+ float(cm["confiance_amplitude"]) * float(e["profil"]["fiabilite_lot"])
+		+ float(cm["confiance_amplitude"]) * float(e["profil"]["regularite_lot"])
 	# `f_delai` : la rupture d'approvisionnement. Le graphe (§3) la remplira vraiment au
 	# jalon 2 ; ici elle vaut 1 pour tout le monde, et le terme est déjà là pour qu'il n'ait
 	# pas à être ajouté après coup dans un système calibré (§2).

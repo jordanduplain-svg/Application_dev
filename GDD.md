@@ -91,11 +91,36 @@ Aucun curseur ne contrôle directement une spec affichée.
 | Paramètre | Plage | Nature |
 |---|---|---|
 | `famille_precurseurs` | 4 familles fictives | choix discret : coût, disponibilité, traçabilité |
-| `purete_visee` | 0.30 – 0.99 | continu |
-| `rendement` | 0.20 – 0.95 | continu — antagoniste de la pureté |
+| `purete_visee` | 0.30 – 0.99 | continu — plafond reculé par recherche |
+| `rendement` | 0.20 – 0.95 | continu — antagoniste de la pureté ; plafond reculé par recherche |
 | `complexite_procede` | 1 – 5 | paliers — débloqués par recherche |
-| `coupe` | 0.0 – 0.7 | dilution ajoutée après production |
-| `stabilisation` | 0 – 3 | additifs fictifs, coûteux |
+| `coupe` | 0.0 – 0.7 | dilution ajoutée après production ; plafond reculé par recherche |
+| `stabilisation` | 0 – 3 | additifs fictifs, coûteux — paliers débloqués par recherche |
+| `marquage` | 0 – 2 | aucun / tampon / marque — paliers débloqués par recherche |
+| `forme` | brute, cristaux, gel, galets | choix discret — options débloquées par recherche |
+| `agent` (de coupe) | neutre, enrobant, exaltant | choix discret — options débloquées par recherche |
+| `cadence` | standard, petits lots, gros lots | choix discret — options débloquées par recherche |
+
+**Les quatre derniers sont nés pour la grille de recherche** (§2bis) : les six bornes d'origine
+étaient toutes ouvertes par une case, et en ajouter sans nouveau choix aurait été un bonus
+déguisé. Chacun a une **option neutre** (aucun marquage, forme brute, agent neutre, cadence
+standard) qui ne porte aucun nombre et sert de défaut : une recette qui les ignore — rivaux,
+références, bots — garde des specs bit-identiques. Leurs arbitrages (`data/conception.json`) :
+
+| Choix | Gagne | Perd |
+|---|---|---|
+| Marquage | dépendance (le client reconnaît ce qui lui plaît) | signature (on reconnaît ta maison) |
+| Cristaux | signature | coût, un peu de débit |
+| Gel | coût, débit | signature, régularité |
+| Galets | régularité | coût, débit |
+| Agent enrobant | la coupe dilue moins la puissance | régularité, à proportion de la coupe |
+| Agent exaltant | dépendance, à proportion de la coupe | instabilité neuro — on peut charger vite sans viser haut |
+| Petits lots | régularité | débit |
+| Gros lots | débit | régularité |
+
+`tests/run.gd` vérifie qu'aucune option n'est dominée par une autre sur les sept specs dans
+tous les contextes (comme les familles), et `data/calibration.json` porte leurs ordres
+d'intention (« les cristaux signent moins que la forme brute »).
 
 ### Specs émergentes (ce que le joueur lit)
 
@@ -104,10 +129,16 @@ puissance        = purete × (1 − coupe) × k_famille                     -- c
 cout_unitaire    = f(famille, purete² / complexite^k, 1/rendement, complexite) × (1 − coupe)
 debit_kg_sem     = capacite_labo × rendement × (1 − k × complexite) / (1 − coupe)
 signature        = tracabilite_famille × (1 + k × complexite) − k × stabilisation
-fiabilite_lot    = 1 − variance(purete, complexite, RENDEMENT, competence_chimiste)
+regularite_lot   = 1 − variance(purete, complexite, RENDEMENT, competence_chimiste)
 dependance       = puissance^k × (1 − coupe)                            -- fidélise la demande
 instabilite_neuro = clamp(puissance^k − k × stabilisation − seuil_famille, 0, 1)
 ```
+
+**`regularite_lot` n'est pas la qualité, c'est la constance d'un lot à l'autre.** Viser 0,50 de
+pureté, presque tous les lots tombent juste ; viser 0,99, c'est viser une cible minuscule et la
+rater plus souvent. Elle s'appelait `fiabilite_lot`, et le mot faisait lire « plus pur = moins
+fiable » comme une incohérence. Infobulle de l'écran de conception : « Viser haut, c'est rater
+plus souvent. »
 
 *Les coefficients vivent dans `data/constants.json` et ne sont pas recopiés ici — les chiffres
 d'une formule écrite dans un document périment exactement comme ceux d'un commentaire.*
@@ -118,7 +149,7 @@ d'une formule écrite dans un document périment exactement comme ceux d'un comm
 parcours de l'espace de conception (972 contextes) l'a montré en une ligne chacun :
 
 - **`complexite` n'améliorait RIEN.** Coût plus cher, débit plus bas, signature plus haute,
-  fiabilité plus basse — quatre specs dégradées, aucune améliorée. La bonne réponse était
+  régularité plus basse — quatre specs dégradées, aucune améliorée. La bonne réponse était
   toujours 1. Le nœud `procede_deux_etapes` (160 000 $) ne débloquait qu'une dégradation, et
   `colonne_seche` l'exigeait : **on forçait le joueur à acheter une dégradation pour atteindre
   la pureté maximale.**
@@ -133,7 +164,7 @@ parcours de l'espace de conception (972 contextes) l'a montré en une ligne chac
 |---|---|---|
 | `complexite` | divise le carré de la pureté | l'arbre de §2bis le disait déjà : `colonne_seche` exige `procede_deux_etapes`. L'intention « un procédé complexe PERMET la haute pureté » existait dans l'arbre et pas dans la formule. |
 | `coupe` | multiplie les kilos vendables, divise le coût par kilo | ce que le mot décrit. Aucune constante : les deux effets sortent du même fait arithmétique, et puissance × volume reste constant — un échange pur qualité contre quantité. |
-| `rendement` | se paie en variance de lot | pousser un procédé, c'est le pousser tout court. `fiabilite_lot` est la spec que `milieu` et `haut_de_gamme` pondèrent le plus fort : le rendement s'arbitre contre le segment visé. |
+| `rendement` | se paie en variance de lot | pousser un procédé, c'est le pousser tout court. `regularite_lot` est la spec que `milieu` et `haut_de_gamme` pondèrent le plus fort : le rendement s'arbitre contre le segment visé. |
 
 **À complexité 1 et sans coupe, rien ne bouge** : c'est ce qui garantit qu'un joueur qui ne
 touche pas à ces curseurs garde exactement le jeu d'avant.
@@ -210,21 +241,68 @@ charger**, et rien dans l'acte I qui pousse à les payer.
 
 ---
 
-## 2bis. La recherche — trois branches
+## 2bis. La recherche — une grille d'hexagones, trois branches
 
-**Écrit, pas porté** — `sim/recherche.gd`. §13 a tranché depuis que cette ligne a été écrite :
-on ne reprend de `bureau-etudes` que le socle et le marché, et son `research.gd` portait un
-modèle de brevets et de concours qui n'a rien à faire ici. Cette ligne disait le contraire
-jusqu'au jour de l'implémentation.
+**Écrit, pas porté** — `sim/recherche.gd`. §13 a tranché : on ne reprend de `bureau-etudes` que
+le socle et le marché, et son `research.gd` portait un modèle de brevets et de concours qui n'a
+rien à faire ici.
 
-### Pas de monnaie de recherche
+**Réécrit en grille, à la Plague Inc.** La première version était un arbre de prérequis à
+chantier unique — coût, durée, un nœud à la fois. C'est l'arbre techno de n'importe quel tycoon,
+et il ressemblait trop au jeu d'avion dont ce projet sort. La recherche prend maintenant la
+**forme** de Plague Inc (grille, adjacence, coût croissant, achat instantané) et garde le
+**fond** de Cartel (argent propre, ouverture de choix).
 
-La recherche se paie en **`cash_propre` + temps**. Aucun point d'ADN, aucun jeton, aucune
-troisième bourse — ce serait une conversion déguisée et ça contredirait la règle du papier (§5).
+### Deux prix : l'argent propre et le savoir-faire
+
+Une case se paie en **`cash_propre`** (avec l'inflation) **et en savoir-faire de son bras**.
+
+**Le savoir-faire s'apprend en produisant**, et **chaque bras n'apprend que de ses propres
+curseurs** : le bras Pureté/Procédé apprend quand on produit près du plafond de pureté ou de
+complexité, le bras Volume près de celui du rendement ou de la coupe, le bras Familles en
+produisant avec la famille la plus avancée qu'on ait (ou près du plafond de stabilisation).
+On cherche la pureté en poussant la pureté — et le joueur « rue » apprend le volume.
+
+- **Trois réserves séparées, et pas une.** Une réserve unique alimentée par n'importe quel
+  curseur aurait permis de pousser la coupe, le curseur le moins cher, pour acheter de la pureté.
+  Avec des réserves par bras, aucune direction n'est récompensée plus qu'une autre — et la pureté
+  garde son seul vrai prix, l'instabilité neuro (§2), au lieu d'en recevoir une seconde prime.
+- **Par semaine, pondéré par la part de capacité utilisée**, pas par kilo. Le kilo est plus
+  réaliste (la courbe d'apprentissage industrielle suit le volume cumulé) mais il donnerait aux
+  gros producteurs une boule de neige que rien ne compense. Un petit labo plein apprend aussi vite
+  qu'une usine pleine ; un labo à l'arrêt n'apprend rien.
+- **Proximité en rampe** : on n'apprend rien sous 80 % de la plage d'un curseur, tout en butée.
+  Un plafond encore égal à son minimum (complexité 1, stabilisation 0 au départ) n'apprend rien.
+- **Pas d'inflation sur le savoir-faire** : le temps passé à l'apprendre freine déjà.
+- **Il ne s'échange jamais contre de l'argent**, dans aucun sens. C'est la différence avec un
+  point d'ADN, et c'est ce qui le garde hors de la règle du papier (§5) : ce n'est pas une
+  troisième bourse, c'est de l'expérience. `tests/run.gd` vérifie qu'apprendre ne touche aucune
+  bourse et que chaque bras n'apprend que de ses curseurs.
+
+**Ce que la mesure montre** : l'argent borne les premières cases (la dette), le savoir-faire
+borne les dernières. Le coût en savoir-faire de l'Extraction azurite ne mord jamais pour les
+témoins — un an de Verdal en a appris bien plus — et le levier le déclare saturé par la dette.
 
 Conséquence voulue : **le rythme de la recherche est étranglé par le blanchiment.** Un joueur
 assis sur 40 M$ sales ne recherche pas plus vite qu'un joueur pauvre. C'est le même goulot que
 tout le reste, et il n'a pas fallu l'inventer.
+
+### La grille
+
+- **Adjacence.** Chaque branche est une grille d'hexagones autour d'un centre. Une case est
+  achetable si elle **touche** le centre ou une case déjà acquise. Il n'y a pas de prérequis :
+  on trace son chemin.
+- **Achat instantané.** Pas de chantier, pas de durée : payée, la case ouvre sa borne pour la
+  conception de la semaine même. On peut en acheter plusieurs d'affilée.
+- **Coût croissant.** Chaque case acquise dans une branche renchérit toutes les suivantes de la
+  même branche (`inflation_par_acquis`, linéaire). C'est l'inflation qui remplace la durée comme
+  frein de la montée, et c'est elle qui fait le choix : **pas « lequel d'abord » mais « où je me
+  spécialise »**. Une case prise par curiosité rend toutes les autres plus chères.
+- **Raccourcis.** Les veines sont posées côte à côte : on peut atteindre une case par une veine
+  voisine sans passer par la case précédente de la sienne. Les bornes se prennent au plus large,
+  donc un raccourci donne exactement la borne de la case atteinte.
+- **Pas de dé-évolution, pas de mutation aléatoire** — pour l'instant. Les deux existent chez
+  Plague Inc et se grefferaient sans rien casser ; on les ajoutera si la grille en a besoin.
 
 ### Les trois branches
 
@@ -232,67 +310,89 @@ Elles correspondent exactement aux trois piliers du jeu — et aux trois jalons 
 
 | Branche | Ouvre au | Débloque | Acte |
 |---|---|---|---|
-| **Chimie** | jalon 1 | familles de précurseurs, paliers de `complexite_procede`, stabilisation, plafonds de `purete_visee` | I |
+| **Chimie** | jalon 1 | familles de précurseurs, plafonds de pureté, de rendement et de coupe, paliers de complexité et de stabilisation | I |
 | **Logistique** | jalon 2 | engins, capacités, `−usure`, `−p_saisie`, classes d'arêtes nouvelles (haute mer, corridors aériens) | II |
 | **Influence** | jalon 3 | paliers de contacts, capacité et taux de blanchiment, contre-espionnage (`+decroissance` de visibilité), fiabilité d'élimination | II-III |
 
-**7 nœuds par branche, 22 au total (Chimie en a 8).** C'est une révision du plafond de §17 (12), et elle a un
-coût qu'il faut nommer : **plus de nœuds = un espace de stratégies plus large = des bots plus
-difficiles à lire.** La raison du plafond d'origine reste valable ; 21 est le maximum qui tient
-encore dans un harnais à 4 bots, et il ne doit pas augmenter ensuite.
+**Une vingtaine de cases par branche, comme Plague Inc** (décision de l'utilisateur). C'est une
+seconde révision du plafond de §17, et son coût était nommé avant de la prendre : **plus de
+cases = un espace de stratégies plus large = des bots plus difficiles à lire.** Il s'est vu dès
+la Chimie : deux témoins prennent 7 cases sur 27, et les vingt autres dorment au levier, chacune
+datée du profil qui la réveillera (`tests/levier.gd`, `DORMANTES`). Les effets des jonctions,
+eux, sont mesurés : les références « Choix » de `data/calibration.json` les exercent.
 
-**Chimie a un 8ᵉ nœud** : le remède fabricable par le joueur (§10) — terminal, ruineux, et le
-seul de l'arbre qui n'ouvre pas un choix mais une fin. 22 nœuds au total.
+**La Chimie a un 20ᵉ hexagone** : le remède fabricable par le joueur (§10) — terminal, ruineux,
+et le seul de la grille qui n'ouvre pas un choix mais une fin. Il arrive au jalon 5.
 
-### Ce qui existe aujourd'hui — `data/procedes.json`, 7 nœuds
+### Ce qui existe aujourd'hui — `data/procedes.json`, Chimie, 27 cases
 
-**Seule la Chimie est écrite**, et seulement ses 7 nœuds de jalon 1 : le 8ᵉ (le remède) arrive
-avec l'acte III, Logistique avec le parc, Influence avec l'argent sale. Écrire leurs nœuds
-maintenant produirait des constantes que rien ne peut bouger — du bruit qu'on prendrait pour
-un signal, exactement la règle qui tient `opportuniste` et `accelerateur` hors du harnais.
+**Seule la Chimie est écrite** : le remède arrive avec l'acte III, Logistique avec le parc,
+Influence avec l'argent sale. Écrire leurs cases maintenant produirait des constantes que rien ne
+peut bouger — du bruit qu'on prendrait pour un signal.
 
-```
-extraction_azurite    →  famille azurite            80 k$ /  4 sem
-raffinage_court       →  purete_max 0.80           120 k$ /  6 sem
-procede_deux_etapes   →  complexite_max 2          160 k$ /  6 sem   [raffinage_court]
-synthese_corymbe      →  famille corymbe           220 k$ /  8 sem   [extraction_azurite]
-colonne_seche         →  purete_max 0.99           280 k$ /  9 sem   [raffinage, deux_etapes]
-additifs_stabilisants →  stabilisation_max 3       200 k$ /  8 sem   [procede_deux_etapes]
-culture_noctal        →  famille noctal            400 k$ / 12 sem   [corymbe, colonne_seche]
+Trois bras doubles autour du centre, à 120° l'un de l'autre. Chaque bras porte deux veines qui
+se touchent sur toute leur longueur :
 
-kit de départ : verdal seul, purete ≤ 0.60, complexite ≤ 1, aucune stabilisation
-```
+| Bras | Veine | Cases, du centre vers le bord | Ouvre |
+|---|---|---|---|
+| **Pureté / Procédé** | Pureté | Filtration → Raffinage court → Recristallisation → Colonne sèche | pureté max 0,70 → 0,80 → 0,90 → 0,99 |
+| | Procédé | Deux étapes → Reflux → Cascade → Synthèse continue | complexité max 2 → 3 → 4 → 5 |
+| **Familles / Stabilisation** | Familles | Extraction azurite → Synthèse corymbe → Culture noctal | les trois familles |
+| | Stabilisation | Liant gris → Liant ambré → Matrice froide | stabilisation max 1 → 2 → 3 |
+| **Volume** | Rendement | Cuves larges → Cuves en série | rendement max 0,85 → 0,95 |
+| | Coupe | Charges neutres → Charges lourdes | coupe max 0,50 → 0,70 |
 
-**La liste de ce qu'un nœud peut ouvrir est FERMÉE** — `famille`, `purete_max`,
-`complexite_max`, `stabilisation_max` — et `tests/run.gd` la vérifie contre les données.
-C'est ce qui rend vraie la phrase « aucun bonus numérique direct » : elle ne se casse pas
-dans le code, elle se casse dans une ligne de JSON, en silence, et aucune cible ne le verrait.
+**Et les cases de jonction** — plusieurs arbres qui se rejoignent, comme chez Plague Inc. Elles
+sont posées dans les creux entre les bras, là où deux bras se touchent, et ouvrent les quatre
+choix de conception de §2 :
 
-### Le coût gate le DÉPART, la durée gate la MONTÉE — mesuré
+| Jonction | Entre | Cases | Ouvre |
+|---|---|---|---|
+| Formes | Procédé et Familles | Galets · Cristallisation · Gélification | les trois formes |
+| Marquage | au bout des Familles | Tampon de maison → Marque | marquage 1 → 2 |
+| Cadences | Pureté et Coupe | Petits lots · Gros lots | les deux cadences |
+| Agents | Volume et Stabilisation | Agent enrobant · Agent exaltant | les deux agents |
 
-**La dette de l'acte I (§1bis) mange tout le budget de recherche de la première année.**
-800 000 $ dus semaine 60 contre 700 000 $ de départ : un profil qui ne veut pas se faire
-saisir ne pose son premier nœud que vers la semaine 52. Ce n'est pas un défaut, c'est une
-contrainte lisible — année 1 pour survivre et payer, année 2 pour investir — mais elle
-n'était écrite nulle part et c'est la mesure qui l'a révélée.
+**27 cases** en tout pour la Chimie (le remède fera la 28ᵉ).
 
-**Le critère des durées, posé avant de les choisir : une branche doit être grimpable dans la
-durée de vie du profil qui la grimpe, avec du temps pour jouer le résultat.** Première
-version (50 semaines au total) : le profil-témoin `industriel` posait son dernier nœud
-semaine 106 et se faisait arrêter semaine 111. **Sa recette cible existait cinq semaines sur
-260** — une branche entière décorative pour le seul profil qui l'utilise, c'est-à-dire le
-levier débranché que §16 existe pour attraper, un étage plus haut. Durées resserrées d'un
-tiers ; les coûts n'ont pas bougé. Résultat mesuré : sommet semaine 98, mort semaine 109.
+Les coûts de base, les coordonnées et l'inflation vivent dans `data/procedes.json`, pas ici.
 
-**Onze semaines de marge, et c'est mince.** C'est le coût, pas la durée, qui borne désormais
-le dernier nœud — le bot attend seize semaines entre l'avant-dernier et le dernier, le temps
-d'épargner 280 000 $.
+Ce que les voisinages veulent dire : **un procédé complexe permet la haute pureté** (les deux
+veines se touchent — c'était le prérequis `colonne_seche ← procede_deux_etapes` de l'arbre) ;
+**la route défensive mène au Noctal** (la Matrice froide touche la Culture noctal) ;
+**rendement et coupe sont les deux leviers du volume de rue**.
+
+**Kit de départ** : Verdal seul, pureté ≤ 0,60, rendement ≤ 0,75, complexité 1, coupe ≤ 0,30,
+aucune stabilisation. Les deux bornes neuves (rendement, coupe) sont posées là où aucun témoin
+ne les touche : la trajectoire de `discret` est donc bit-identique à celle d'avant la grille.
+
+**La liste de ce qu'une case peut ouvrir est FERMÉE** — `famille`, `purete_max`,
+`rendement_max`, `complexite_max`, `coupe_max`, `stabilisation_max` — et `tests/run.gd` la
+vérifie contre les données, avec la connexité de la grille. C'est ce qui rend vraie la phrase
+« aucun bonus numérique direct » : elle ne se casse pas dans le code, elle se casse dans une
+ligne de JSON, en silence, et aucune cible ne le verrait.
+
+### Le coût gate le DÉPART, l'inflation gate la MONTÉE
+
+**La dette de l'acte I (§1bis) mange tout le budget de recherche de la première année.** Un
+profil qui ne veut pas se faire saisir ne pose sa première case qu'autour de l'échéance. Ce
+n'est pas un défaut, c'est une contrainte lisible — année 1 pour survivre et payer, année 2
+pour investir.
+
+**Le critère, posé avant de choisir les coûts et hérité de l'arbre : une branche doit être
+grimpable dans la durée de vie du profil qui la grimpe, avec du temps pour jouer le résultat.**
+L'arbre l'avait raté une fois (la recette cible d'`industriel` existait cinq semaines sur 260,
+une branche décorative pour le seul profil qui l'utilise). La grille le tient ; le chiffre ne
+s'écrit pas ici, il se lit : `trace.gd -- 7 industriel 13` note chaque case achetée et la
+semaine de la fin.
 
 ### Ce que la recherche ne fait jamais
 
 - Elle ne donne **aucun bonus numérique direct** (« +10 % de rendement »). Elle **ouvre des
-  choix** : un précurseur de plus, un palier de complexité, un engin. L'arbitrage reste dans
-  l'écran de conception (§2), il ne remonte pas dans l'arbre.
+  choix** : un précurseur de plus, un palier de complexité, un curseur qui va plus loin, un
+  engin. L'arbitrage reste dans l'écran de conception (§2), il ne remonte pas dans la grille.
+  C'est l'autre emprunt à Plague Inc qu'on refuse : là-bas, un symptôme change les stats ;
+  ici, c'est l'écran de conception qui joue ce rôle, et il est le cœur du jeu.
 - Elle n'est **jamais** un prérequis de survie. Une partie entière est jouable sans rien
   rechercher — plus pauvre, plus discrète, parfaitement viable. C'est la trajectoire du bot
   `discret`, et c'est ce qui l'empêche d'être un bot cassé plutôt qu'un témoin.
@@ -473,8 +573,8 @@ phrase, dans le document qui sert de source de vérité.*
 | Segment | Critères pondérés | Volume | `niveau_prix` | `exposant_prix` |
 |---|---|---|---|---|
 | `rue` | coût .45, disponibilité .30, puissance .25 | énorme | 1.0 (référence) | 1.5 — court après le rabais |
-| `milieu` | puissance .40, fiabilité .35, coût .25 | moyen | 1.25 | 1.1 |
-| `haut_de_gamme` | pureté .50, fiabilité .30, discrétion .20 | faible | **1.6** | 0.45 — n'écoute presque pas |
+| `milieu` | puissance .40, régularité .35, coût .25 | moyen | 1.25 | 1.1 |
+| `haut_de_gamme` | pureté .50, régularité .30, discrétion .20 | faible | **1.6** | 0.45 — n'écoute presque pas |
 
 ### UN PRIX PAR SEGMENT — §19.6, et c'est ce qui rend ce marché opérant
 
@@ -858,7 +958,7 @@ capacite_institutionnelle = max(0, 1 − instabilite / 80)
 Le joueur a la formule. Personne n'est mieux placé pour concevoir l'antidote que celui qui a
 conçu le produit.
 
-**8ᵉ nœud de la branche Chimie** (§2bis) : terminal, ruineux, et le seul de l'arbre qui n'ouvre
+**20ᵉ hexagone de la grille Chimie** (§2bis) : terminal, ruineux, et le seul de la grille qui n'ouvre
 pas un choix mais une fin. Une fois pris, il ouvre une ligne de R&D dédiée :
 
 ```
@@ -1070,25 +1170,39 @@ plafond du nœud à côté. Quand c'est saturé — presque toujours (§5) — l
 
 ### 12bis.4 — L'écran recherche
 
-Trois onglets, 7 nœuds chacun (§2bis). Structure Plague Inc, contenu Cartel.
+Trois onglets, une grille d'hexagones chacun (§2bis). Structure Plague Inc, contenu Cartel.
 
-Chaque nœud affiche **avant l'achat** : son coût en `cash_propre`, sa durée en semaines, et
-**ce qu'il ouvre** — jamais un pourcentage abstrait. « Débloque le sous-marin classe II », pas
-« +15 % de capacité logistique ». C'est la même règle que §2bis : la recherche ouvre des choix,
-elle ne distribue pas des bonus.
+Chaque case affiche **avant l'achat** : ses deux prix — `cash_propre` du jour (inflation
+comprise) et savoir-faire de son bras — et **ce qu'elle ouvre** — jamais un pourcentage abstrait. « Débloque la famille Corymbe »,
+« pureté jusqu'à 0,90 », pas « +15 % de qualité ». C'est la même règle que §2bis : la recherche
+ouvre des choix, elle ne distribue pas des bonus.
 
-Deux contraintes :
+**Trois jauges de savoir-faire**, une par bras, en tête de l'onglet, chacune avec ce qui la
+remplit (« produire près du plafond de pureté ou de complexité »). Elles n'apparaissent pas dans
+le HUD : ce n'est pas une bourse.
+
+Quatre états lisibles d'un coup d'œil : **acquise**, **achetable** (elle touche une case
+acquise), **trop chère** (avec la phrase de §12bis.3 : combien il manque, en combien de
+semaines), **hors d'atteinte** (elle ne touche encore rien). Survoler une case montre ce que son
+achat renchérit : le prix de toutes les autres cases de la branche monte d'un cran.
+
+Trois contraintes :
 
 - **Les branches non ouvertes sont visibles et grisées dès le jalon 1**, avec leur condition
   d'ouverture. Le joueur doit savoir que Logistique et Influence existent avant de pouvoir y
   toucher — c'est ce qui donne à l'acte I une direction, et l'acte I a maintenant la sienne (§1bis).
-- **Aucune recherche en cours n'est annulable sans perte.** C'est un engagement de trésorerie
-  propre, et le propre est la ressource rare du jeu.
+- **Aucun achat n'est annulable.** C'est un engagement de trésorerie propre, et le propre est la
+  ressource rare du jeu. Un bouton de confirmation suffit ; un bouton d'annulation mentirait.
+- **Une case achetée renvoie à l'écran de conception.** Chez Plague Inc, un symptôme change les
+  stats sur place ; ici, la case ouvre un curseur ailleurs. Sans ce lien (« nouveau : famille
+  Corymbe → concevoir »), la grille aurait l'air de ne rien faire.
 
 ### 12bis.5 — L'écran de conception
 
-Inchangé par rapport à `bureau-etudes/game/design/blueprint.gd` : les six paramètres à gauche,
-les sept specs émergentes à droite, recalcul en direct.
+Les dix paramètres à gauche — les six curseurs d'origine, puis les quatre choix de conception
+(marquage, forme, agent, cadence) — les sept specs émergentes à droite, recalcul en direct.
+Chaque option verrouillée dit quelle case de la grille l'ouvre. `regularite_lot` s'affiche
+« Régularité du lot — constance d'un lot à l'autre ».
 
 **`instabilite_neuro` y est affiché dès la première minute, inerte pendant tout l'acte I.**
 C'est la contrainte la plus importante du document (§2), et elle est autant une contrainte
@@ -1212,7 +1326,8 @@ data/
                          (dont dette_montant, dette_echeance, k_charge, seuil_charge)
   calibration.json    -- 3 produits de référence, tolérance 5 %
   precurseurs.json    -- 4 familles fictives
-  procedes.json       -- arbre de recherche (§2bis) — ✅ Chimie, 7 nœuds ; les deux
+  conception.json     -- les quatre choix de conception (§2) : marquage, formes, agents, cadences
+  procedes.json       -- grille de recherche (§2bis) — ✅ Chimie, 27 cases ; les deux
                          autres branches naissent avec leurs systèmes
   graphe.json         -- nœuds + arêtes (classes, distances, risque)
   vehicules.json      -- les 5 engins : capacité, coût, entretien, usure, équipage
@@ -1305,10 +1420,19 @@ La cible n'est pas chiffrée, elle est qualitative : **le joueur dit-il « j'ai 
 |---|---|---|
 | `discret` | petit volume, produit propre, jamais d'épidémie | jalon 1 |
 | `industriel` | gros volume, produit puissant, aide le remède quand ça dérape | jalon 1 |
+| `grossiste` | la rue en gros : coupé, haut rendement, gros lots, agent exaltant — ne regarde pas sa jauge | jalon 1 (choix de conception) |
+| `orfevre` | petit volume haut de gamme qui se protège de tout : stabilisation, cristaux, petits lots, tampon | jalon 1 (choix de conception) |
 | `opportuniste` | laisse brûler, nettoie uniquement ses nœuds rentables | jalon 3 |
 | `accelerateur` | sabote activement le remède, vise `L'HÉRITIER` | jalon 5 |
 
 Lancer un bot avant que son système existe produit du bruit qu'on prendra pour un signal.
+**L'inverse est vrai aussi** : un système qui existe sans profil pour le jouer est un angle mort.
+`grossiste` et `orfevre` sont nés le jour où la grille a gagné ses cases de jonction (§2bis) —
+vingt cases sur vingt-sept ne servaient alors à aucun témoin. Leur intention est écrite dans
+`tests/bots.gd` avant toute mesure. Ce qu'ils ont dit dès la première mesure : la rue en gros
+sur Verdal, sans se couvrir, se faisait arrêter en un an et demi, et la cible 2 (mortalité de
+démarrage) est passée au rouge. Le jeu a été ajusté, pas le témoin (`visibilite.k_volume`,
+voir `data/constants.json`).
 `opportuniste` et `accelerateur` restent donc hors du harnais jusqu'à leurs jalons respectifs.
 
 ### Conventions
@@ -1682,8 +1806,8 @@ nommé en §16, et il a fallu le planter deux fois pour le reconnaître.
 19. AUCUNE BRANCHE MORTE                                    [JALON 3]
     chaque branche de recherche reçoit ≥ 20 % des dépenses de R&D
     d'au moins un bot, sur la médiane
-    ↳ une branche que personne n'ouvre est 7 nœuds de contenu mort et
-      7 nœuds d'équilibrage à maintenir pour rien
+    ↳ une branche que personne n'ouvre est une vingtaine de cases de contenu
+      mort et autant de constantes d'équilibrage à maintenir pour rien
 ```
 
 ### Cibles de l'acte III — jalons 5 et 6
@@ -1762,11 +1886,13 @@ Volontairement absents. Chacun est une ligne à ajouter plus tard, pas une dette
 - **3 recettes actives maximum.** Au-delà, l'écran de conception devient un tableur.
 - **Pas de plafond de flotte.** On achète autant d'engins qu'on peut en entretenir ; les trois
   freins sont économiques, jamais une règle.
-- **22 procédés de recherche maximum** (Chimie 8, Logistique 7, Influence 7 — §2bis). Révisé depuis 12. Au-delà,
-  la R&D se dilue et les bots deviennent illisibles ; 21 est ce qui tient encore dans un
-  harnais à 4 bots.
-- **Aucune monnaie de recherche.** La recherche se paie en `cash_propre`. Un jeton de type
-  ADN serait une conversion déguisée et contredirait la règle du papier (§5).
+- **Une vingtaine de cases de recherche par branche** (§2bis, grille à la Plague Inc). Révisé
+  deux fois : 12 au total, puis 22, puis une vingtaine par branche sur décision de
+  l'utilisateur. Le coût est connu et accepté : les bots deviennent plus durs à lire, et la
+  grille Chimie a déjà onze cases dormantes au levier. Ce plafond-là ne doit plus monter.
+- **Aucune monnaie de recherche convertible.** La recherche se paie en `cash_propre` et en
+  savoir-faire, qui s'apprend en produisant et ne s'achète ni ne se vend (§2bis). Un jeton de
+  type ADN échangeable serait une conversion déguisée et contredirait la règle du papier (§5).
 - **Pas de multijoueur, pas de co-op.** Le genre s'y prête ; le périmètre non.
 - **Pas de carte dessinée.** Un graphe lisible, des nœuds, des arêtes, des chiffres.
 - **Chimie entièrement fictive.** Contrainte permanente, pas une étape de polish.
@@ -1822,7 +1948,7 @@ atteignable, et la cible 5 passe de quatre à cinq fins.
 
 ### 19.3 — Le remède fabricable par le joueur — ✅ ADOPTÉ, voir §10 et §2bis
 
-Tranché. 8ᵉ nœud terminal de la branche Chimie. Il alimente `progres_remede` **sans passer par
+Tranché. 20ᵉ hexagone, terminal, de la grille Chimie. Il alimente `progres_remede` **sans passer par
 `capacite_institutionnelle`**, donc c'est la seule voie qui fonctionne encore au-dessus
 d'instabilité 80. Sixième fin : **LE BIENFAITEUR**. Encadré par la cible 20 — 5 à 20 % des
 campagnes de `industriel`, sinon c'est soit un nœud mort, soit une sortie de secours qui
@@ -2097,3 +2223,15 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   coût a été propagé à `calibration.json` et oublié dans `segments.json`, dont les `ref` portent
   la même échelle. Un fichier de données qui contient des nombres en dollars ou en kilos est
   calibré sur une échelle, même quand rien ne le dit.
+- **Un système bien mesuré peut quand même avoir la mauvaise forme.** L'arbre de recherche
+  passait tous ses tests, tenait son critère de durée, et ressemblait au jeu d'avion dont ce
+  projet sort : l'utilisateur l'a vu, aucun harnais ne le pouvait. Le passage en grille a gardé
+  les règles (argent propre, liste fermée des ouvertures, jamais un péage) et changé la forme.
+  Les deux bornes neuves ont été posées hors de portée des témoins pour que le changement de
+  forme se mesure seul — deux changements mélangés n'auraient rien mesuré.
+- **Un garde-fou peut coûter plus que ce qu'il garde.** La vérification de fin de tick
+  construisait le chemin de chaque valeur de l'état pour un message d'erreur qui ne sortait
+  jamais : la moitié du coût d'un tick. Elle n'a été vue que le jour où le levier a franchi son
+  budget de `perf.gd` — et la tentation était de relever le budget. Le profil a montré l'endroit ;
+  deux passes (une rapide sans chaînes, une détaillée seulement en cas d'échec) ont rendu le
+  tick moins cher qu'avant les ajouts, au même verdict.

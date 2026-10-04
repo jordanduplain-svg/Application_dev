@@ -44,7 +44,7 @@
      "ref": 0.7
     },
     {
-     "nom": "fiabilite_lot",
+     "nom": "regularite_lot",
      "poids": 0.35,
      "sens": "haut",
      "ref": 0.9
@@ -71,7 +71,7 @@
      "seuil": 0.7
     },
     {
-     "nom": "fiabilite_lot",
+     "nom": "regularite_lot",
      "poids": 0.3,
      "sens": "haut",
      "ref": 0.93

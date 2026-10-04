@@ -140,6 +140,173 @@
     "cout_unitaire": 10190.0,
     "instabilite_neuro": 0.8986
    }
+  },
+  {
+   "id": "choix_neutre",
+   "nom": "Choix — recette milieu, toutes options neutres",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0
+   },
+   "attendu": {}
+  },
+  {
+   "id": "forme_cristaux",
+   "nom": "Choix — forme cristaux",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "forme": "cristaux"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "forme_gel",
+   "nom": "Choix — forme gel",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "forme": "gel"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "forme_galets",
+   "nom": "Choix — forme galets",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "forme": "galets"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "agent_enrobant",
+   "nom": "Choix — agent enrobant",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "agent": "enrobant"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "agent_exaltant",
+   "nom": "Choix — agent exaltant",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "agent": "exaltant"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "cadence_petits",
+   "nom": "Choix — petits lots",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "cadence": "petits_lots"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "cadence_gros",
+   "nom": "Choix — gros lots",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "cadence": "gros_lots"
+   },
+   "attendu": {}
+  },
+  {
+   "id": "marquage_1",
+   "nom": "Choix — tampon",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "marquage": 1
+   },
+   "attendu": {}
+  },
+  {
+   "id": "marquage_2",
+   "nom": "Choix — marque",
+   "recette": {
+    "famille": "verdal",
+    "purete": 0.7,
+    "rendement": 0.6,
+    "complexite": 1,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "marquage": 2
+   },
+   "attendu": {}
+  },
+  {
+   "id": "choix_neutre_charge",
+   "nom": "Choix — haut de gamme coupe, agent neutre",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.9,
+    "rendement": 0.5,
+    "complexite": 2,
+    "coupe": 0.3,
+    "stabilisation": 0
+   },
+   "attendu": {}
+  },
+  {
+   "id": "agent_exaltant_charge",
+   "nom": "Choix — haut de gamme coupe, agent exaltant",
+   "_": "La ou l'instabilite neuro n'est plus plafonnee a zero : c'est la que l'exaltant montre ce qu'il coute. Dans la recette milieu, son terme d'instabilite etait absorbe par le plancher, et le levier l'a vu.",
+   "recette": {
+    "famille": "corymbe",
+    "purete": 0.9,
+    "rendement": 0.5,
+    "complexite": 2,
+    "coupe": 0.3,
+    "stabilisation": 0,
+    "agent": "exaltant"
+   },
+   "attendu": {}
   }
  ],
  "_quatre": "QUATRE references d'archetype et non trois (§2 en demandait trois). La troisieme a ete ajoutee apres un audit : la reference « haut de gamme » etait STABILISEE, donc elle lisait une instabilite nulle — elle montrait l'INVERSE du piege que §2 decrit. Or a l'acte I l'instabilite ne fait rien, donc un joueur rationnel ne paie pas la stabilisation : la recette qu'il construit vraiment charge, et coute MOINS cher. Les deux versions sont donc la, cote a cote — le piege, et son prix. Les `attendu` ci-dessous portent les chiffres ; ce commentaire porte la raison.",
@@ -169,6 +336,116 @@
     "haut_de_gamme",
     "extreme"
    ]
+  },
+  {
+   "specs": [
+    "signature"
+   ],
+   "croissant": [
+    "forme_cristaux",
+    "choix_neutre",
+    "forme_gel"
+   ]
+  },
+  {
+   "specs": [
+    "regularite_lot"
+   ],
+   "croissant": [
+    "forme_gel",
+    "choix_neutre",
+    "forme_galets"
+   ]
+  },
+  {
+   "specs": [
+    "debit_kg_sem"
+   ],
+   "croissant": [
+    "forme_galets",
+    "choix_neutre",
+    "forme_gel"
+   ]
+  },
+  {
+   "specs": [
+    "cout_unitaire"
+   ],
+   "croissant": [
+    "forme_gel",
+    "choix_neutre",
+    "forme_galets",
+    "forme_cristaux"
+   ]
+  },
+  {
+   "specs": [
+    "puissance"
+   ],
+   "croissant": [
+    "choix_neutre",
+    "agent_enrobant"
+   ]
+  },
+  {
+   "specs": [
+    "regularite_lot"
+   ],
+   "croissant": [
+    "agent_enrobant",
+    "choix_neutre"
+   ]
+  },
+  {
+   "specs": [
+    "dependance"
+   ],
+   "croissant": [
+    "choix_neutre",
+    "agent_exaltant"
+   ]
+  },
+  {
+   "specs": [
+    "debit_kg_sem"
+   ],
+   "croissant": [
+    "cadence_petits",
+    "choix_neutre",
+    "cadence_gros"
+   ]
+  },
+  {
+   "specs": [
+    "regularite_lot"
+   ],
+   "croissant": [
+    "cadence_gros",
+    "choix_neutre",
+    "cadence_petits"
+   ]
+  },
+  {
+   "specs": [
+    "dependance",
+    "signature"
+   ],
+   "croissant": [
+    "choix_neutre",
+    "marquage_1",
+    "marquage_2"
+   ]
+  },
+  {
+   "specs": [
+    "instabilite_neuro",
+    "dependance"
+   ],
+   "croissant": [
+    "choix_neutre_charge",
+    "agent_exaltant_charge"
+   ]
   }
- ]
+ ],
+ "_choix": "LES REFERENCES DES QUATRE CHOIX DE CONCEPTION (data/conception.json), SANS ATTENDU CHIFFRE. Leur intention est dans `ordres`, pas dans des nombres : ecrire des attendus le jour meme ou les formules naissent, ce serait les generer depuis le code — le detecteur de changement que `_intention` refuse. Elles servent aussi au levier : aucun bot ne joue ces options, et c'est ici que leurs constantes se mesurent, comme la stabilisation et le Noctal."
 }

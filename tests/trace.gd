@@ -99,6 +99,7 @@ func _tracer(data: Dictionary, strat: Dictionary, graine: int, pas: int) -> void
 	for t: int in range(semaines_max + 1):
 		var part_avant: float = float(state["part_capacite"])
 		var dette_avant: float = float(state["dette"])
+		var acquis_avant: Dictionary = (state["recherche"]["acquis"] as Dictionary).duplicate()
 		Bots.agir(state, data, strat)
 		Sim.tick(state, data)
 		var sem: int = int(state["tick"])
@@ -127,6 +128,12 @@ func _tracer(data: Dictionary, strat: Dictionary, graine: int, pas: int) -> void
 		var part: float = float(state["part_capacite"])
 		if absf(part - part_avant) >= SAUT_PART or (part > 0.0) != (part_avant > 0.0):
 			notes.append("part %.2f -> %.2f" % [part_avant, part])
+		# LES CASES DE LA GRILLE (§2bis) : c'est ici qu'on lit a quelle semaine un profil
+		# atteint sa recette cible, et combien de temps il la joue avant de mourir — le
+		# critere des couts de data/procedes.json. `-- 7 industriel 13` suffit.
+		for id: String in Etat.cles_triees(state["recherche"]["acquis"]):
+			if not acquis_avant.has(id):
+				notes.append("case " + id)
 		if float(state["cash_propre"]) < 0.0:
 			notes.append("ROUGE %d sem" % int(state["semaines_rouge"]))
 		if str(state["fin"]) != "":
