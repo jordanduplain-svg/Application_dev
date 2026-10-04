@@ -10,3 +10,5 @@ balance.csv
 levier.csv
 # La mesure « d'avant » d'une comparaison (voir l'en-tete de tests/comparer.gd).
 avant.csv
+
+node_modules/

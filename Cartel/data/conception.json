@@ -1,7 +1,7 @@
 {
  "_": "GDD §2 : les quatre CHOIX DE CONCEPTION ajoutes aux six parametres d'origine — marquage, forme, agent de coupe, cadence. Ils sont nes pour donner a la grille de recherche (§2bis) de quoi ouvrir : les six bornes etaient epuisees, et une case de plus sans nouveau choix aurait ete un bonus deguise.",
  "_neutre": "CHAQUE CHOIX A UNE OPTION NEUTRE, et c'est elle le defaut. Une option neutre ne porte AUCUN nombre : le code lit une cle absente comme « aucun effet » (multiplicateur 1, terme additif 0). Ainsi une recette qui ignore ces choix — les rivaux, les produits de reference, les bots — a des specs bit-identiques a celles d'avant, et le levier ne perturbe pas des constantes qui ne decrivent rien.",
- "_arbitrage": "Chaque option non neutre gagne sur au moins une spec et perd sur au moins une autre, et aucune n'est dominee par une autre dans tous les contextes : tests/run.gd le verifie comme pour les familles. Les intentions d'ordre (« les cristaux signent moins que la forme brute ») vivent dans data/calibration.json.",
+ "_arbitrage": "Chaque option non neutre gagne sur au moins une spec et perd sur au moins une autre, et aucune n'est dominee par une autre dans tous les contextes : src/tests/run.ts le verifie comme pour les familles. Les intentions d'ordre (« les cristaux signent moins que la forme brute ») vivent dans data/calibration.json.",
  "marquage": {
   "_": "Paliers 0 (aucun), 1 (tampon), 2 (marque). Un tampon sur les lots fidelise — le client reconnait ce qui lui plait — et c'est exactement ce qui le rend tracable. dependance x (1 + k_dependance x palier), signature + k_signature x palier.",
   "k_dependance": 0.12,

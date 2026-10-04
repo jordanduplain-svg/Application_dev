@@ -118,7 +118,7 @@ références, bots — garde des specs bit-identiques. Leurs arbitrages (`data/c
 | Petits lots | régularité | débit |
 | Gros lots | débit | régularité |
 
-`tests/run.gd` vérifie qu'aucune option n'est dominée par une autre sur les sept specs dans
+`src/tests/run.ts` vérifie qu'aucune option n'est dominée par une autre sur les sept specs dans
 tous les contextes (comme les familles), et `data/calibration.json` porte leurs ordres
 d'intention (« les cristaux signent moins que la forme brute »).
 
@@ -169,9 +169,9 @@ parcours de l'espace de conception (972 contextes) l'a montré en une ligne chac
 **À complexité 1 et sans coupe, rien ne bouge** : c'est ce qui garantit qu'un joueur qui ne
 touche pas à ces curseurs garde exactement le jeu d'avant.
 
-`tests/run.gd` parcourt désormais l'espace et **échoue si un curseur n'a pas de contrepartie
+`src/tests/run.ts` parcourt désormais l'espace et **échoue si un curseur n'a pas de contrepartie
 qui compte** : bouger le curseur dans chaque sens doit améliorer au moins une spec d'**1 % de
-son étendue**. Le seuil est celui que `comparer.gd` utilise déjà pour « un mouvement qui
+son étendue**. Le seuil est celui que `comparer.ts` utilise déjà pour « un mouvement qui
 compte ». La première version exigeait seulement un gain non nul : elle attrapait un zéro exact
 et laissait passer un terme symbolique — `k_variance_rendement` divisé par 2500 restait vert.
 Le seuil a été posé après mesure : la contrepartie réelle la plus mince (baisser la
@@ -222,7 +222,7 @@ bots produisent des combinaisons illisibles.
 ### Calibration obligatoire (suite)
 
 **Quatre** produits de référence en `data/calibration.json`, tolérance 5 %, testés dans
-`tests/run.gd`. Toute modification des formules casse ce test avant de casser l'équilibrage.
+`src/tests/run.ts`. Toute modification des formules casse ce test avant de casser l'équilibrage.
 
 La quatrième est née d'un audit, et elle mérite d'être expliquée : la référence « haut de
 gamme » était **stabilisée**, donc elle lisait `instabilite_neuro = 0.000` — elle montrait
@@ -243,7 +243,7 @@ charger**, et rien dans l'acte I qui pousse à les payer.
 
 ## 2bis. La recherche — une grille d'hexagones, trois branches
 
-**Écrit, pas porté** — `sim/recherche.gd`. §13 a tranché : on ne reprend de `bureau-etudes` que
+**Écrit, pas porté** — `src/sim/recherche.ts`. §13 a tranché : on ne reprend de `bureau-etudes` que
 le socle et le marché, et son `research.gd` portait un modèle de brevets et de concours qui n'a
 rien à faire ici.
 
@@ -276,7 +276,7 @@ On cherche la pureté en poussant la pureté — et le joueur « rue » apprend 
 - **Pas d'inflation sur le savoir-faire** : le temps passé à l'apprendre freine déjà.
 - **Il ne s'échange jamais contre de l'argent**, dans aucun sens. C'est la différence avec un
   point d'ADN, et c'est ce qui le garde hors de la règle du papier (§5) : ce n'est pas une
-  troisième bourse, c'est de l'expérience. `tests/run.gd` vérifie qu'apprendre ne touche aucune
+  troisième bourse, c'est de l'expérience. `src/tests/run.ts` vérifie qu'apprendre ne touche aucune
   bourse et que chaque bras n'apprend que de ses curseurs.
 
 **Ce que la mesure montre** : l'argent borne les premières cases (la dette), le savoir-faire
@@ -318,7 +318,7 @@ Elles correspondent exactement aux trois piliers du jeu — et aux trois jalons 
 seconde révision du plafond de §17, et son coût était nommé avant de la prendre : **plus de
 cases = un espace de stratégies plus large = des bots plus difficiles à lire.** Il s'est vu dès
 la Chimie : deux témoins prennent 7 cases sur 27, et les vingt autres dorment au levier, chacune
-datée du profil qui la réveillera (`tests/levier.gd`, `DORMANTES`). Les effets des jonctions,
+datée du profil qui la réveillera (`src/tests/levier.ts`, `DORMANTES`). Les effets des jonctions,
 eux, sont mesurés : les références « Choix » de `data/calibration.json` les exercent.
 
 **La Chimie a un 20ᵉ hexagone** : le remède fabricable par le joueur (§10) — terminal, ruineux,
@@ -367,7 +367,7 @@ aucune stabilisation. Les deux bornes neuves (rendement, coupe) sont posées là
 ne les touche : la trajectoire de `discret` est donc bit-identique à celle d'avant la grille.
 
 **La liste de ce qu'une case peut ouvrir est FERMÉE** — `famille`, `purete_max`,
-`rendement_max`, `complexite_max`, `coupe_max`, `stabilisation_max` — et `tests/run.gd` la
+`rendement_max`, `complexite_max`, `coupe_max`, `stabilisation_max` — et `src/tests/run.ts` la
 vérifie contre les données, avec la connexité de la grille. C'est ce qui rend vraie la phrase
 « aucun bonus numérique direct » : elle ne se casse pas dans le code, elle se casse dans une
 ligne de JSON, en silence, et aucune cible ne le verrait.
@@ -383,7 +383,7 @@ pour investir.
 grimpable dans la durée de vie du profil qui la grimpe, avec du temps pour jouer le résultat.**
 L'arbre l'avait raté une fois (la recette cible d'`industriel` existait cinq semaines sur 260,
 une branche décorative pour le seul profil qui l'utilise). La grille le tient ; le chiffre ne
-s'écrit pas ici, il se lit : `trace.gd -- 7 industriel 13` note chaque case achetée et la
+s'écrit pas ici, il se lit : `trace.ts 7 industriel 13` note chaque case achetée et la
 semaine de la fin.
 
 ### Ce que la recherche ne fait jamais
@@ -561,7 +561,7 @@ producteur à haute pureté y reprend une part majoritaire au producteur de rue,
 richesse entre les deux profils-témoins se resserre. Aucune fixture ni aucun seuil de verdict
 n'a été touché pour l'obtenir : c'est le marché qui a changé, pas le juge.
 
-*Le chiffre du jour se lit en lançant `tests/balance.gd`, et la forme en balayant
+*Le chiffre du jour se lit en lançant `src/tests/balance.ts`, et la forme en balayant
 `segments.segments.haut_de_gamme.criteres.0.seuil`. Cette phrase portait deux mesures et un
 verdict (« la cible 3 passe au vert ») : le verdict est devenu faux quand la cible a gagné son
 terme de survie, et les deux chiffres étaient exprimés dans une unité — l'instantané de
@@ -1220,13 +1220,47 @@ n'a mise sur une capture Steam, et elle se comprend en une seconde.
 
 ## 13. Architecture
 
-**Godot 4.7, GDScript.** Reprise intégrale des conventions de `bureau-etudes` :
+**TypeScript, Node 24 ; l'interface en web, empaquetée par Electron pour Steam.** Les
+conventions de `bureau-etudes` restent intégralement en vigueur :
 
-- `sim/` = fonctions **statiques et pures** sur `(state: Dictionary, data: Dictionary)`.
-  Aucun accès aux scènes. Déterministe sur seed.
-- `game/` = UI seulement. Aucune règle de jeu.
+- `src/sim/` = fonctions **pures** sur `(state, data)`. Aucun accès à l'interface ni au
+  disque — elles tournent telles quelles dans le navigateur d'Electron. Déterministe sur seed.
+  `src/sim/disque.ts` est la seule exception, côté Node : lire `data/*.json` et hacher un state.
+- `src/ui/` (à venir) = interface seulement. Aucune règle de jeu.
 - `data/` = tout le contenu en JSON. **Aucun nombre d'équilibrage dans le code.**
-- `tests/` = headless, exécutables en CI.
+- `src/tests/` = le harnais, exécutable en CI (`node src/tests/run.ts`, `levier.ts`, `balance.ts`…).
+
+### Le portage Godot → TypeScript — pourquoi, et comment il a été validé
+
+**Pourquoi.** Cartel est un jeu d'INTERFACE — panneaux, jauges, graphe, grille — et ses écrans
+se dessinent sur Claude Design, qui produit du HTML. En Godot, chaque maquette devait être
+reconstruite en nœuds `Control` ; en web, elle devient du quasi-code. Steam accepte une
+application Electron (les fonctions Steam passent par `steamworks.js`). La seule perte réelle
+est la console (Switch, PlayStation, Xbox n'acceptent pas de jeu web) — un renoncement assumé
+par l'utilisateur, au jalon 1, quand `game/` n'existait pas encore et que le changement ne
+coûtait que la simulation et le harnais.
+
+**Comment il a été validé — par la mesure, pas par la relecture.**
+
+1. **Un essai d'abord** : `produit.gd` porté seul et comparé au bit près sur 11 740 recettes.
+   Tout identique sauf deux specs, à 1 et 2 ULP — `pow()` n'est pas calculé par la même
+   bibliothèque dans les deux moteurs. La comparaison a aussi attrapé la seule vraie
+   différence de langage : `Math.trunc(-0.3)` vaut **-0** en JavaScript, `int()` vaut 0 en
+   GDScript (`src/sim/gd.ts` reproduit les primitives de Godot à la lettre).
+2. **Puis des campagnes entières** : quatre bots, trois graines, 260 semaines, comparés
+   semaine par semaine — bourses, jauge, stock, flux aléatoire, cases, savoir-faire, parts de
+   marché. **Les douze campagnes sont identiques au bit près.**
+3. **Puis le harnais** : `balance` (100 graines × 4 bots) et `levier` (216 constantes)
+   rendent les MÊMES chiffres que sous Godot, et `balayage` la même courbe.
+
+**Ce que ça a apporté au passage** : la simulation tourne environ 8 fois plus vite par tick ;
+le levier est repassé de 4 à 6 graines (il était descendu à 4 pour tenir le budget de
+`perf`), et le mode diff de `trace` — cassé sous Godot depuis que le levier balaie tous les
+fichiers de données, sans qu'aucun test ne le lance avec une constante — remarche et passe
+dans le smoke de la CI.
+
+**Ce qui ne survit pas au portage : l'identité bit à bit avec Godot.** Elle ne servait qu'à
+valider ; TypeScript est désormais la référence, et Godot a quitté le dépôt.
 
 ### Réemploi de `bureau-etudes` — LE SOCLE, PLUS LE MARCHÉ
 
@@ -1277,8 +1311,8 @@ relit, jamais des fichiers qu'on copie. Le prix de cette décision est au §15, 
 
 **Ce qui rend le port du marché plus sûr qu'il ne l'était dans `bureau-etudes` :** le harnais
 existe AVANT lui. `bureau-etudes` a accumulé ses rustines parce que rien ne les voyait venir ;
-ici `levier.gd` dira si les constantes de `segments.json` sont branchées, `balance.gd` si les
-rivaux tiennent leur part, `trace.gd` pourquoi. Porter un modèle sous un harnais qui marche
+ici `levier.ts` dira si les constantes de `segments.json` sont branchées, `balance.ts` si les
+rivaux tiennent leur part, `trace.ts` pourquoi. Porter un modèle sous un harnais qui marche
 est plus sûr que d'en écrire un neuf sans aucune mesure préalable.
 
 **Où le risque est vraiment**, et il n'est pas dans le port : la boucle de §4
@@ -1291,7 +1325,7 @@ fera rien, et c'est elle qui mérite la méfiance.
 Engins, contacts corrompus et commerces-façade sont **le même objet vu sous trois angles**.
 Un module, trois fichiers de données — pas trois modules.
 
-```gdscript
+```ts
 { "id": "...", "type": "vehicule|contact|commerce",
   "noeud": "port_sud",
   "cout_achat": 0, "cout_sem": 0,
@@ -1302,19 +1336,19 @@ Un module, trois fichiers de données — pas trois modules.
   "effets": { } }
 ```
 
-La maintenance et le vieillissement s'écrivent **une fois** dans `sim/actifs.gd` et servent
+La maintenance et le vieillissement s'écrivent **une fois** dans `src/sim/actifs.ts` et servent
 les trois. Écrire ce système trois fois est l'erreur à ne pas commettre — c'était vrai quand
 `production.gd` devait le fournir tout fait, ça l'est davantage maintenant qu'il faut
 l'écrire soi-même.
 
 ### Modules nouveaux (les seuls)
 
-`sim/actifs.gd` (parc, contacts, commerces : achat, entretien, usure, perte) ·
-`sim/graphe.gd` (nœuds, arêtes, voyages, saisies, pannes) ·
-`sim/epidemie.gd` (propagation, nettoyage, instabilité dérivée) · `sim/remede.gd`
+`src/sim/actifs.ts` (parc, contacts, commerces : achat, entretien, usure, perte) ·
+`src/sim/graphe.ts` (nœuds, arêtes, voyages, saisies, pannes) ·
+`src/sim/epidemie.ts` (propagation, nettoyage, instabilité dérivée) · `src/sim/remede.ts`
 
-`sim/blanchiment.gd` et un hypothétique `sim/parc.gd` **n'existent pas** : ce sont des cas
-d'usage de `sim/actifs.gd`.
+`src/sim/blanchiment.ts` et un hypothétique `src/sim/parc.ts` **n'existent pas** : ce sont des
+cas d'usage de `src/sim/actifs.ts`.
 
 ---
 
@@ -1356,13 +1390,13 @@ sous-systèmes sur vingt-trois ans simulés), pas la discipline de mesure.
 **Corollaire, ajouté après coup et tout aussi contraignant :** les cibles de §16 sont
 **échelonnées**. Les cibles 5 et 6 exigent le jeu complet ; les appliquer au jalon 1 est
 impossible, et prétendre le contraire vide la règle de son sens. Chaque jalon porte sa
-propre porte, écrite dans `balance.gd` **le jour où le sous-système naît** — jamais
+propre porte, écrite dans `balance.ts` **le jour où le sous-système naît** — jamais
 rétro-ajoutée. Un axe mesuré trop tard est la faute qui a coûté `bureau-etudes`, appliquée
 cette fois à la mesure au lieu du modèle.
 
 | # | Jalon | Durée | Contenu | Porte | Bots | Jouable ? |
 |---|---|---|---|---|---|---|
-| **0** | **Le harnais** | ✅ **fait** | `run.gd`, `levier.gd`, `balance.gd`, `bots.gd`, `perf.gd`, `trace.gd`, `comparer.gd`, CI — **portés**, pas réécrits | **levier connecté** ✅ | — | — |
+| **0** | **Le harnais** | ✅ **fait** | `run.ts`, `levier.ts`, `balance.ts`, `bots.ts`, `perf.ts`, `trace.ts`, `comparer.ts`, CI — **portés**, pas réécrits | **levier connecté** ✅ | — | — |
 | **1** | **Le labo** | **3-4 sem** | conception (dont `instabilite_neuro`), 1 nœud, **le marché de §4 porté au scalpel** (§13) + la boucle de dépendance, trésorerie simple, **la dette** (§1bis), **branche Chimie** (§2bis) | 2, **7** (1 et 3 → jalon 2, voir §16) | 2 | **oui** |
 | **2** | **Le graphe & le parc** | **5-7 sem** | nœuds, arêtes, **les 5 engins**, usure, entretien, pannes, saisies, visibilité, **branche Logistique** (recherche et production **écrites ici**), **le catalogue de 3 recettes** (§2) | + **1, 3**, 8, 9, 15 | 2 | **oui** |
 | **3** | **L'argent sale** | 2-3 sem | double trésorerie **non fongible** (§5), les deux bourses au HUD (§12bis), commerces, **corruption**, **élimination**, cash physique, **branche Influence** | + **10, 11, 16, 17, 18** | 3 | **oui — jeu fini et vendable** |
@@ -1414,7 +1448,7 @@ La cible n'est pas chiffrée, elle est qualitative : **le joueur dit-il « j'ai 
 
 ## 16. Cibles d'équilibrage
 
-### Bots (`tests/bots.gd`)
+### Bots (`src/tests/bots.ts`)
 
 | Bot | Comportement | Disponible à partir de |
 |---|---|---|
@@ -1429,7 +1463,7 @@ Lancer un bot avant que son système existe produit du bruit qu'on prendra pour 
 **L'inverse est vrai aussi** : un système qui existe sans profil pour le jouer est un angle mort.
 `grossiste` et `orfevre` sont nés le jour où la grille a gagné ses cases de jonction (§2bis) —
 vingt cases sur vingt-sept ne servaient alors à aucun témoin. Leur intention est écrite dans
-`tests/bots.gd` avant toute mesure. Ce qu'ils ont dit dès la première mesure : la rue en gros
+`src/tests/bots.ts` avant toute mesure. Ce qu'ils ont dit dès la première mesure : la rue en gros
 sur Verdal, sans se couvrir, se faisait arrêter en un an et demi, et la cible 2 (mortalité de
 démarrage) est passée au rouge. Le jeu a été ajusté, pas le témoin (`visibilite.k_volume`,
 voir `data/constants.json`).
@@ -1437,7 +1471,7 @@ voir `data/constants.json`).
 
 ### Conventions
 
-Reprendre telles quelles les conventions déjà éprouvées dans `bureau-etudes/tests/balance.gd`
+Reprendre telles quelles les conventions déjà éprouvées dans `bureau-etudes/src/tests/balance.ts`
 (nombre de graines réglable en argument, verdict de mortalité de démarrage, écart de richesse
 en plus du taux de victoire). **Ce harnais est mûr : le porter, pas le réinventer.**
 
@@ -1451,9 +1485,9 @@ cible 3 a depuis remplacée par une intégrale.
 
 Chaque tableau porte donc ce qui l'a produit et dans quelle unité. Il raconte ce qu'une
 décision a changé — un fait historique, qui reste vrai. Il ne dit pas où en est le jeu
-aujourd'hui, ce qui se lit en lançant `tests/balance.gd`.
+aujourd'hui, ce qui se lit en lançant `src/tests/balance.ts`.
 
-**LA PORTÉE PAR BOT — mesure d'abord, verdict au jalon 2.** `tests/levier.gd` demande « au
+**LA PORTÉE PAR BOT — mesure d'abord, verdict au jalon 2.** `src/tests/levier.ts` demande « au
 moins une métrique bouge » en mettant les bots en commun : une constante qui secoue un seul
 profil passe au vert, et l'autre joue à un jeu dont ce levier n'existe pas. C'est le même
 refuge que celui fermé sur la jauge de visibilité, rouvert un étage plus haut.
@@ -1497,7 +1531,7 @@ confondre avec un angle mort accuserait les bots d'une chose dont ils ne peuvent
    ↳ la richesse se mesure en INTÉGRALE — le propre moyen tenu jusqu'à la date, pas
      sa valeur ce jour-là. Depuis §2bis un bot sort 280 000 $ d'un coup pour un nœud,
      et l'instantané mesurait la semaine du paiement. RELEVÉ du jour où la métrique a
-     changé (`balayage.gd -- colonne_seche.cout_propre 200000 420000 6 20`) : l'instantané
+     changé (`balayage.ts colonne_seche.cout_propre 200000 420000 6 20`) : l'instantané
      balayait de +376 à +1133 % puis repartait à +181 %, six fois d'amplitude et un
      demi-tour ; l'intégrale descendait de +109 à +99 %, monotone. Le point échantillonnait
      un accident de trésorerie. Ce relevé compare DEUX MÉTRIQUES entre elles, ce que la
@@ -1571,8 +1605,8 @@ en deux temps — le mécanisme d'abord, à résultat **bit-identique** (les tro
 changements mêlés n'auraient rien mesuré.
 
 ```
-RELEVÉ — §19.6, avant/après le prix par segment · portée par `tests/levier.gd`, le reste par
-`tests/balance.gd`. Les compteurs du jour s'impriment à chaque exécution.
+RELEVÉ — §19.6, avant/après le prix par segment · portée par `src/tests/levier.ts`, le reste par
+`src/tests/balance.ts`. Les compteurs du jour s'impriment à chaque exécution.
                                         avant        après
 leviers de campagne sentis par `discret`   20 / 92     91 / 95
                         hors de portée      78 %          5 %
@@ -1614,7 +1648,7 @@ Il est maintenant déclaré dans `data/segments.json:ordre_service`, sous forme 
 Écrit d'abord en trois nombres (`priorite_service: 1/2/3`), il s'est fait refuser par la
 porte du jalon 0 en trois lignes : perturbés d'un cran entier ils s'égalisaient, le nom
 tranchait, l'ordre ne changeait jamais — **trois leviers débranchés**. Un rang n'est pas une
-grandeur. C'est `tests/run.gd` qui le garde honnête, par un test de couverture : la liste
+grandeur. C'est `src/tests/run.ts` qui le garde honnête, par un test de couverture : la liste
 doit nommer exactement les segments.
 
 ### Ce que §2bis a coûté aux témoins — mesuré
@@ -1650,7 +1684,7 @@ arrive plus. Aucune mécanique n'a été débranchée : c'est la durée de vie d
 changé. La baseline se remesure, elle ne se cite pas.
 
 **La butée de famille était décidée par `sort()`, et son accident était heureux.** Quand un
-joueur demande une famille verrouillée, `sim/produit.gd` le ramène en butée. Cette butée
+joueur demande une famille verrouillée, `src/sim/produit.ts` le ramène en butée. Cette butée
 était `ouvertes[0]` après tri alphabétique : `industriel`, qui vise le corymbe, recevait donc
 l'azurite entre ses semaines 56 et 70 — par chance, parce que « a » vient avant « v ». En la
 déclarant (`famille_defaut`, stable), il repartait sur le précurseur le plus traçable et
@@ -1690,7 +1724,7 @@ zéro. **La cible 23 qui repasse au vert est la conséquence, pas la raison** : 
 **La calibration a été remesurée, et c'est dangereux.** Le modèle de coût a changé délibérément,
 donc l'échelle a baissé ; les puissances et les instabilités n'ont pas bougé d'un chiffre. Mais
 une calibration qu'on réaligne sur ce que le code produit ne peut plus jamais échouer — c'est
-le poteau qu'on déplace. `tests/run.gd` vérifie donc EN PLUS les **ordres**, qui expriment
+le poteau qu'on déplace. `src/tests/run.ts` vérifie donc EN PLUS les **ordres**, qui expriment
 l'intention et qu'aucune remesure ne satisfait toute seule : familles strictement croissantes
 en coût, en puissance et en instabilité ; rue < haut de gamme < extrême.
 
@@ -1727,8 +1761,8 @@ de `visibilite.k_cash_sale` de 0.60 à 1.30 en huit points :
 ```
 
 Il n'y a **aucune valeur** donnant 15-35 %. Ce n'est pas un réglage manqué, c'est l'absence
-d'un **risque grumeleux** : saisies, descentes, pannes (§3bis, §7 — `raids.gd` et
-`accidents.gd`, jalon 2). Tant qu'ils manquent, la cible 1 ne peut valoir que 0 %, 50 % ou
+d'un **risque grumeleux** : saisies, descentes, pannes (§3bis, §7 — `raids.ts` et
+`accidents.ts`, jalon 2). Tant qu'ils manquent, la cible 1 ne peut valoir que 0 %, 50 % ou
 100 %, et la cible 3 tombe avec elle (un bot qui meurt à toutes les graines n'a pas de
 richesse médiane, donc l'écart n'existe pas).
 
@@ -1870,7 +1904,7 @@ Toutes vécues sur `bureau-etudes`. Elles valent plus que les seuils ci-dessus.
 
 ### Vitesse du harnais
 
-Nombre de graines **réglable en argument** (`-s res://tests/balance.gd -- 20`), défaut 100.
+Nombre de graines **réglable en argument** (`-s res://tests/balance.ts 20`), défaut 100.
 20 pour itérer (~2 min), 100 pour valider un jalon. À 10 minutes la boucle, l'équilibrage
 devient impraticable et on se met à deviner au lieu de mesurer.
 
@@ -1971,7 +2005,7 @@ prétend qu'il est.
 
 Tranché par le designer après mesure. Le joueur pose **un prix par segment** ; un prix nul
 l'en retire. Le niveau que chaque segment tolère vit dans `data/segments.json:niveau_prix`,
-comme déclaration du tableau de §4 — donc balayé par `tests/levier.gd` comme le reste, et
+comme déclaration du tableau de §4 — donc balayé par `src/tests/levier.ts` comme le reste, et
 non comme un réglage de témoin.
 
 **C'est la décision qui rend le marché opérant.** Avec un prix unique, un kilo rapportait la
@@ -1995,7 +2029,7 @@ tranchés.
 **Valeur posée : 0.35.** Ce qu'elle produit : un producteur à plein régime qui ne se couvre
 de rien est arrêté **semaine 227 sur 260**, soit ~33 semaines de traque jouables.
 
-Ce que le balayage dit (`-s res://tests/balayage.gd -- visibilite.k_cash_sale 0.25 0.55 7`) :
+Ce que le balayage dit (`-s res://tests/balayage.ts visibilite.k_cash_sale 0.25 0.55 7`) :
 
 ```
 0.25 → mort sem 244
@@ -2136,7 +2170,7 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   qui la grimpe, avec du temps pour jouer le résultat.**
 - **J'ai tourné trois fois un nombre de fixture avant de m'en apercevoir.** La garde de dette
   des bots a eu trois versions (immobiliser la dette / projeter le blanchiment / projeter
-  depuis la première rentrée), dont deux réfutées par la mesure, et `tests/bots.gd` interdit
+  depuis la première rentrée), dont deux réfutées par la mesure, et `src/tests/bots.ts` interdit
   en toutes lettres de tourner ses nombres. La version retenue est la plus bête des trois.
   Sa conséquence — pas de recherche avant la semaine 60 — n'est pas un défaut du garde : c'est
   un **constat sur le jeu**, §1bis contre §2bis, et il appartient à ce document.
@@ -2145,14 +2179,14 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   donc on ne blanchit rien et les précurseurs se paient en propre. Toute projection qui
   l'ignore surestime d'un trimestre entier.
 - **Une fixture écrivait dans le state du jeu, et ça partait dans les sauvegardes.**
-  `tests/bots.gd` rangeait un mémo (`cout_pose`) dans l'état, que la sérialisation emportait
+  `src/tests/bots.ts` rangeait un mémo (`cout_pose`) dans l'état, que la sérialisation emportait
   et que l'empreinte de déterminisme hachait — §13 dit que `sim/` est le seul à y écrire.
   Rien ne l'a vu pendant une manche entière parce que **rien ne regardait la FORME de
-  l'état**, seulement ses valeurs. `tests/run.gd` compare désormais les clés du state après
+  l'état**, seulement ses valeurs. `src/tests/run.ts` compare désormais les clés du state après
   une campagne de chaque bot à celles que `Etat.nouvelle_partie` déclare ; la garde vaudra
   aussi pour `game/` le jour où un écran voudra y mémoriser un repli d'interface.
-- **J'ai écrit l'aveu à la place du test.** Mon commentaire dans `run.gd` annonçait « ce test
-  ne garde PAS l'arithmétique de `sim/recherche.gd` » — et le test manquant n'a jamais été
+- **J'ai écrit l'aveu à la place du test.** Mon commentaire dans `run.ts` annonçait « ce test
+  ne garde PAS l'arithmétique de `src/sim/recherche.ts` » — et le test manquant n'a jamais été
   écrit. Cent dix lignes de simulation neuve n'étaient exercées que par la survie des bots,
   c'est-à-dire par un signal qui aurait aussi bien pu venir d'ailleurs. Un aveu dans un
   commentaire n'est pas une dette enregistrée : personne ne relit un commentaire.
@@ -2169,31 +2203,31 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
   la re-justification a révélé que **le catalogue de §2 n'était daté dans aucun jalon** de
   §15. Une exemption bien datée force un trou de planning à se montrer.
 - **Une dérogation qui vit hors du mécanisme n'est surveillée par personne.** La CI portait
-  un `continue-on-error` avec « à retirer au jalon 1, en même temps que `sim/produit.gd` » :
+  un `continue-on-error` avec « à retirer au jalon 1, en même temps que `src/sim/produit.ts` » :
   échéance dépassée d'un jalon entier, dans le fichier que personne n'ouvre sauf quand la CI
   rougit. Elle avait raison par accident — la dérogation reste justifiée, mais par §16 et
   jusqu'au jalon 2, pas par ce qu'elle disait. Elle porte maintenant un `jalon:` que
-  `tests/run.gd` confronte à `JALON_COURANT`, comme les dormantes du levier.
+  `src/tests/run.ts` confronte à `JALON_COURANT`, comme les dormantes du levier.
 - **Un test que rien ne lance est vert pour toujours**, et c'est la forme la plus silencieuse
   de test mort : pire qu'un test cassé, qui au moins crie. Tout script de `tests/` qui étend
-  `SceneTree` doit désormais apparaître dans un workflow, sinon `run.gd` échoue.
+  `SceneTree` doit désormais apparaître dans un workflow, sinon `run.ts` échoue.
 - **La règle « aucun chiffre mesuré dans un commentaire » n'avait jamais été appliquée à ce
-  document.** Dix passes l'ont imposée au code — `balayage.gd`, `levier.gd`, `balance.gd`, le
+  document.** Dix passes l'ont imposée au code — `balayage.ts`, `levier.ts`, `balance.ts`, le
   lanceur, la CI — pendant qu'une seule session ajoutait ici quatre tableaux de mesures, dont
   un déjà irreproductible (il exprimait l'écart de richesse en instantané, unité remplacée
   depuis par une intégrale). §4 est allé plus loin : il affirmait « la cible 3 passe au vert »
   alors qu'elle est rouge. **La source de vérité était le seul artefact non surveillé.** Les
   tableaux portent maintenant ce qui les a produits et dans quelle unité : un relevé daté
   reste vrai, c'est le confondre avec l'état courant qui ne l'est pas.
-- **Une énumération dans un commentaire pourrit comme un chiffre.** L'en-tête de `balance.gd`
+- **Une énumération dans un commentaire pourrit comme un chiffre.** L'en-tête de `balance.ts`
   annonçait « cibles 1, 2 et 3 » pendant que le fichier en tenait cinq — les deux autres
   étaient arrivées le jour de leur axe, exactement comme la règle l'exige, et l'en-tête ne les
   avait pas vues passer. Il garde la RÈGLE et laisse `verdicts()` produire la liste.
-- **Trois fichiers frères, une phrase fausse, une seule corrigée.** `trace.gd` et
-  `comparer.gd` ont affirmé pendant des mois ne pas être dans la CI, qui les lance deux fois
-  chacun ; la même phrase avait été corrigée dans `balayage.gd` sans que personne aille voir
+- **Trois fichiers frères, une phrase fausse, une seule corrigée.** `trace.ts` et
+  `comparer.ts` ont affirmé pendant des mois ne pas être dans la CI, qui les lance deux fois
+  chacun ; la même phrase avait été corrigée dans `balayage.ts` sans que personne aille voir
   ses voisins. C'était une contradiction entre deux fichiers du dépôt, donc lisible par une
-  machine — et elle a survécu à douze passes de relecture. `tests/run.gd` la refuse désormais.
+  machine — et elle a survécu à douze passes de relecture. `src/tests/run.ts` la refuse désormais.
   Corollaire assumé : le contrôle cherche une chaîne littérale, donc les commentaires qui
   racontent l'histoire ne la recopient pas, sous peine de se dénoncer eux-mêmes.
 - **Trois curseurs de conception sur six n'avaient qu'une bonne position, et 3217 lignes de
@@ -2232,6 +2266,12 @@ Trace des corrections apportées à la v1, pour ne pas les refaire.
 - **Un garde-fou peut coûter plus que ce qu'il garde.** La vérification de fin de tick
   construisait le chemin de chaque valeur de l'état pour un message d'erreur qui ne sortait
   jamais : la moitié du coût d'un tick. Elle n'a été vue que le jour où le levier a franchi son
-  budget de `perf.gd` — et la tentation était de relever le budget. Le profil a montré l'endroit ;
+  budget de `perf.ts` — et la tentation était de relever le budget. Le profil a montré l'endroit ;
   deux passes (une rapide sans chaînes, une détaillée seulement en cas d'échec) ont rendu le
   tick moins cher qu'avant les ajouts, au même verdict.
+- **On valide un portage par la mesure, et en commençant petit.** Le passage de Godot à
+  TypeScript s'est fait en trois marches — un module comparé au bit près, puis des campagnes
+  entières semaine par semaine, puis le harnais complet — et chaque marche a été franchie
+  avant d'écrire la suivante. La première a payé tout de suite : `-0` contre `0`, invisible à
+  l'affichage, aurait déplacé un clamp ailleurs et n'aurait jamais été cherché. Un portage
+  relu « attentivement » sans comparateur n'est pas validé, il est espéré.
