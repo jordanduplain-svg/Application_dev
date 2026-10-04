@@ -1,0 +1,86 @@
+{
+ "_": "GDD §14 : toutes les constantes d'equilibrage vivent ici, zero nombre dans le code.",
+ "eco": {
+  "cash_propre_depart": 700000.0,
+  "cash_sale_depart": 0.0,
+  "cout_fixe_sem": 9000.0,
+  "capacite_labo_kg_sem": 40.0,
+  "k_cout_purete": 2.2,
+  "semaines_faillite": 8
+ },
+ "produit": {
+  "_": "GDD §2 : les six parametres de conception, les sept specs qui en emergent. Aucun curseur ne controle directement une spec affichee.",
+  "_debit": "debit_kg_sem = capacite_labo x rendement x (1 - k_debit_complexite x complexite) x disponibilite_famille",
+  "k_debit_complexite": 0.12,
+  "_cout": "cout_unitaire = cout_base_famille x (1 + k_cout_purete x purete^2) x (rendement_reference / rendement) x (1 + k_cout_complexite x (complexite - 1)) + cout_stabilisation x stabilisation. La purete coute en CARRE (§2).",
+  "rendement_reference": 0.5,
+  "k_cout_complexite": 0.12,
+  "cout_stabilisation_kg": 900.0,
+  "_signature": "signature = tracabilite_famille x (1 + k_signature_complexite x complexite) - k_signature_stabilisation x stabilisation",
+  "k_signature_complexite": 0.5,
+  "k_signature_stabilisation": 0.15,
+  "_regularite": "regularite_lot = 1 - (k_variance_purete x purete + k_variance_complexite x (complexite - 1)) x (1 - competence). Le chimiste arrive avec les bras droits (§6, jalon 4) ; d'ici la, competence_defaut.",
+  "competence_defaut": 0.55,
+  "k_variance_purete": 0.18,
+  "k_variance_complexite": 0.06,
+  "_dependance": "dependance = puissance^exposant x (1 - coupe). Fidelise la demande (§4).",
+  "exposant_dependance": 1.3,
+  "_instabilite": "instabilite_neuro = clamp(puissance^exposant - k_stabilisation x stabilisation - seuil_famille, 0, 1). L'AXE LE PLUS IMPORTANT DU JEU (§2) : il ne fait rien pendant tout l'acte I et il est la cause de l'acte III.",
+  "exposant_instabilite": 2.2,
+  "k_instabilite_stabilisation": 0.4,
+  "_complexite": "CE QUE LA COMPLEXITE ACHETE, et il a manque pendant tout le jalon 1 : elle rendait le cout PLUS cher, le debit PLUS bas, la signature PLUS haute et la regularite PLUS mauvaise, sans rien ameliorer nulle part. Quatre specs degradees, aucune amelioree — personne n'aurait jamais monte ce curseur, et `procede_deux_etapes` etait un noeud a 160 000 $ dont l'unique effet etait de debloquer une degradation. L'INTENTION EXISTAIT DEJA DANS L'ARBRE : `colonne_seche` (purete max) exige `procede_deux_etapes`, c'est-a-dire « un procede complexe est ce qui PERMET la haute purete ». Elle descend maintenant dans la formule : la purete coute toujours en carre, mais la complexite divise ce carre. A complexite 1 le diviseur vaut 1 — la recette du temoin prudent ne bouge donc pas d'un dollar.",
+  "k_complexite_purete": 0.6,
+  "_rendement_variance": "CE QUE LE RENDEMENT COUTE. Il n'avait AUCUN effet negatif : le monter baissait le cout et montait le debit, point. Un curseur sans contrepartie est une reponse, pas un choix. Pousser un procede a haut rendement, c'est le pousser tout court : la variance de lot monte avec lui, donc `regularite_lot` descend — et c'est la spec que `milieu` et `haut_de_gamme` ponderent le plus fort (0.35 et 0.30). Le rendement s'arbitre desormais contre le segment qu'on vise.",
+  "k_variance_rendement": 0.25,
+  "_coupe": "CE QUE LA COUPE RAPPORTE : DES KILOS. Elle diluait la puissance et la dependance contre une instabilite qui ne fait rien avant l'acte III — donc elle ne rapportait rien au jalon 1. Il lui manquait la seule chose que le mot decrit : couper un produit AJOUTE du volume vendable, et baisse le cout par kilo vendu d'autant. Les deux sortent du meme fait et ne demandent aucune constante : `debit /= (1 - coupe)` et `cout *= (1 - coupe)`. Puissance x volume reste constant — c'est un echange pur qualite contre quantite, et c'est exactement ce qui separe `rue` de `haut_de_gamme`."
+ },
+ "marche": {
+  "_": "GDD §4. Porte au scalpel depuis bureau-etudes : ces valeurs sont celles qui y ont ete mesurees, pas des inventions. On les REMESURE ici, on ne les cite pas (§16).",
+  "_cadence": "La resolution est TRIMESTRIELLE, et l'inertie ci-dessous n'a de sens qu'a cette cadence : appliquee chaque semaine sur une campagne entiere, les parts convergeraient en quelques mois et la fidelite du client deviendrait decorative.",
+  "inertie": 0.2,
+  "alea_demande": 0.12,
+  "_attrait": "attractivite = qualite_s x f_prix x f_confiance x f_delai",
+  "plafond_critere": 1.4,
+  "_plafond_prix": "Ce qui manquait au port : la qualite etait bornee a 1.4 mais le rabais ne l'etait pas. Vendre au quart du prix median rapportait un multiplicateur de 5.4 qu'aucun avantage de qualite ne pouvait rattraper — le moins cher gagnait tous les segments. Au-dela de ce plafond, casser les prix ne fait plus vendre davantage.",
+  "_plafond_prix_asymetrie": "NON symetrique de plafond_critere (1.4), et la difference est MESUREE, pas supposee : balaye de 1.0 a 1.8, le jeu bascule entre 1.3 et 1.4 — a 1.4 le produit bon marche reprend l'avantage, la jauge de visibilite cesse de tuer et l'ecart de richesse s'ouvre de +11 % a +24 %. La qualite tolere un plafond plus large que le prix parce qu'elle se paie, alors que le rabais ne coute rien a celui qui le consent.",
+  "plafond_prix": 1.15,
+  "confiance_base": 0.7,
+  "confiance_amplitude": 0.6,
+  "k_delai": 0.15,
+  "_empilement": "Deux produits jumeaux d'une meme maison valent racine de 2 fois un seul (mesure : 13 points de part). 1.0 reproduit le comportement historique et sert de temoin — on mesure avant de le bouger.",
+  "empilement_maison": 1.0,
+  "_fidelite": "GDD §4 : demande_t+1 += dependance x ventes_t x k_fidelite. Retroaction POSITIVE : sans plafond elle diverge, et c'est le seul endroit de ce fichier qui n'a d'equivalent nulle part.",
+  "k_fidelite": 0.15,
+  "_plafond_mesure": "Le plafond est un GARDE-FOU ANTI-DIVERGENCE, pas un plafond de design : il ne doit pas mordre en jeu normal. Il mordait — le bot industriel saturait `milieu` avant la fin de campagne, donc la boucle de §4 etait figee sur le dernier tiers alors qu'elle est censee grandir « jusqu'a ce qu'elle tue le marche » (acte III). Le verifier : tracer `demande_fidele` par segment, ou `balayage.gd -- marche.plafond_fidelite 0.6 1.6 6`.",
+  "plafond_fidelite": 1.2
+ },
+ "dette": {
+  "_": "GDD §1bis : l'horloge de l'acte I. Remboursable en argent PROPRE.",
+  "_serree": "GDD §1bis veut l'echeance « atteignable sur un seul marche, mais SERREE ». Elle ne l'etait pas : le plus faible des deux bots arrivait a l'echeance avec plusieurs fois la dette en caisse, et le levier mesurait une amplitude negligeable — une date qui ne coute rien n'est pas une horloge. Le prudent doit y arriver, l'ambitieux doit le sentir passer. Le remesurer : `trace.gd -- 1 tous <echeance>` pour les deux caisses a la date, `balayage.gd -- dette.montant ...` pour la forme.",
+  "_falaise": "MESURE A REFAIRE avant de retoucher ce nombre : il existe une valeur au-dela de laquelle l'ambitieux est SAISI a l'echeance, ce qui casse la cible 2 (mortalite de demarrage). Elle se trouve avec `balayage.gd -- dette.montant 380000 1100000 7` — la colonne `precoce` saute d'un coup. La valeur posee garde une marge deliberee sous ce bord.",
+  "montant": 800000.0,
+  "echeance_sem": 60
+ },
+ "blanchiment": {
+  "_": "GDD §5 : debit hebdomadaire plafonne, jamais un guichet.",
+  "capacite_sem": 42000.0,
+  "taux": 0.72
+ },
+ "visibilite": {
+  "_": "GDD §7 : jauge 0-100.",
+  "_k_volume": "GDD §1 : « tout ce qui rapporte te rend visible », et §7 met `signature x kg_produits_sem` EN TETE de ses traces. C'etait faux : la production du bot prudent pesait une fraction negligeable de la decroissance, donc blanchir parfaitement achetait l'invisibilite ABSOLUE — il traversait la campagne entiere a zero de jauge, insensible a la moitie des constantes du jeu. Le verifier : la colonne `discret` du classement de sensibilite de levier.gd, qui doit etre non nulle sur les constantes de `visibilite`.",
+  "_k_volume_seuil": "MESURE A REFAIRE : la jauge n'a pas d'equilibre, elle a un SEUIL. Sous une certaine valeur elle reste clouee a zero pour toujours (le plancher max(...,0) absorbe tout) ; au-dessus elle monte sans fin, et trop haut elle tue aussi le prudent. Ce qui creera un vrai point de repos, c'est la decroissance achetable des contacts (§5bis, jalon 3). D'ici la c'est binaire, et le bord se trouve avec `balayage.gd -- visibilite.k_volume 0.01 0.40 8`.",
+  "_k_volume_grossiste": "BAISSE PAR LE TEMOIN `grossiste`, ne de la grille a jonctions (§2bis). La rue en gros sur Verdal se faisait arreter avant la semaine 104 : la cible 2 (mortalite de demarrage) etait rouge, hors de toute derogation. Le balayage `balayage.gd -- visibilite.k_volume 0.14 0.42 5 10` montre une PENTE, pas une falaise : la plus petite baisse qui rend la cible 2 a ete retenue. LE PRIX, et il est a surveiller : `discret` redevient presque invisible, c'est-a-dire le defaut que la hausse precedente corrigeait. Le levier dit s'il le sent encore — colonne `discret` sur les constantes de `visibilite`.",
+  "k_volume": 0.21,
+  "_k_cash_sale": "PROVISOIRE — decision de design en attente, voir GDD §19bis, qui porte l'intention (combien de temps tient un producteur a plein regime qui ne se couvre de rien). Ce n'est pas un taux de mortalite qu'on regle ici : le balayage montre une falaise, en dessous la jauge ne tue jamais, au-dessus elle tue toujours et seule la DATE glisse. La remesurer a chaque fois qu'une mecanique change le debit d'argent sale : `balayage.gd -- visibilite.k_cash_sale 0.25 0.55 7`.",
+  "k_cash_sale": 0.35,
+  "decroissance_sem": 2.0,
+  "seuil_arrestation": 100.0,
+  "semaines_arrestation": 4
+ },
+ "sim": {
+  "_": "1 tick = 1 semaine (§1). Le marche, lui, se resout au trimestre (§4).",
+  "semaines_par_trimestre": 13,
+  "semaines_max": 260
+ }
+}

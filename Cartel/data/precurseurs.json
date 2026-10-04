@@ -1,0 +1,40 @@
+{
+  "_": "GDD §2 : 4 familles fictives. Substance ENTIEREMENT fictive — aucune chimie reelle, ni ici ni ailleurs. C'est une contrainte de design autant que de prudence : une chimie inventee place les arbitrages la ou le jeu en a besoin.",
+
+  "_arbitrage": "Les quatre familles tirent dans le meme sens et c'est voulu : plus une famille est puissante, moins elle est tracable, moins elle est disponible, plus elle est chere, et PLUS BAS est son seuil — donc plus vite elle charge (§8). La famille bon marche est celle que tout le monde surveille ; la famille discrete est celle qui declenche l'epidemie.",
+
+  "familles": {
+    "verdal": {
+      "nom": "Verdal",
+      "k_famille": 0.82,
+      "cout_base_kg": 1800.0,
+      "tracabilite": 0.55,
+      "seuil_famille": 0.38,
+      "disponibilite": 1.00
+    },
+    "azurite": {
+      "nom": "Azurite",
+      "k_famille": 0.95,
+      "cout_base_kg": 2400.0,
+      "tracabilite": 0.40,
+      "seuil_famille": 0.30,
+      "disponibilite": 0.92
+    },
+    "corymbe": {
+      "nom": "Corymbe",
+      "k_famille": 1.06,
+      "cout_base_kg": 3400.0,
+      "tracabilite": 0.28,
+      "seuil_famille": 0.24,
+      "disponibilite": 0.78
+    },
+    "noctal": {
+      "nom": "Noctal",
+      "k_famille": 1.15,
+      "cout_base_kg": 4600.0,
+      "tracabilite": 0.20,
+      "seuil_famille": 0.18,
+      "disponibilite": 0.62
+    }
+  }
+}

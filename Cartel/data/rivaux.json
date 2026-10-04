@@ -1,0 +1,60 @@
+{
+  "_": "GDD §4 : deux cartels, memes formules que le joueur, seed. Ils meurent en acte III quand l'instabilite de leur noeud d'origine depasse 0.6 — pas avant (`ponytail:` pas de faillite avant l'acte III).",
+
+  "_troisieme": "Un TROISIEME emplacement est reserve, vide au depart (`fusion_only`). Un lieutenant qui trahit (§6, jalon 4) le remplit : il devient un rival NOMME, avec la recette du joueur FIGEE au moment de la trahison, le noeud qu'il a emporte et son stock. Cout technique : cette entree. Effet : la trahison cesse d'etre une perte comptable oubliee en dix semaines.",
+
+  "_renouvellement": "Un rival qui ne renouvelle pas devient decoratif en dix trimestres. Il ameliore donc sa recette d'un cran tous les `renouvellement_trim`, jusqu'a son plafond — c'est sa R&D simulee, et elle n'a pas besoin d'un arbre de recherche pour etre credible.",
+
+  "maisons": {
+    "los_hermanos": {
+      "nom": "Los Hermanos",
+      "recette": {
+        "famille": "verdal",
+        "purete": 0.52,
+        "rendement": 0.70,
+        "complexite": 1,
+        "coupe": 0.30,
+        "stabilisation": 0
+      },
+      "marge": 1.55,
+      "renouvellement_trim": 5,
+      "purete_pas": 0.045,
+      "purete_plafond": 0.86,
+      "familles_montee": ["verdal", "azurite", "corymbe"]
+    },
+    "la_costera": {
+      "nom": "La Costera",
+      "recette": {
+        "famille": "azurite",
+        "purete": 0.78,
+        "rendement": 0.52,
+        "complexite": 2,
+        "coupe": 0.10,
+        "stabilisation": 1
+      },
+      "marge": 1.85,
+      "renouvellement_trim": 7,
+      "purete_pas": 0.030,
+      "purete_plafond": 0.95,
+      "familles_montee": ["azurite", "corymbe", "noctal"]
+    },
+    "le_traitre": {
+      "_": "Vide jusqu'a la premiere trahison (§6, jalon 4). Initialise a l'execution avec la recette du joueur figee.",
+      "fusion_only": true,
+      "nom": "",
+      "recette": {
+        "famille": "verdal",
+        "purete": 0.50,
+        "rendement": 0.50,
+        "complexite": 1,
+        "coupe": 0.20,
+        "stabilisation": 0
+      },
+      "marge": 1.60,
+      "renouvellement_trim": 99,
+      "purete_pas": 0.0,
+      "purete_plafond": 0.50,
+      "familles_montee": ["verdal"]
+    }
+  }
+}

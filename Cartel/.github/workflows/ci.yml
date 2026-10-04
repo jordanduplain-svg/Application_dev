@@ -1,0 +1,122 @@
+# Verrou d'intégration : les tests headless, la porte du jalon 0 (le levier) ET
+# l'équilibrage (§16) doivent rester verts. Une régression d'équilibrage (mortalité qui
+# s'envole, domination d'un bot) casse ici, plus en douce.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Le binaire Godot vit dans tools/ (gitignoré) : la CI télécharge la version épinglée.
+      - name: Télécharger Godot 4.7
+        run: |
+          curl -fL -o godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7-stable/Godot_v4.7-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          mv Godot_v4.7-stable_linux.x86_64 godot
+          chmod +x godot
+
+      # run.gd/balance.gd/levier.gd ne lisent que du JSON (FileAccess) : aucun import requis.
+      # Le detail de ce que couvre run.gd s'imprime a chaque execution ; le recopier ici
+      # produisait une liste perimee (elle disait encore « donnees, determinisme, save/load,
+      # papier, dette, visibilite » alors que la recherche, la forme du state et les
+      # commandes citees s'y etaient ajoutees).
+      - name: Tests logiques (le detail s'imprime, il n'est pas recopie ici)
+        run: ./godot --headless --path . -s res://tests/run.gd
+
+      # LA porte du jalon 0 (§15) : chaque constante de data/ bouge quelque chose — les six
+      # fichiers, pas seulement constants.json. Elle passe AVANT l'équilibrage : mesurer avec
+      # un levier débranché, c'est équilibrer dans le vide, et aucun verdict d'en dessous ne
+      # voudrait plus rien dire.
+      - name: Levier connecte (chaque constante a +/-30 %)
+        run: ./godot --headless --path . -s res://tests/levier.gd
+
+      # §16 « Vitesse du harnais » : un harnais qui ralentit d'un facteur 50 ne casse rien,
+      # il rend l'équilibrage impraticable en silence. Budgets larges — on attrape un ordre
+      # de grandeur perdu, pas la météo du runner.
+      - name: Vitesse du harnais (extrapolation des deux boucles)
+        run: ./godot --headless --path . -s res://tests/perf.gd
+
+      # Pas d'écran à fumer : game/ n'existe pas encore (§12bis, jalon 1). Le smoke UI et
+      # le perf.gd « FPS » de bureau-etudes reviennent ici le jour où les cinq écrans
+      # existent. tests/trace.gd n'est pas dans cette liste et n'y sera jamais : il ne rend
+      # aucun verdict, c'est l'outil qu'on ouvre à la main quand l'étape suivante rougit.
+      #
+      # DEROGATION DATEE — jalon: 2
+      #
+      # Les cibles de §16 sont écrites et armées dans balance.gd, qui sort en 1 quand elles
+      # ratent. Deux ratent aujourd'hui, et §16 dit POURQUOI, mesures à l'appui : tout ce
+      # qui existe à l'acte I est lisse, donc la mortalité est une falaise et jamais une
+      # distribution. Il manque au jeu un risque GRUMELEUX — les saisies et les descentes
+      # (§3bis, §7), qui arrivent au jalon 2. Aucun réglage ne les remplace.
+      #
+      # AUCUN CHIFFRE MESURÉ ICI, et c'est une règle du projet. Cette dérogation en portait
+      # un (« arrêté en 37 semaines ») : il était faux depuis plusieurs manches, dans le
+      # fichier que personne n'ouvre sauf quand la CI rougit. Le chiffre du jour s'obtient
+      # en lançant l'étape — elle tourne à chaque push et imprime tout.
+      #
+      # Elle annonçait « à retirer au jalon 1, en même temps que sim/produit.gd » : produit.gd
+      # existe depuis longtemps, l'échéance était dépassée d'un jalon entier, et rien ne le
+      # signalait. `tests/run.gd` lit désormais la ligne `jalon:` ci-dessus et la confronte
+      # à `Levier.JALON_COURANT`, exactement comme il le fait pour les dormantes du levier.
+      # Une dérogation sans date n'est pas une dérogation, c'est une suppression.
+      - name: Harnais d'equilibrage (les cibles de §16 — mesure, derogation jusqu'au jalon 2)
+        continue-on-error: true
+        run: ./godot --headless --path . -s res://tests/balance.gd
+
+      # Les deux OUTILS ne rendent aucun verdict et ne sont donc gardes par rien : une
+      # erreur de syntaxe y dormirait jusqu'au jour ou on les ouvre — c'est-a-dire le jour
+      # ou l'etape du dessus rougit et ou on en a le plus besoin. On ne verifie pas ce
+      # qu'ils impriment, seulement qu'ils tournent : c'est tout ce qu'un smoke doit faire.
+      - name: Smoke des outils (trace, comparer)
+        run: |
+          ./godot --headless --path . -s res://tests/trace.gd -- 1 discret 52
+          ./godot --headless --path . -s res://tests/trace.gd -- 1 discret 52 blanchiment.taux 0.7 3
+          # Comparer un fichier a LUI-MEME ne sortait que par le « aucun changement » : les
+          # trois branches qui comptent (cause, changement d'etat, mouvements classes) ne
+          # tournaient jamais — c'est-a-dire exactement le code qu'on vient de corriger.
+          # On fabrique donc une mesure differente, et on EXIGE les trois blocs.
+          ./godot --headless --path . -s res://tests/comparer.gd -- levier.csv levier.csv
+          ./godot --headless --path . -s res://tests/balayage.gd -- marche.inertie 0.1 0.3 2 4
+          # Les colonnes sont adressees PAR NOM, lues dans l'en-tete. Avec des indices
+          # ($2, $3, $6), ce script modelait l'ordre des colonnes decide dans
+          # levier.gd::_exporter, a l'autre bout du depot : en reordonner deux aurait fait
+          # modifier les mauvais champs, produit quand meme les trois blocs, et laisse ce
+          # smoke vert en testant autre chose. Une colonne absente = echec bruyant.
+          awk -F, -v OFS=, '
+            NR==1 { for (i=1;i<=NF;i++) col[$i]=i
+                    if (!("valeur" in col) || !("statut" in col) || !("amplitude" in col)) {
+                      print "smoke : colonne attendue absente de levier.csv" > "/dev/stderr"
+                      exit 1 }
+                    print; next }
+            NR==2 { $col["valeur"]=$col["valeur"]*1.5; $col["statut"]="DEBRANCHEE"
+                    $col["amplitude"]=$col["amplitude"]*2 }
+                  { print }' levier.csv > modifie.csv
+          ./godot --headless --path . -s res://tests/comparer.gd -- levier.csv modifie.csv | tee sortie.txt
+          grep -q "CE QUI A CHANGE EN ENTREE" sortie.txt
+          grep -q "CHANGEMENTS D'ETAT" sortie.txt
+          grep -q "MOUVEMENTS" sortie.txt
+          rm -f modifie.csv sortie.txt
+
+      # Les mesures des deux harnais, une ligne par campagne et une ligne par constante. Pas
+      # une baseline qu'on citera plus tard (§16 l'interdit) : de quoi rejouer deux commits
+      # et DIFFUSER deux mesures fraîches. tests/comparer.gd lit ces fichiers — télécharger
+      # ceux de deux commits et les lui donner, c'est la seule façon de voir qu'un levier a
+      # changé de statut sans qu'un humain ait eu à le remarquer à l'œil dans 23 lignes.
+      # `always()` parce que les étapes du dessus peuvent rougir : c'est là qu'on en a le
+      # plus besoin.
+      - name: Publier les mesures brutes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesures-csv
+          path: |
+            balance.csv
+            levier.csv
+          if-no-files-found: warn
