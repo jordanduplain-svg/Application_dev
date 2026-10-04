@@ -26,6 +26,12 @@ Application Windows installable qui repère les appels d'offres fédéraux amér
 
 ## Projets d'apprentissage
 
+### [Cartel](Cartel)
+
+Jeu de gestion PC en développement : concevoir un produit entièrement fictif par de vrais arbitrages, le distribuer sur un réseau mondial, blanchir un argent qui accuse, jusqu'à l'épidémie que ses propres routes propagent. Simulation déterministe pilotée par les données, recherche en grille d'hexagones, et harnais d'équilibrage par bots témoins (levier de sensibilité, cibles chiffrées). Le document de conception (`GDD.md`) est la source de vérité.
+
+`Godot 4` · `GDScript`
+
 ### [SpaceCenter](SpaceCenter)
 
 Visualisation 3D de mécanique orbitale dans le navigateur.
