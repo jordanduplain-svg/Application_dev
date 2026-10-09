@@ -53,3 +53,6 @@ vitest_err*.txt
 # IDE / OS
 .DS_Store
 Thumbs.db
+
+# Ressources de build electron-builder (icône) — à versionner
+!apps/desktop/build/

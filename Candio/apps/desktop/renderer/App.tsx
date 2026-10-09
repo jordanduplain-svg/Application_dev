@@ -261,7 +261,7 @@ export default function App() {
 
     <div className="app">
       <nav className="sidebar">
-        <h1>Candidatures</h1>
+        <h1>Candio</h1>
 
         {/* UX-S20 : barre de recherche globale. */}
         {/* AUDIT-H4 fix : ref pour la détection du clic extérieur. */}

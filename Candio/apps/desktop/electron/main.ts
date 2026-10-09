@@ -204,7 +204,7 @@ function createWindow(): void {
     height: winState.height,
     minWidth: MIN_WIN_WIDTH,
     minHeight: MIN_WIN_HEIGHT,
-    title: 'Candidatures',
+    title: 'Candio',
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.js'),
@@ -238,7 +238,7 @@ function createTray(): void {
     // Utiliser une image vide (1×1 px transparent) si pas d'icône fournie.
     const icon = nativeImage.createEmpty();
     tray = new Tray(icon);
-    tray.setToolTip('Candidatures');
+    tray.setToolTip('Candio');
 
     const contextMenu = Menu.buildFromTemplate([
       {

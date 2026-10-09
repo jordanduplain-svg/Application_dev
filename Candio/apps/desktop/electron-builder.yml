@@ -1,6 +1,6 @@
 # Config electron-builder — production du .exe Windows.
-appId: com.perso.candidatures
-productName: Candidatures
+appId: com.jordanduplain.candio
+productName: Candio
 
 # pnpm hoist `electron` dans le node_modules RACINE (pas apps/desktop/node_modules) ;
 # avec une version en plage (^34) electron-builder ne peut pas la déduire et échoue
@@ -20,7 +20,7 @@ directories:
 publish:
   provider: github
   owner: jordanduplain-svg
-  repo: Application-dev
+  repo: Application_dev
 
 # Fichiers de l'app à empaqueter. Les node_modules de production sont copiés
 # automatiquement ; on n'ajoute ici que ce qu'electron-builder ne détecte pas.
@@ -30,6 +30,13 @@ files:
   # .prisma/client = client Prisma généré (code + moteur natif). Ce dossier
   # n'est pas un "package" npm → electron-builder ne le copie pas tout seul.
   - node_modules/.prisma/**/*
+  # Avec node-linker=hoisted (.npmrc), pnpm génère .prisma à la RACINE du monorepo,
+  # pas sous apps/desktop : la ligne ci-dessus ne trouve alors rien et l'app packagée
+  # plante au démarrage (« Cannot find module '.prisma/client/default' »).
+  - from: ../../node_modules/.prisma
+    to: node_modules/.prisma
+    filter:
+      - "**/*"
 
 # Le schéma et les migrations sont lus au 1er lancement (prisma migrate deploy).
 # Placés hors de l'asar, dans resources/, donc lisibles directement sur disque.
@@ -43,7 +50,9 @@ extraResources:
 asarUnpack:
   - "**/*.node"
   - node_modules/.prisma/**
-  - node_modules/@prisma/engines/**
+  # Tout @prisma/* (et pas seulement engines) : le CLI lancé en sous-process
+  # résout @prisma/debug, get-platform… depuis le disque, hors asar.
+  - node_modules/@prisma/**
   - node_modules/prisma/**
 
 win:
